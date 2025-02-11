@@ -168,7 +168,7 @@ def load_raw_episode_data(
     with h5py.File(ep_path, "r") as ep:
         state = torch.from_numpy(ep["/observations/qpos"][:])
         action = torch.from_numpy(ep["/action"][:])
-
+        # import ipdb; ipdb.set_trace()
         velocity = None
         if "/observations/qvel" in ep:
             velocity = torch.from_numpy(ep["/observations/qvel"][:])
@@ -201,7 +201,7 @@ def populate_dataset(
 
     for ep_idx in tqdm.tqdm(episodes):
         ep_path = hdf5_files[ep_idx]
-
+        # import ipdb; ipdb.set_trace()
         imgs_per_cam, state, action, velocity, effort = load_raw_episode_data(ep_path)
         num_frames = state.shape[0]
 
