@@ -173,9 +173,8 @@ def smooth_base_action(base_action):
 
 def preprocess_base_action(base_action):
     # base_action = calibrate_linear_vel(base_action)
-    base_action = smooth_base_action(base_action)
 
-    return base_action
+    return smooth_base_action(base_action)
 
 def postprocess_base_action(base_action):
     linear_vel, angular_vel = base_action
