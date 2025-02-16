@@ -44,7 +44,7 @@ def main(args: Args) -> None:
 
     # Send 1 observation to make sure the model is loaded.
     policy.infer(obs_fn())
-    import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
     start = time.time()
     for _ in range(args.num_steps):
         policy.infer(obs_fn())

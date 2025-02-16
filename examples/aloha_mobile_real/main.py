@@ -28,7 +28,7 @@ def main(args: Args) -> None:
     )
     logging.info(f"Server metadata: {ws_client_policy.get_server_metadata()}")
 
-    metadata = ws_client_policy.get_server_metadata()
+    # metadata = ws_client_policy.get_server_metadata()
     runtime = _runtime.Runtime(
         environment=_env.AlohaRealEnvironment(),
         agent=_policy_agent.PolicyAgent(
