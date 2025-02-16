@@ -69,6 +69,7 @@ class RealEnv:
     def __init__(
         self,
         node: InterbotixRobotNode,
+        *,
         setup_robots: bool = True,
         setup_base: bool = False,
         is_mobile: bool = IS_MOBILE,
