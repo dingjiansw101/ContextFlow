@@ -18,6 +18,7 @@ import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
+import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
@@ -291,6 +292,62 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
             model_transforms=model_transforms,
         )
 
+@dataclasses.dataclass(frozen=True)
+class LeRobotAlohaMobileDataConfig(DataConfigFactory):
+    # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
+    # Gripper dimensions will remain in absolute values.
+    use_delta_joint_actions: bool = True
+    # If provided, will be injected into the input data if the "prompt" key is not present.
+    default_prompt: str | None = None
+    # If true, this will convert the joint and gripper values from the standard Aloha space to
+    # the space used by the pi internal runtime which was used to train the base model. People who
+    # use standard Aloha data should set this to true.
+    # adapt_to_pi: bool = True
+    adapt_to_pi: bool = False
+
+
+    # Repack transforms.
+    repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
+        default=_transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "images": {"cam_high": "observation.images.top"},
+                        "state": "observation.state",
+                        "actions": "action",
+                    }
+                )
+            ]
+        )
+    )
+    # Action keys that will be used to read the action sequence from the dataset.
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        # import ipdb; ipdb.set_trace()
+        # assert model_config.action_dim == 16
+        data_transforms = _transforms.Group(
+            inputs=[aloha_mobile_policy.AlohaMobileInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)],
+            outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
+        )
+        if self.use_delta_joint_actions:
+            # TODO: for base action, has it been delta?
+            delta_action_mask = _transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+
+        model_transforms = ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=self.repack_transforms,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            action_sequence_keys=self.action_sequence_keys,
+        )
 
 @dataclasses.dataclass(frozen=True)
 class TrainConfig:
@@ -407,6 +464,38 @@ _CONFIGS = [
             assets=AssetsConfig(asset_id="trossen"),
             default_prompt="open the tupperware and put the food on the plate",
         ),
+    ),
+    TrainConfig(
+        name="pi0_aloha_handover",
+        model=pi0.Pi0Config(),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/bottle_handover",
+            assets=AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen",
+            ),
+            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
     ),
     #
     # Inference DROID configs.

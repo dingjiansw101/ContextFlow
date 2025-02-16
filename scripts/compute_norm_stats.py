@@ -22,6 +22,7 @@ class RemoveStrings(transforms.DataTransformFn):
 
 def create_dataset(config: _config.TrainConfig) -> tuple[_config.DataConfig, _data_loader.Dataset]:
     data_config = config.data.create(config.assets_dirs, config.model)
+    # import ipdb; ipdb.set_trace()
     if data_config.repo_id is None:
         raise ValueError("Data config must have a repo_id")
     dataset = _data_loader.create_dataset(data_config, config.model)

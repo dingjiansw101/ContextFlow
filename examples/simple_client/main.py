@@ -15,6 +15,7 @@ class EnvMode(enum.Enum):
     ALOHA_SIM = "aloha_sim"
     DROID = "droid"
     LIBERO = "libero"
+    ALOHA_MOBILE = "aloha_mobile"
 
 
 @dataclasses.dataclass
@@ -32,6 +33,7 @@ def main(args: Args) -> None:
         EnvMode.ALOHA_SIM: _random_observation_aloha,
         EnvMode.DROID: _random_observation_droid,
         EnvMode.LIBERO: _random_observation_libero,
+        EnvMode.ALOHA_MOBILE: _random_observation_aloha_mobile,
     }[args.env]
 
     policy = _websocket_client_policy.WebsocketClientPolicy(
@@ -42,7 +44,7 @@ def main(args: Args) -> None:
 
     # Send 1 observation to make sure the model is loaded.
     policy.infer(obs_fn())
-
+    import ipdb; ipdb.set_trace()
     start = time.time()
     for _ in range(args.num_steps):
         policy.infer(obs_fn())
@@ -51,6 +53,16 @@ def main(args: Args) -> None:
     print(f"Total time taken: {end - start:.2f} s")
     print(f"Average inference time: {1000 * (end - start) / args.num_steps:.2f} ms")
 
+def _random_observation_aloha_mobile() -> dict:
+    return {
+        "state": np.ones((14,)),
+        "images": {
+            "cam_high": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
+            "cam_left_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
+            "cam_right_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
+        },
+        "prompt": "do something",
+    }
 
 def _random_observation_aloha() -> dict:
     return {
