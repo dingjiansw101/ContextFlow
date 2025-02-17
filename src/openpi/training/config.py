@@ -151,6 +151,10 @@ class DataConfigFactory(abc.ABC):
     def create_base_config(self, assets_dirs: pathlib.Path) -> DataConfig:
         repo_id = self.repo_id if self.repo_id is not tyro.MISSING else None
         asset_id = self.assets.asset_id or repo_id
+        print("asset_id: ", asset_id)
+        print("assets.asset_id: ", self.assets.asset_id )
+        print("repo_id: ", repo_id)
+        # import ipdb; ipdb.set_trace() # TODO: fix this bug, The trossen remote norm stats is used for training and testing
         return dataclasses.replace(
             self.base_config or DataConfig(),
             repo_id=repo_id,
@@ -471,7 +475,7 @@ _CONFIGS = [
         data=LeRobotAlohaMobileDataConfig(
             repo_id="vo2yager/bottle_handover",
             assets=AssetsConfig(
-                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets", # TODO: check the assets and modify it
                 asset_id="trossen",
             ),
             default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
@@ -494,7 +498,7 @@ _CONFIGS = [
                 local_files_only=False,  # Set to True for local-only datasets.
             ),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"), # TODO: check the weight_loader
         num_train_steps=20_000,
     ),
     #
