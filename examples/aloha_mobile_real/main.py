@@ -12,7 +12,7 @@ from examples.aloha_mobile_real import env as _env
 
 @dataclasses.dataclass
 class Args:
-    host: str = "0.0.0.0"
+    host: str = "10.68.106.146"
     port: int = 8000
 
     action_horizon: int = 25
