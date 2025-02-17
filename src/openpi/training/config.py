@@ -474,10 +474,10 @@ _CONFIGS = [
         model=pi0.Pi0Config(),
         data=LeRobotAlohaMobileDataConfig(
             repo_id="vo2yager/bottle_handover",
-            assets=AssetsConfig(
-                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets", # TODO: check the assets and modify it
-                asset_id="trossen",
-            ),
+            # assets=AssetsConfig(
+            #     assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets", # TODO: check the assets and modify it
+            #     asset_id="trossen",
+            # ),
             default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
             repack_transforms=_transforms.Group(
                 inputs=[
