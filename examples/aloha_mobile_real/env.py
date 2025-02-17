@@ -4,9 +4,18 @@ import einops
 from openpi_client import image_tools
 from openpi_client.runtime import environment as _environment
 from typing_extensions import override
+from interbotix_common_modules.common_robot.robot import (
+    create_interbotix_global_node,
+    get_interbotix_global_node,
+    robot_startup,
+)
+from interbotix_common_modules.common_robot.exceptions import InterbotixException
+
+import sys
+sys.path.append('/home/aloha/workspace/openpi')
 
 from examples.aloha_mobile_real import real_env as _real_env
-
+# from . import real_env as _real_env
 
 class AlohaRealEnvironment(_environment.Environment):
     """An environment for an Aloha robot on real hardware."""
@@ -16,11 +25,16 @@ class AlohaRealEnvironment(_environment.Environment):
         render_height: int = 224,
         render_width: int = 224,
     ) -> None:
-        # TODO: reset base
-        # TODO: check the input of make_real_env
-        self._env = _real_env.make_real_env(setup_robots=True, setup_base=True)
+        try:
+            node = get_interbotix_global_node()
+        except:
+            node = create_interbotix_global_node('aloha')
+        self._env = _real_env.make_real_env(node=node, setup_robots=True, setup_base=True)
 
-
+        try:
+            robot_startup(node)
+        except InterbotixException:
+            pass
         self._render_height = render_height
         self._render_width = render_width
 

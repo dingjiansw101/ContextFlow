@@ -7,6 +7,8 @@ from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
 import tyro
 
+import sys
+sys.path.append('/home/aloha/workspace/openpi')
 from examples.aloha_mobile_real import env as _env
 
 
@@ -38,7 +40,8 @@ def main(args: Args) -> None:
             )
         ),
         subscribers=[],
-        max_hz=50,
+        # max_hz=50, # TODO: adjust the hz. default 50
+        max_hz=5, # TODO: adjust the hz. default 50
         num_episodes=args.num_episodes,
         max_episode_steps=args.max_episode_steps,
     )
