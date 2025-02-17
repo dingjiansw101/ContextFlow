@@ -44,7 +44,6 @@ class AlohaMobileInputs(transforms.DataTransformFn):
     EXPECTED_CAMERAS: ClassVar[tuple[str, ...]] = ("cam_high", "cam_left_wrist", "cam_right_wrist")
 
     def __call__(self, data: dict) -> dict:
-        # TODO: set adapt_to_pi as False
         data = _decode_aloha(data, adapt_to_pi=self.adapt_to_pi)
 
         # Get the state. We are padding from 14 to the model action dim.
@@ -86,6 +85,8 @@ class AlohaMobileInputs(transforms.DataTransformFn):
         # Actions are only available during training.
         if "actions" in data:
             actions = np.asarray(data["actions"])
+            # in the current 
+            # print("actions shape: ", actions.shape)
             actions = _encode_actions_inv(actions, adapt_to_pi=self.adapt_to_pi)
             inputs["actions"] = transforms.pad_to_dim(actions, self.action_dim)
 
@@ -113,8 +114,7 @@ class AlohaMobileOutputs(transforms.DataTransformFn):
 
 def _joint_flip_mask() -> np.ndarray:
     """Used to convert between aloha and pi joint angles."""
-    # TODO: consider base action
-    return np.array([1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1])
+    return np.array([1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, 1, 1])
 
 
 def _normalize(x, min_val, max_val):
