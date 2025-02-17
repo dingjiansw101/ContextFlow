@@ -27,8 +27,7 @@ from interbotix_common_modules.common_robot.robot import (
     InterbotixRobotNode,
 )
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
-if IS_MOBILE:
-    from interbotix_xs_modules.xs_robot.slate import InterbotixSlate
+from interbotix_xs_modules.xs_robot.slate import InterbotixSlate
 from interbotix_xs_msgs.msg import JointSingleCommand
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,25 +68,10 @@ class RealEnv:
     def __init__(
         self,
         node: InterbotixRobotNode,
-        *,
         setup_robots: bool = True,
         setup_base: bool = False,
         is_mobile: bool = IS_MOBILE,
-        torque_base: bool = False,
     ):
-        """Initialize the Real Robot Environment
-
-        :param node: The InterbotixRobotNode to build the Interbotix API on
-        :param setup_robots: True to run through the arm setup process on init, defaults to True
-        :param setup_base: True to run through the base setup process on init, defaults to False
-        :param is_mobile: True to initialize the Mobile ALOHA environment, False for the Stationary
-            ALOHA environment, defaults to IS_MOBILE
-        :param torque_base: True to torque the base on after setup, False otherwise, defaults to
-            True. Only applies when IS_MOBILE is True
-        :raises ValueError: On providing False for setup_base but the robot is not mobile
-        """
-        # https://github.com/Interbotix/interbotix_ros_toolboxes/blob/main/interbotix_xs_toolbox/interbotix_xs_modules/src/interbotix_xs_modules/arm.py
-        # TODO: check why there is no init_node
         self.follower_bot_left = InterbotixManipulatorXS(
             robot_model='vx300s',
             group_name='arm',
@@ -115,24 +99,19 @@ class RealEnv:
 
         if setup_base:
             if is_mobile:
-                self.setup_base(node, torque_base)
+                self.setup_base(node)
             else:
                 raise ValueError((
                     'Requested to set up base but robot is not mobile. '
                     "Hint: check the 'IS_MOBILE' constant."
                 ))
 
-    def setup_base(self, node: InterbotixRobotNode, torque_enable: bool = False):
-        """Create and configure the SLATE base node
-
-        :param node: The InterbotixRobotNode to build the SLATE base module on
-        :param torque_enable: True to torque the base on setup, defaults to False
-        """
+    def setup_base(self, node):
         self.base = InterbotixSlate(
             'aloha',
             node=node,
         )
-        self.base.base.set_motor_torque(torque_enable)
+        self.base.base.set_motor_torque(False)
 
     def setup_robots(self):
         setup_follower_bot(self.follower_bot_left)
@@ -217,12 +196,13 @@ class RealEnv:
             moving_time=1.0,
         )
 
-    def get_observation(self, get_base_vel=IS_MOBILE):
+    def get_observation(self, get_base_vel=False):
         obs = collections.OrderedDict()
         obs['qpos'] = self.get_qpos()
         obs['qvel'] = self.get_qvel()
         obs['effort'] = self.get_effort()
         obs['images'] = self.get_images()
+        obs['base_vel'] = self.get_base_vel()
         if get_base_vel:
             obs['base_vel'] = self.get_base_vel()
         return obs
@@ -283,20 +263,13 @@ def get_action(
 def make_real_env(
     node: InterbotixRobotNode = None,
     setup_robots: bool = True,
-    setup_base: bool = False,
-    torque_base: bool = False,
+    setup_base: bool = False
 ):
     if node is None:
         node = get_interbotix_global_node()
         if node is None:
             node = create_interbotix_global_node('aloha')
-    env = RealEnv(
-        node=node,
-        setup_robots=setup_robots,
-        setup_base=setup_base,
-        is_mobile=IS_MOBILE,
-        torque_base=torque_base,
-    )
+    env = RealEnv(node, setup_robots, setup_base)
     return env
 
 
