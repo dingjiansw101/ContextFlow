@@ -14,8 +14,8 @@ from examples.aloha_mobile_real import env as _env
 
 @dataclasses.dataclass
 class Args:
-    # host: str = "10.68.106.146"
-    host: str = "10.68.106.82"
+    host: str = "10.68.106.146"
+    # host: str = "10.68.106.82"
     port: int = 8000
 
     action_horizon: int = 25
@@ -41,8 +41,7 @@ def main(args: Args) -> None:
             )
         ),
         subscribers=[],
-        # max_hz=50, # TODO: adjust the hz. default 50
-        max_hz=5, # TODO: adjust the hz. default 50
+        max_hz=50,
         num_episodes=args.num_episodes,
         max_episode_steps=args.max_episode_steps,
     )
