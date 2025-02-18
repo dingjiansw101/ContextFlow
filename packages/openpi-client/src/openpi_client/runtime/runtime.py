@@ -50,20 +50,20 @@ class Runtime:
     def _run_episode(self) -> None:
         """Runs a single episode."""
         logging.info("Starting episode...")
-        self._environment.reset()
-        self._agent.reset()
+        self._environment.reset() # The environment reset is no bug
+        self._agent.reset() # There is no bug for the agent reset
         for subscriber in self._subscribers:
             subscriber.on_episode_start()
 
         self._in_episode = True
         self._episode_steps = 0
         step_time = 1 / self._max_hz if self._max_hz > 0 else 0
-        DEBUG = True
-        if DEBUG:
-            step_time = 5.0
-        last_step_time = time.time()
 
+        last_step_time = time.time()
+        print(f"step_time: {step_time}")
+        
         while self._in_episode:
+            # print("self._in_episode: ", self._in_episode)
             self._step()
             self._episode_steps += 1
 
@@ -84,6 +84,7 @@ class Runtime:
         """A single step of the runtime loop."""
         observation = self._environment.get_observation()
         action = self._agent.get_action(observation)
+
         self._environment.apply_action(action)
 
         for subscriber in self._subscribers:
