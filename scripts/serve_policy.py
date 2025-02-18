@@ -76,7 +76,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.ALOHA_MOBILE: Checkpoint(
         config="pi0_aloha_handover",
-        dir="/home/dingj0b/workspace/openpi/checkpoints/pi0_aloha_handover/aloha_handover/10000",
+        dir="checkpoints/pi0_aloha_handover/pi0_aloha_handover/10000",
     ),
 }
 
