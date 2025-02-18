@@ -151,7 +151,7 @@ def create_data_loader(
             execute in the main process.
     """
     data_config = config.data.create(config.assets_dirs, config.model)
-    import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
     dataset = create_dataset(data_config, config.model)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
 
