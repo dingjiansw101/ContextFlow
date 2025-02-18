@@ -232,7 +232,7 @@ class RealEnv:
             Warning('Action length is 16, assuming base action is included')
             action = action[:14]
             # base_action = action[14:]
-        # import ipdb; ipdb.set_trace()       
+        # import ipdb; ipdb.set_trace()
         state_len = int(len(action) / 2)
         left_action = action[:state_len]
         right_action = action[state_len:]
