@@ -27,7 +27,7 @@ class AlohaRealEnvironment(_environment.Environment):
     ) -> None:
         try:
             node = get_interbotix_global_node()
-        except:
+        except Exception:
             node = create_interbotix_global_node('aloha')
         self._env = _real_env.make_real_env(node=node, setup_robots=True, setup_base=True)
 
