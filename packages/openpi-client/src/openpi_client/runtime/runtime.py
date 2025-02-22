@@ -6,6 +6,7 @@ from openpi_client.runtime import agent as _agent
 from openpi_client.runtime import environment as _environment
 from openpi_client.runtime import subscriber as _subscriber
 
+import numpy as np
 
 class Runtime:
     """The core module orchestrating interactions between key components of the system."""
@@ -63,7 +64,6 @@ class Runtime:
         print(f"step_time: {step_time}")
         
         while self._in_episode:
-            # print("self._in_episode: ", self._in_episode)
             self._step()
             self._episode_steps += 1
 
@@ -84,7 +84,15 @@ class Runtime:
         """A single step of the runtime loop."""
         observation = self._environment.get_observation()
         action = self._agent.get_action(observation)
-
+        # import ipdb; ipdb.set_trace()
+        movement = np.sum(np.abs(observation['state'] - action['actions'][:14]))
+        # print(f"observation: {observation['state']}")
+        print(f"movement: {movement}")
+        if movement > 2.5:
+            print(f"movement: {movement}")
+            print(f"observation: {observation['state']}")
+            print(f"action: {action['actions'][:14]}")
+            import ipdb; ipdb.set_trace()
         self._environment.apply_action(action)
 
         for subscriber in self._subscribers:

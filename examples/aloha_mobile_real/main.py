@@ -21,7 +21,7 @@ class Args:
     action_horizon: int = 25
 
     num_episodes: int = 1
-    max_episode_steps: int = 1000
+    max_episode_steps: int = 1000 # TODO: Set this to a reasonable value
 
 
 def main(args: Args) -> None:
