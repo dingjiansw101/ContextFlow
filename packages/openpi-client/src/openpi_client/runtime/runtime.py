@@ -92,7 +92,8 @@ class Runtime:
             print(f"movement: {movement}")
             print(f"observation: {observation['state']}")
             print(f"action: {action['actions'][:14]}")
-            import ipdb; ipdb.set_trace()
+            import ipdb; 
+            ipdb.set_trace()
         self._environment.apply_action(action)
 
         for subscriber in self._subscribers:

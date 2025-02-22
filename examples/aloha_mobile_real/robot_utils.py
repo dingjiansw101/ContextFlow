@@ -230,7 +230,7 @@ def move_grippers(
     gripper_command = JointSingleCommand(name='gripper')
     num_steps = int(moving_time / DT)
     curr_pose_list = [get_arm_gripper_positions(bot) for bot in bot_list]
-    zipped_lists = zip(curr_pose_list, target_pose_list)
+    zipped_lists = zip(curr_pose_list, target_pose_list, strict=True)
     traj_list = [
         np.linspace(curr_pose, target_pose, num_steps) for curr_pose, target_pose in zipped_lists
     ]

@@ -231,7 +231,7 @@ class RealEnv:
 
         if len(action) == 16:
             # TODO: find a proper way to handle base action, and refactor the code
-            warnings.warn('Action length is 16, assuming base action is included')
+            print('Action length is 16, assuming base action is included')
             action = action[:14]
             # base_action = action[14:]
         # import ipdb; ipdb.set_trace()
@@ -279,8 +279,7 @@ def make_real_env(
         node = get_interbotix_global_node()
         if node is None:
             node = create_interbotix_global_node('aloha')
-    env = RealEnv(node, setup_robots, setup_base)
-    return env
+    return RealEnv(node, setup_robots, setup_base)
 
 
 def test_real_teleop():
