@@ -474,10 +474,6 @@ _CONFIGS = [
         model=pi0.Pi0Config(),
         data=LeRobotAlohaMobileDataConfig(
             repo_id="vo2yager/bottle_handover",
-            # assets=AssetsConfig(
-            #     assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets", # TODO: check the assets and modify it
-            #     asset_id="trossen",
-            # ),
             default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
             repack_transforms=_transforms.Group(
                 inputs=[
@@ -501,6 +497,69 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"), # TODO: check the weight_loader
         num_train_steps=20_000,
     ),
+
+    TrainConfig(
+        name="pi0_aloha_handover_low_mem_finetune",
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/bottle_handover",
+            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+
+    TrainConfig(
+        name="pi0_fast_aloha_handover",
+        model=pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=10, max_token_len=180),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/bottle_handover",
+            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
+            repack_transforms=_transforms.Group(
+                inputs=[
+                    _transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=20_000,
+    ),
+
     #
     # Inference DROID configs.
     #
