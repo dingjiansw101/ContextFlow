@@ -20,6 +20,8 @@ class EnvMode(enum.Enum):
     LIBERO = "libero"
     ALOHA_HANDOVER = "aloha_handover"
     ALOHA_MOBILE = "trossen_mobile"
+    ALOHA_HANDOVER_LOW_MEM = "aloha_handover_low_mem"
+    FAST_ALOHA_HANDOVER = "pi0_fast_aloha_handover"
 
 
 @dataclasses.dataclass
@@ -78,12 +80,19 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.ALOHA_HANDOVER: Checkpoint(
         config="pi0_aloha_handover",
-        # dir="checkpoints/pi0_aloha_handover/pi0_aloha_handover/10000",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_handover/pi0_aloha_handover/19999",
     ),
     EnvMode.ALOHA_MOBILE: Checkpoint(
         config="pi0_aloha_mobile",
         dir="s3://openpi-assets/checkpoints/pi0_base",
+    ),
+    EnvMode.ALOHA_HANDOVER_LOW_MEM: Checkpoint(
+        config="pi0_aloha_handover_low_mem_finetune",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_handover_low_mem_finetune/pi0_aloha_handover_low_mem_finetune/10000",
+    ),
+    EnvMode.FAST_ALOHA_HANDOVER: Checkpoint(
+        config="pi0_fast_aloha_handover",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_handover/pi0_fast_aloha_handover/10000",
     ),
 }
 
