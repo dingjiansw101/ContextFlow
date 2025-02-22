@@ -18,7 +18,8 @@ class EnvMode(enum.Enum):
     ALOHA_SIM = "aloha_sim"
     DROID = "droid"
     LIBERO = "libero"
-    ALOHA_MOBILE = "aloha_mobile"
+    ALOHA_HANDOVER = "aloha_handover"
+    ALOHA_MOBILE = "trossen_mobile"
 
 
 @dataclasses.dataclass
@@ -58,6 +59,7 @@ class Args:
 
 # Default checkpoints that should be used for each environment.
 DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
+    # TODO: add mobile_trossen
     EnvMode.ALOHA: Checkpoint(
         config="pi0_aloha",
         dir="s3://openpi-assets/checkpoints/pi0_base",
@@ -74,9 +76,14 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_fast_libero",
         dir="s3://openpi-assets/checkpoints/pi0_fast_libero",
     ),
-    EnvMode.ALOHA_MOBILE: Checkpoint(
+    EnvMode.ALOHA_HANDOVER: Checkpoint(
         config="pi0_aloha_handover",
-        dir="checkpoints/pi0_aloha_handover/pi0_aloha_handover/10000",
+        # dir="checkpoints/pi0_aloha_handover/pi0_aloha_handover/10000",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_handover/pi0_aloha_handover/19999",
+    ),
+    EnvMode.ALOHA_MOBILE: Checkpoint(
+        config="pi0_aloha_mobile",
+        dir="s3://openpi-assets/checkpoints/pi0_base",
     ),
 }
 

@@ -454,6 +454,13 @@ _CONFIGS = [
         ),
     ),
     TrainConfig(
+        name="pi0_aloha_mobile",
+        model=pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            assets=AssetsConfig(asset_id="mobile_trossen"),
+        ),
+    ),
+    TrainConfig(
         name="pi0_aloha_towel",
         model=pi0.Pi0Config(),
         data=LeRobotAlohaDataConfig(
