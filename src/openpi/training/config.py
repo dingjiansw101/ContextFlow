@@ -543,7 +543,7 @@ _CONFIGS = [
 
     TrainConfig(
         name="pi0_fast_aloha_handover",
-        model=pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=10, max_token_len=180),
+        model=pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=10, max_token_len=400),
         data=LeRobotAlohaMobileDataConfig(
             repo_id="vo2yager/bottle_handover",
             default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
