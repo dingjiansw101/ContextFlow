@@ -21,6 +21,7 @@ from sensor_msgs.msg import Image, JointState
 class ImageRecorder:
     def __init__(
         self,
+        *,
         is_mobile: bool = IS_MOBILE,
         is_debug: bool = False,
         node: Node = None,
@@ -104,6 +105,7 @@ class Recorder:
     def __init__(
         self,
         side: str,
+        *,
         is_debug: bool = False,
         node: Node = None,
     ):
@@ -175,8 +177,7 @@ def get_arm_joint_positions(bot: InterbotixManipulatorXS):
 
 
 def get_arm_gripper_positions(bot: InterbotixManipulatorXS):
-    joint_position = bot.gripper.core.joint_states.position[6]
-    return joint_position
+    return bot.gripper.core.joint_states.position[6]
 
 
 def move_arms(
@@ -186,7 +187,7 @@ def move_arms(
 ) -> None:
     num_steps = int(moving_time / DT)
     curr_pose_list = [get_arm_joint_positions(bot) for bot in bot_list]
-    zipped_lists = zip(curr_pose_list, target_pose_list)
+    zipped_lists = zip(curr_pose_list, target_pose_list, strict=True)
     traj_list = [
         np.linspace(curr_pose, target_pose, num_steps) for curr_pose, target_pose in zipped_lists
     ]
@@ -199,6 +200,7 @@ def move_arms(
 def sleep_arms(
     bot_list: Sequence[InterbotixManipulatorXS],
     moving_time: float = 5.0,
+    *,
     home_first: bool = True,
 ) -> None:
     """Command given list of arms to their sleep poses, optionally to their home poses first.
@@ -263,13 +265,13 @@ def set_low_pid_gains(bot: InterbotixManipulatorXS):
 
 
 def torque_off(bot: InterbotixManipulatorXS):
-    bot.core.robot_torque_enable('group', 'arm', False)
-    bot.core.robot_torque_enable('single', 'gripper', False)
+    bot.core.robot_torque_enable('group', 'arm', enable=False)
+    bot.core.robot_torque_enable('single', 'gripper', enable=False)
 
 
 def torque_on(bot: InterbotixManipulatorXS):
-    bot.core.robot_torque_enable('group', 'arm', True)
-    bot.core.robot_torque_enable('single', 'gripper', True)
+    bot.core.robot_torque_enable('group', 'arm', enable=True)
+    bot.core.robot_torque_enable('single', 'gripper', enable=True)
 
 
 def calibrate_linear_vel(base_action, c=None):

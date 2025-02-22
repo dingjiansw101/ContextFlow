@@ -31,6 +31,7 @@ from interbotix_xs_modules.xs_robot.slate import InterbotixSlate
 from interbotix_xs_msgs.msg import JointSingleCommand
 import matplotlib.pyplot as plt
 import numpy as np
+import warnings
 
 
 class RealEnv:
@@ -225,12 +226,12 @@ class RealEnv:
             observation=self.get_observation(),
         )
 
-    def step(self, action, base_action=None, get_base_vel=False, get_obs=True):
+    def step(self, *, action, base_action=None, get_base_vel=False, get_obs=True):
         # import ipdb; ipdb.set_trace()
 
         if len(action) == 16:
             # TODO: find a proper way to handle base action, and refactor the code
-            Warning('Action length is 16, assuming base action is included')
+            warnings.warn('Action length is 16, assuming base action is included')
             action = action[:14]
             # base_action = action[14:]
         # import ipdb; ipdb.set_trace()
@@ -243,10 +244,9 @@ class RealEnv:
         if base_action is not None:
             base_action_linear, base_action_angular = base_action
             self.base.base.command_velocity_xyaw(x=base_action_linear, yaw=base_action_angular)
-        if get_obs:
-            obs = self.get_observation(get_base_vel)
-        else:
-            obs = None
+
+        obs = self.get_observation(get_base_vel) if get_obs else None
+
         return dm_env.TimeStep(
             step_type=dm_env.StepType.MID,
             reward=self.get_reward(),
@@ -271,6 +271,7 @@ def get_action(
 
 def make_real_env(
     node: InterbotixRobotNode = None,
+    *,
     setup_robots: bool = True,
     setup_base: bool = False
 ):
