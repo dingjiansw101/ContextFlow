@@ -1,37 +1,30 @@
 import collections
 import time
 
-from aloha.constants import (
-    DT,
-    FOLLOWER_GRIPPER_JOINT_CLOSE,
-    FOLLOWER_GRIPPER_JOINT_OPEN,
-    FOLLOWER_GRIPPER_JOINT_UNNORMALIZE_FN,
-    FOLLOWER_GRIPPER_POSITION_NORMALIZE_FN,
-    FOLLOWER_GRIPPER_VELOCITY_NORMALIZE_FN,
-    IS_MOBILE,
-    LEADER_GRIPPER_JOINT_NORMALIZE_FN,
-    START_ARM_POSE,
-)
-from aloha.robot_utils import (
-    ImageRecorder,
-    move_arms,
-    move_grippers,
-    Recorder,
-    setup_follower_bot,
-    setup_leader_bot,
-)
+from aloha.constants import DT
+from aloha.constants import FOLLOWER_GRIPPER_JOINT_CLOSE
+from aloha.constants import FOLLOWER_GRIPPER_JOINT_OPEN
+from aloha.constants import FOLLOWER_GRIPPER_JOINT_UNNORMALIZE_FN
+from aloha.constants import FOLLOWER_GRIPPER_POSITION_NORMALIZE_FN
+from aloha.constants import FOLLOWER_GRIPPER_VELOCITY_NORMALIZE_FN
+from aloha.constants import IS_MOBILE
+from aloha.constants import LEADER_GRIPPER_JOINT_NORMALIZE_FN
+from aloha.constants import START_ARM_POSE
+from aloha.robot_utils import ImageRecorder
+from aloha.robot_utils import Recorder
+from aloha.robot_utils import move_arms
+from aloha.robot_utils import move_grippers
+from aloha.robot_utils import setup_follower_bot
+from aloha.robot_utils import setup_leader_bot
 import dm_env
-from interbotix_common_modules.common_robot.robot import (
-    create_interbotix_global_node,
-    get_interbotix_global_node,
-    InterbotixRobotNode,
-)
+from interbotix_common_modules.common_robot.robot import InterbotixRobotNode
+from interbotix_common_modules.common_robot.robot import create_interbotix_global_node
+from interbotix_common_modules.common_robot.robot import get_interbotix_global_node
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
 from interbotix_xs_modules.xs_robot.slate import InterbotixSlate
 from interbotix_xs_msgs.msg import JointSingleCommand
 import matplotlib.pyplot as plt
 import numpy as np
-import warnings
 
 
 class RealEnv:
@@ -75,26 +68,26 @@ class RealEnv:
         is_mobile: bool = IS_MOBILE,
     ):
         self.follower_bot_left = InterbotixManipulatorXS(
-            robot_model='vx300s',
-            group_name='arm',
-            gripper_name='gripper',
-            robot_name='follower_left',
+            robot_model="vx300s",
+            group_name="arm",
+            gripper_name="gripper",
+            robot_name="follower_left",
             node=node,
             iterative_update_fk=False,
         )
         self.follower_bot_right = InterbotixManipulatorXS(
-            robot_model='vx300s',
-            group_name='arm',
-            gripper_name='gripper',
-            robot_name='follower_right',
+            robot_model="vx300s",
+            group_name="arm",
+            gripper_name="gripper",
+            robot_name="follower_right",
             node=node,
             iterative_update_fk=False,
         )
 
-        self.recorder_left = Recorder('left', node=node)
-        self.recorder_right = Recorder('right', node=node)
+        self.recorder_left = Recorder("left", node=node)
+        self.recorder_right = Recorder("right", node=node)
         self.image_recorder = ImageRecorder(node=node, is_mobile=IS_MOBILE)
-        self.gripper_command = JointSingleCommand(name='gripper')
+        self.gripper_command = JointSingleCommand(name="gripper")
 
         if setup_robots:
             self.setup_robots()
@@ -103,14 +96,13 @@ class RealEnv:
             if is_mobile:
                 self.setup_base(node)
             else:
-                raise ValueError((
-                    'Requested to set up base but robot is not mobile. '
-                    "Hint: check the 'IS_MOBILE' constant."
-                ))
+                raise ValueError(
+                    "Requested to set up base but robot is not mobile. " "Hint: check the 'IS_MOBILE' constant."
+                )
 
     def setup_base(self, node):
         self.base = InterbotixSlate(
-            'aloha',
+            "aloha",
             node=node,
         )
         self.base.base.set_motor_torque(False)
@@ -126,9 +118,7 @@ class RealEnv:
         right_arm_qpos = right_qpos_raw[:6]
         left_gripper_qpos = [FOLLOWER_GRIPPER_POSITION_NORMALIZE_FN(left_qpos_raw[7])]
         right_gripper_qpos = [FOLLOWER_GRIPPER_POSITION_NORMALIZE_FN(right_qpos_raw[7])]
-        return np.concatenate(
-            [left_arm_qpos, left_gripper_qpos, right_arm_qpos, right_gripper_qpos]
-        )
+        return np.concatenate([left_arm_qpos, left_gripper_qpos, right_arm_qpos, right_gripper_qpos])
 
     def get_qvel(self):
         left_qvel_raw = self.recorder_left.qvel
@@ -137,9 +127,7 @@ class RealEnv:
         right_arm_qvel = right_qvel_raw[:6]
         left_gripper_qvel = [FOLLOWER_GRIPPER_VELOCITY_NORMALIZE_FN(left_qvel_raw[7])]
         right_gripper_qvel = [FOLLOWER_GRIPPER_VELOCITY_NORMALIZE_FN(right_qvel_raw[7])]
-        return np.concatenate(
-            [left_arm_qvel, left_gripper_qvel, right_arm_qvel, right_gripper_qvel]
-        )
+        return np.concatenate([left_arm_qvel, left_gripper_qvel, right_arm_qvel, right_gripper_qvel])
 
     def get_effort(self):
         left_effort_raw = self.recorder_left.effort
@@ -156,20 +144,12 @@ class RealEnv:
         angular_vel = self.base.base.get_angular_velocity().z
         return np.array([linear_vel, angular_vel])
 
-    def set_gripper_pose(
-        self,
-        left_gripper_desired_pos_normalized,
-        right_gripper_desired_pos_normalized
-    ):
-        left_gripper_desired_joint = FOLLOWER_GRIPPER_JOINT_UNNORMALIZE_FN(
-            left_gripper_desired_pos_normalized
-        )
+    def set_gripper_pose(self, left_gripper_desired_pos_normalized, right_gripper_desired_pos_normalized):
+        left_gripper_desired_joint = FOLLOWER_GRIPPER_JOINT_UNNORMALIZE_FN(left_gripper_desired_pos_normalized)
         self.gripper_command.cmd = left_gripper_desired_joint
         self.follower_bot_left.gripper.core.pub_single.publish(self.gripper_command)
 
-        right_gripper_desired_joint = FOLLOWER_GRIPPER_JOINT_UNNORMALIZE_FN(
-            right_gripper_desired_pos_normalized
-        )
+        right_gripper_desired_joint = FOLLOWER_GRIPPER_JOINT_UNNORMALIZE_FN(right_gripper_desired_pos_normalized)
         self.gripper_command.cmd = right_gripper_desired_joint
         self.follower_bot_right.gripper.core.pub_single.publish(self.gripper_command)
 
@@ -200,13 +180,13 @@ class RealEnv:
 
     def get_observation(self, *, get_base_vel=False):
         obs = collections.OrderedDict()
-        obs['qpos'] = self.get_qpos()
-        obs['qvel'] = self.get_qvel()
-        obs['effort'] = self.get_effort()
-        obs['images'] = self.get_images()
-        obs['base_vel'] = self.get_base_vel()
+        obs["qpos"] = self.get_qpos()
+        obs["qvel"] = self.get_qvel()
+        obs["effort"] = self.get_effort()
+        obs["images"] = self.get_images()
+        obs["base_vel"] = self.get_base_vel()
         if get_base_vel:
-            obs['base_vel'] = self.get_base_vel()
+            obs["base_vel"] = self.get_base_vel()
         return obs
 
     def get_reward(self):
@@ -215,8 +195,8 @@ class RealEnv:
     def reset(self, *, fake=False):
         if not fake:
             # Reboot follower robot gripper motors
-            self.follower_bot_left.core.robot_reboot_motors('single', 'gripper', enable=True)
-            self.follower_bot_right.core.robot_reboot_motors('single', 'gripper', enable=True)
+            self.follower_bot_left.core.robot_reboot_motors("single", "gripper", enable=True)
+            self.follower_bot_right.core.robot_reboot_motors("single", "gripper", enable=True)
             self._reset_joints()
             self._reset_gripper()
         return dm_env.TimeStep(
@@ -231,7 +211,7 @@ class RealEnv:
 
         if len(action) == 16:
             # TODO: find a proper way to handle base action, and refactor the code
-            print('Action length is 16, assuming base action is included')
+            print("Action length is 16, assuming base action is included")
             action = action[:14]
             # base_action = action[14:]
         # import ipdb; ipdb.set_trace()
@@ -247,38 +227,26 @@ class RealEnv:
 
         obs = self.get_observation(get_base_vel) if get_obs else None
 
-        return dm_env.TimeStep(
-            step_type=dm_env.StepType.MID,
-            reward=self.get_reward(),
-            discount=None,
-            observation=obs)
+        return dm_env.TimeStep(step_type=dm_env.StepType.MID, reward=self.get_reward(), discount=None, observation=obs)
 
 
-def get_action(
-    leader_bot_left: InterbotixManipulatorXS,
-    leader_bot_right: InterbotixManipulatorXS
-):
+def get_action(leader_bot_left: InterbotixManipulatorXS, leader_bot_right: InterbotixManipulatorXS):
     action = np.zeros(14)  # 6 joint + 1 gripper, for two arms
     # Arm actions
     action[:6] = leader_bot_left.core.joint_states.position[:6]
-    action[7:7+6] = leader_bot_right.core.joint_states.position[:6]
+    action[7 : 7 + 6] = leader_bot_right.core.joint_states.position[:6]
     # Gripper actions
     action[6] = LEADER_GRIPPER_JOINT_NORMALIZE_FN(leader_bot_left.core.joint_states.position[6])
-    action[7+6] = LEADER_GRIPPER_JOINT_NORMALIZE_FN(leader_bot_right.core.joint_states.position[6])
+    action[7 + 6] = LEADER_GRIPPER_JOINT_NORMALIZE_FN(leader_bot_right.core.joint_states.position[6])
 
     return action
 
 
-def make_real_env(
-    node: InterbotixRobotNode = None,
-    *,
-    setup_robots: bool = True,
-    setup_base: bool = False
-):
+def make_real_env(node: InterbotixRobotNode = None, *, setup_robots: bool = True, setup_base: bool = False):
     if node is None:
         node = get_interbotix_global_node()
         if node is None:
-            node = create_interbotix_global_node('aloha')
+            node = create_interbotix_global_node("aloha")
     return RealEnv(node, setup_robots, setup_base)
 
 
@@ -294,19 +262,19 @@ def test_real_teleop():
     This script will result in higher fidelity (obs, action) pairs
     """
     onscreen_render = True
-    render_cam = 'cam_left_wrist'
+    render_cam = "cam_left_wrist"
 
     node = get_interbotix_global_node()
 
     # source of data
     leader_bot_left = InterbotixManipulatorXS(
-        robot_model='wx250s',
-        robot_name='leader_left',
+        robot_model="wx250s",
+        robot_name="leader_left",
         node=node,
     )
     leader_bot_right = InterbotixManipulatorXS(
-        robot_model='wx250s',
-        robot_name='leader_right',
+        robot_model="wx250s",
+        robot_name="leader_right",
         node=node,
     )
     setup_leader_bot(leader_bot_left)
@@ -319,7 +287,7 @@ def test_real_teleop():
     # visualization setup
     if onscreen_render:
         ax = plt.subplot()
-        plt_img = ax.imshow(ts.observation['images'][render_cam])
+        plt_img = ax.imshow(ts.observation["images"][render_cam])
         plt.ion()
 
     for _ in range(1000):
@@ -328,11 +296,11 @@ def test_real_teleop():
         episode.append(ts)
 
         if onscreen_render:
-            plt_img.set_data(ts.observation['images'][render_cam])
+            plt_img.set_data(ts.observation["images"][render_cam])
             plt.pause(DT)
         else:
             time.sleep(DT)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_real_teleop()

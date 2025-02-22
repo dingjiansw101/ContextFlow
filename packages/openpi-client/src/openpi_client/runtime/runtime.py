@@ -8,6 +8,7 @@ from openpi_client.runtime import subscriber as _subscriber
 
 import numpy as np
 
+
 class Runtime:
     """The core module orchestrating interactions between key components of the system."""
 
@@ -51,8 +52,8 @@ class Runtime:
     def _run_episode(self) -> None:
         """Runs a single episode."""
         logging.info("Starting episode...")
-        self._environment.reset() # The environment reset is no bug
-        self._agent.reset() # There is no bug for the agent reset
+        self._environment.reset()  # The environment reset is no bug
+        self._agent.reset()  # There is no bug for the agent reset
         for subscriber in self._subscribers:
             subscriber.on_episode_start()
 
@@ -62,7 +63,7 @@ class Runtime:
 
         last_step_time = time.time()
         print(f"step_time: {step_time}")
-        
+
         while self._in_episode:
             self._step()
             self._episode_steps += 1
@@ -85,14 +86,15 @@ class Runtime:
         observation = self._environment.get_observation()
         action = self._agent.get_action(observation)
         # import ipdb; ipdb.set_trace()
-        movement = np.sum(np.abs(observation['state'] - action['actions'][:14]))
+        movement = np.sum(np.abs(observation["state"] - action["actions"][:14]))
         # print(f"observation: {observation['state']}")
         print(f"movement: {movement}")
         if movement > 2.5:
             print(f"movement: {movement}")
             print(f"observation: {observation['state']}")
             print(f"action: {action['actions'][:14]}")
-            import ipdb; 
+            import ipdb
+
             ipdb.set_trace()
         self._environment.apply_action(action)
 

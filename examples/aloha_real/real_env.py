@@ -134,8 +134,8 @@ class RealEnv:
     def reset(self, *, fake=False):
         if not fake:
             # Reboot puppet robot gripper motors
-            self.puppet_bot_left.dxl.robot_reboot_motors('single', 'gripper', enable=True)("single", "gripper", True)
-            self.puppet_bot_right.dxl.robot_reboot_motors('single', 'gripper', enable=True)("single", "gripper", True)
+            self.puppet_bot_left.dxl.robot_reboot_motors("single", "gripper", enable=True)("single", "gripper", True)
+            self.puppet_bot_right.dxl.robot_reboot_motors("single", "gripper", enable=True)("single", "gripper", True)
             self._reset_joints()
             self._reset_gripper()
         return dm_env.TimeStep(

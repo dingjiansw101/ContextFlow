@@ -1,5 +1,6 @@
 import dataclasses
 import logging
+import sys
 
 from openpi_client import action_chunk_broker
 from openpi_client import websocket_client_policy as _websocket_client_policy
@@ -7,8 +8,7 @@ from openpi_client.runtime import runtime as _runtime
 from openpi_client.runtime.agents import policy_agent as _policy_agent
 import tyro
 
-import sys
-sys.path.append('/home/aloha/workspace/openpi')
+sys.path.append("/home/aloha/workspace/openpi")
 from examples.aloha_mobile_real import env as _env
 
 
@@ -21,7 +21,7 @@ class Args:
     action_horizon: int = 25
 
     num_episodes: int = 1
-    max_episode_steps: int = 1000 # TODO: Set this to a reasonable value
+    max_episode_steps: int = 1000  # TODO: Set this to a reasonable value
 
 
 def main(args: Args) -> None:

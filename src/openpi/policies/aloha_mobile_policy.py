@@ -38,7 +38,6 @@ class AlohaMobileInputs(transforms.DataTransformFn):
     # adapt_to_pi: bool = True
     adapt_to_pi: bool = False
 
-
     # The expected cameras names. All input cameras must be in this set. Missing cameras will be
     # replaced with black images and the corresponding `image_mask` will be set to False.
     EXPECTED_CAMERAS: ClassVar[tuple[str, ...]] = ("cam_high", "cam_left_wrist", "cam_right_wrist")
@@ -85,7 +84,7 @@ class AlohaMobileInputs(transforms.DataTransformFn):
         # Actions are only available during training.
         if "actions" in data:
             actions = np.asarray(data["actions"])
-            # in the current 
+            # in the current
             # print("actions shape: ", actions.shape)
             actions = _encode_actions_inv(actions, adapt_to_pi=self.adapt_to_pi)
             inputs["actions"] = transforms.pad_to_dim(actions, self.action_dim)
@@ -104,7 +103,6 @@ class AlohaMobileOutputs(transforms.DataTransformFn):
     # the space used by the pi internal runtime which was used to train the base model.
     # adapt_to_pi: bool = True
     adapt_to_pi: bool = False
-
 
     def __call__(self, data: dict) -> dict:
         # Only return the first 14 dims.

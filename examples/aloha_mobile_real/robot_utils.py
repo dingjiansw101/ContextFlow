@@ -1,21 +1,19 @@
 from collections import deque
+from collections.abc import Sequence
 import time
-from typing import Sequence
 
-from aloha.constants import (
-    COLOR_IMAGE_TOPIC_NAME,
-    DT,
-    IS_MOBILE,
-)
+from aloha.constants import COLOR_IMAGE_TOPIC_NAME
+from aloha.constants import DT
+from aloha.constants import IS_MOBILE
 from cv_bridge import CvBridge
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
-from interbotix_xs_modules.xs_robot.gravity_compensation import (
-    InterbotixGravityCompensationInterface,
-)
-from interbotix_xs_msgs.msg import JointGroupCommand, JointSingleCommand
+from interbotix_xs_modules.xs_robot.gravity_compensation import InterbotixGravityCompensationInterface
+from interbotix_xs_msgs.msg import JointGroupCommand
+from interbotix_xs_msgs.msg import JointSingleCommand
 import numpy as np
 from rclpy.node import Node
-from sensor_msgs.msg import Image, JointState
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import JointState
 
 
 class ImageRecorder:
@@ -30,64 +28,57 @@ class ImageRecorder:
         self.bridge = CvBridge()
 
         if is_mobile:
-            self.camera_names = ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
+            self.camera_names = ["cam_high", "cam_left_wrist", "cam_right_wrist"]
         else:
-            self.camera_names = ['cam_high', 'cam_low', 'cam_left_wrist', 'cam_right_wrist']
+            self.camera_names = ["cam_high", "cam_low", "cam_left_wrist", "cam_right_wrist"]
 
         for cam_name in self.camera_names:
-            setattr(self, f'{cam_name}_image', None)
-            setattr(self, f'{cam_name}_secs', None)
-            setattr(self, f'{cam_name}_nsecs', None)
-            if cam_name == 'cam_high':
+            setattr(self, f"{cam_name}_image", None)
+            setattr(self, f"{cam_name}_secs", None)
+            setattr(self, f"{cam_name}_nsecs", None)
+            if cam_name == "cam_high":
                 callback_func = self.image_cb_cam_high
-            elif cam_name == 'cam_low':
+            elif cam_name == "cam_low":
                 callback_func = self.image_cb_cam_low
-            elif cam_name == 'cam_left_wrist':
+            elif cam_name == "cam_left_wrist":
                 callback_func = self.image_cb_cam_left_wrist
-            elif cam_name == 'cam_right_wrist':
+            elif cam_name == "cam_right_wrist":
                 callback_func = self.image_cb_cam_right_wrist
             else:
                 raise NotImplementedError
             topic = COLOR_IMAGE_TOPIC_NAME.format(cam_name)
             node.create_subscription(Image, topic, callback_func, 20)
             if self.is_debug:
-                setattr(self, f'{cam_name}_timestamps', deque(maxlen=50))
+                setattr(self, f"{cam_name}_timestamps", deque(maxlen=50))
         time.sleep(0.5)
 
     def image_cb(self, cam_name: str, data: Image):
-        setattr(
-            self,
-            f'{cam_name}_image',
-            self.bridge.imgmsg_to_cv2(data, desired_encoding='passthrough')
-        )
-        setattr(self, f'{cam_name}_secs', data.header.stamp.sec)
-        setattr(self, f'{cam_name}_nsecs', data.header.stamp.nanosec)
+        setattr(self, f"{cam_name}_image", self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough"))
+        setattr(self, f"{cam_name}_secs", data.header.stamp.sec)
+        setattr(self, f"{cam_name}_nsecs", data.header.stamp.nanosec)
         if self.is_debug:
-            getattr(
-                self,
-                f'{cam_name}_timestamps'
-            ).append(data.header.stamp.sec + data.header.stamp.sec * 1e-9)
+            getattr(self, f"{cam_name}_timestamps").append(data.header.stamp.sec + data.header.stamp.sec * 1e-9)
 
     def image_cb_cam_high(self, data):
-        cam_name = 'cam_high'
+        cam_name = "cam_high"
         return self.image_cb(cam_name, data)
 
     def image_cb_cam_low(self, data):
-        cam_name = 'cam_low'
+        cam_name = "cam_low"
         return self.image_cb(cam_name, data)
 
     def image_cb_cam_left_wrist(self, data):
-        cam_name = 'cam_left_wrist'
+        cam_name = "cam_left_wrist"
         return self.image_cb(cam_name, data)
 
     def image_cb_cam_right_wrist(self, data):
-        cam_name = 'cam_right_wrist'
+        cam_name = "cam_right_wrist"
         return self.image_cb(cam_name, data)
 
     def get_images(self):
         image_dict = {}
         for cam_name in self.camera_names:
-            image_dict[cam_name] = getattr(self, f'{cam_name}_image')
+            image_dict[cam_name] = getattr(self, f"{cam_name}_image")
         return image_dict
 
     def print_diagnostics(self):
@@ -95,9 +86,10 @@ class ImageRecorder:
             ts = np.array(ts)
             diff = ts[1:] - ts[:-1]
             return np.mean(diff)
+
         for cam_name in self.camera_names:
-            image_freq = 1 / dt_helper(getattr(self, f'{cam_name}_timestamps'))
-            print(f'{cam_name} {image_freq=:.2f}')
+            image_freq = 1 / dt_helper(getattr(self, f"{cam_name}_timestamps"))
+            print(f"{cam_name} {image_freq=:.2f}")
         print()
 
 
@@ -119,19 +111,19 @@ class Recorder:
 
         node.create_subscription(
             JointState,
-            f'/follower_{side}/joint_states',
+            f"/follower_{side}/joint_states",
             self.follower_state_cb,
             10,
         )
         node.create_subscription(
             JointGroupCommand,
-            f'/follower_{side}/commands/joint_group',
+            f"/follower_{side}/commands/joint_group",
             self.follower_arm_commands_cb,
             10,
         )
         node.create_subscription(
             JointSingleCommand,
-            f'/follower_{side}/commands/joint_single',
+            f"/follower_{side}/commands/joint_single",
             self.follower_gripper_commands_cb,
             10,
         )
@@ -169,7 +161,7 @@ class Recorder:
         arm_command_freq = 1 / dt_helper(self.arm_command_timestamps)
         gripper_command_freq = 1 / dt_helper(self.gripper_command_timestamps)
 
-        print(f'{joint_freq=:.2f}\n{arm_command_freq=:.2f}\n{gripper_command_freq=:.2f}\n')
+        print(f"{joint_freq=:.2f}\n{arm_command_freq=:.2f}\n{gripper_command_freq=:.2f}\n")
 
 
 def get_arm_joint_positions(bot: InterbotixManipulatorXS):
@@ -188,9 +180,7 @@ def move_arms(
     num_steps = int(moving_time / DT)
     curr_pose_list = [get_arm_joint_positions(bot) for bot in bot_list]
     zipped_lists = zip(curr_pose_list, target_pose_list, strict=True)
-    traj_list = [
-        np.linspace(curr_pose, target_pose, num_steps) for curr_pose, target_pose in zipped_lists
-    ]
+    traj_list = [np.linspace(curr_pose, target_pose, num_steps) for curr_pose, target_pose in zipped_lists]
     for t in range(num_steps):
         for bot_id, bot in enumerate(bot_list):
             bot.arm.set_joint_positions(traj_list[bot_id][t], blocking=False)
@@ -210,11 +200,7 @@ def sleep_arms(
     :param home_first: True to command the arms to their home poses first, defaults to True
     """
     if home_first:
-        move_arms(
-            bot_list,
-            [[0.0, -0.96, 1.16, 0.0, -0.3, 0.0]] * len(bot_list),
-            moving_time=moving_time
-        )
+        move_arms(bot_list, [[0.0, -0.96, 1.16, 0.0, -0.3, 0.0]] * len(bot_list), moving_time=moving_time)
     move_arms(
         bot_list,
         [bot.arm.group_info.joint_sleep_positions for bot in bot_list],
@@ -227,13 +213,11 @@ def move_grippers(
     target_pose_list: Sequence[float],
     moving_time: float,
 ):
-    gripper_command = JointSingleCommand(name='gripper')
+    gripper_command = JointSingleCommand(name="gripper")
     num_steps = int(moving_time / DT)
     curr_pose_list = [get_arm_gripper_positions(bot) for bot in bot_list]
     zipped_lists = zip(curr_pose_list, target_pose_list, strict=True)
-    traj_list = [
-        np.linspace(curr_pose, target_pose, num_steps) for curr_pose, target_pose in zipped_lists
-    ]
+    traj_list = [np.linspace(curr_pose, target_pose, num_steps) for curr_pose, target_pose in zipped_lists]
     for t in range(num_steps):
         for bot_id, bot in enumerate(bot_list):
             gripper_command.cmd = traj_list[bot_id][t]
@@ -242,41 +226,41 @@ def move_grippers(
 
 
 def setup_follower_bot(bot: InterbotixManipulatorXS):
-    bot.core.robot_reboot_motors('single', 'gripper', enable=True)
-    bot.core.robot_set_operating_modes('group', 'arm', 'position')
-    bot.core.robot_set_operating_modes('single', 'gripper', 'current_based_position')
+    bot.core.robot_reboot_motors("single", "gripper", enable=True)
+    bot.core.robot_set_operating_modes("group", "arm", "position")
+    bot.core.robot_set_operating_modes("single", "gripper", "current_based_position")
     torque_on(bot)
 
 
 def setup_leader_bot(bot: InterbotixManipulatorXS):
-    bot.core.robot_set_operating_modes('group', 'arm', 'pwm')
-    bot.core.robot_set_operating_modes('single', 'gripper', 'current_based_position')
+    bot.core.robot_set_operating_modes("group", "arm", "pwm")
+    bot.core.robot_set_operating_modes("single", "gripper", "current_based_position")
     torque_off(bot)
 
 
 def set_standard_pid_gains(bot: InterbotixManipulatorXS):
-    bot.core.robot_set_motor_registers('group', 'arm', 'Position_P_Gain', 800)
-    bot.core.robot_set_motor_registers('group', 'arm', 'Position_I_Gain', 0)
+    bot.core.robot_set_motor_registers("group", "arm", "Position_P_Gain", 800)
+    bot.core.robot_set_motor_registers("group", "arm", "Position_I_Gain", 0)
 
 
 def set_low_pid_gains(bot: InterbotixManipulatorXS):
-    bot.core.robot_set_motor_registers('group', 'arm', 'Position_P_Gain', 100)
-    bot.core.robot_set_motor_registers('group', 'arm', 'Position_I_Gain', 0)
+    bot.core.robot_set_motor_registers("group", "arm", "Position_P_Gain", 100)
+    bot.core.robot_set_motor_registers("group", "arm", "Position_I_Gain", 0)
 
 
 def torque_off(bot: InterbotixManipulatorXS):
-    bot.core.robot_torque_enable('group', 'arm', enable=False)
-    bot.core.robot_torque_enable('single', 'gripper', enable=False)
+    bot.core.robot_torque_enable("group", "arm", enable=False)
+    bot.core.robot_torque_enable("single", "gripper", enable=False)
 
 
 def torque_on(bot: InterbotixManipulatorXS):
-    bot.core.robot_torque_enable('group', 'arm', enable=True)
-    bot.core.robot_torque_enable('single', 'gripper', enable=True)
+    bot.core.robot_torque_enable("group", "arm", enable=True)
+    bot.core.robot_torque_enable("single", "gripper", enable=True)
 
 
 def calibrate_linear_vel(base_action, c=None):
     if c is None:
-        c = 0.
+        c = 0.0
     v = base_action[..., 0]
     w = base_action[..., 1]
     base_action = base_action.copy()
@@ -286,12 +270,7 @@ def calibrate_linear_vel(base_action, c=None):
 
 def smooth_base_action(base_action):
     return np.stack(
-        [
-            np.convolve(
-                base_action[:, i],
-                np.ones(5)/5, mode='same') for i in range(base_action.shape[1])
-        ],
-        axis=-1
+        [np.convolve(base_action[:, i], np.ones(5) / 5, mode="same") for i in range(base_action.shape[1])], axis=-1
     ).astype(np.float32)
 
 

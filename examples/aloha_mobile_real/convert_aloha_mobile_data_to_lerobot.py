@@ -79,7 +79,7 @@ def create_empty_dataset(
             "dtype": "float32",
             "shape": (len(motors) + 2,),
             "names": [
-                motors + bases, 
+                motors + bases,
             ],
         },
     }
@@ -165,16 +165,18 @@ def load_raw_images_per_camera(ep: h5py.File, cameras: list[str]) -> dict[str, n
         imgs_per_cam[camera] = imgs_array
     return imgs_per_cam
 
+
 def smooth_base_action(base_action):
-    return np.stack([
-        np.convolve(base_action[:, i], np.ones(5)/5, mode='same') for i in range(base_action.shape[1])
-    ], axis=-1).astype(np.float32)
+    return np.stack(
+        [np.convolve(base_action[:, i], np.ones(5) / 5, mode="same") for i in range(base_action.shape[1])], axis=-1
+    ).astype(np.float32)
 
 
 def preprocess_base_action(base_action):
     # base_action = calibrate_linear_vel(base_action)
 
     return smooth_base_action(base_action)
+
 
 def postprocess_base_action(base_action):
     linear_vel, angular_vel = base_action
@@ -185,6 +187,7 @@ def postprocess_base_action(base_action):
     #     linear_vel = 0
     return np.array([linear_vel, angular_vel])
 
+
 def load_raw_episode_data(
     ep_path: Path,
 ) -> tuple[dict[str, np.ndarray], torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
@@ -193,7 +196,7 @@ def load_raw_episode_data(
         action = torch.from_numpy(ep["/action"][:])
         # base_action = torch.from_numpy(ep["/base_action"][:])
         # TODO: post process the base action later
-    
+
         base_action = ep["/base_action"][:]
         base_action = preprocess_base_action(base_action)
         base_action = torch.from_numpy(base_action)

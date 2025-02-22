@@ -53,6 +53,7 @@ def main(args: Args) -> None:
     print(f"Total time taken: {end - start:.2f} s")
     print(f"Average inference time: {1000 * (end - start) / args.num_steps:.2f} ms")
 
+
 def _random_observation_aloha_mobile() -> dict:
     return {
         "state": np.ones((14,)),
@@ -63,6 +64,7 @@ def _random_observation_aloha_mobile() -> dict:
         },
         "prompt": "do something",
     }
+
 
 def _random_observation_aloha() -> dict:
     return {

@@ -17,8 +17,8 @@ import openpi.models.model as _model
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
-import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
+import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
@@ -152,7 +152,7 @@ class DataConfigFactory(abc.ABC):
         repo_id = self.repo_id if self.repo_id is not tyro.MISSING else None
         asset_id = self.assets.asset_id or repo_id
         print("asset_id: ", asset_id)
-        print("assets.asset_id: ", self.assets.asset_id )
+        print("assets.asset_id: ", self.assets.asset_id)
         print("repo_id: ", repo_id)
         # import ipdb; ipdb.set_trace() # TODO: fix this bug, The trossen remote norm stats is used for training and testing
         return dataclasses.replace(
@@ -296,6 +296,7 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
             model_transforms=model_transforms,
         )
 
+
 @dataclasses.dataclass(frozen=True)
 class LeRobotAlohaMobileDataConfig(DataConfigFactory):
     # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
@@ -308,7 +309,6 @@ class LeRobotAlohaMobileDataConfig(DataConfigFactory):
     # use standard Aloha data should set this to true.
     # adapt_to_pi: bool = True
     adapt_to_pi: bool = False
-
 
     # Repack transforms.
     repack_transforms: tyro.conf.Suppress[_transforms.Group] = dataclasses.field(
@@ -332,7 +332,9 @@ class LeRobotAlohaMobileDataConfig(DataConfigFactory):
         # import ipdb; ipdb.set_trace()
         # assert model_config.action_dim == 16
         data_transforms = _transforms.Group(
-            inputs=[aloha_mobile_policy.AlohaMobileInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)],
+            inputs=[
+                aloha_mobile_policy.AlohaMobileInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)
+            ],
             outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
         )
         if self.use_delta_joint_actions:
@@ -352,6 +354,7 @@ class LeRobotAlohaMobileDataConfig(DataConfigFactory):
             model_transforms=model_transforms,
             action_sequence_keys=self.action_sequence_keys,
         )
+
 
 @dataclasses.dataclass(frozen=True)
 class TrainConfig:
@@ -504,10 +507,11 @@ _CONFIGS = [
                 local_files_only=False,  # Set to True for local-only datasets.
             ),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"), # TODO: check the weight_loader
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "s3://openpi-assets/checkpoints/pi0_base/params"
+        ),  # TODO: check the weight_loader
         num_train_steps=20_000,
     ),
-
     TrainConfig(
         name="pi0_aloha_handover_low_mem_finetune",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
@@ -540,7 +544,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     TrainConfig(
         name="pi0_fast_aloha_handover",
         model=pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=10, max_token_len=400),
@@ -569,7 +572,6 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
     ),
-
     #
     # Inference DROID configs.
     #

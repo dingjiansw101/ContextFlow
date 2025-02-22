@@ -1,22 +1,21 @@
-from typing import List, Optional  # noqa: UP035
+from contextlib import suppress
+import sys
 
 import einops
+from interbotix_common_modules.common_robot.exceptions import InterbotixException
+from interbotix_common_modules.common_robot.robot import create_interbotix_global_node
+from interbotix_common_modules.common_robot.robot import get_interbotix_global_node
+from interbotix_common_modules.common_robot.robot import robot_startup
 from openpi_client import image_tools
 from openpi_client.runtime import environment as _environment
 from typing_extensions import override
-from contextlib import suppress
-from interbotix_common_modules.common_robot.robot import (
-    create_interbotix_global_node,
-    get_interbotix_global_node,
-    robot_startup,
-)
-from interbotix_common_modules.common_robot.exceptions import InterbotixException
 
-import sys
-sys.path.append('/home/aloha/workspace/openpi')
+sys.path.append("/home/aloha/workspace/openpi")
 
 from examples.aloha_mobile_real import real_env as _real_env
+
 # from . import real_env as _real_env
+
 
 class AlohaRealEnvironment(_environment.Environment):
     """An environment for an Aloha robot on real hardware."""
@@ -29,7 +28,7 @@ class AlohaRealEnvironment(_environment.Environment):
         try:
             node = get_interbotix_global_node()
         except Exception:
-            node = create_interbotix_global_node('aloha')
+            node = create_interbotix_global_node("aloha")
         self._env = _real_env.make_real_env(node=node, setup_robots=True, setup_base=True)
 
         with suppress(InterbotixException):
