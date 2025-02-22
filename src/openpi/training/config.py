@@ -457,7 +457,10 @@ _CONFIGS = [
         name="pi0_aloha_mobile",
         model=pi0.Pi0Config(),
         data=LeRobotAlohaDataConfig(
-            assets=AssetsConfig(asset_id="mobile_trossen"),
+            assets=AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="mobile_trossen",
+            ),
         ),
     ),
     TrainConfig(
