@@ -240,7 +240,7 @@ def move_grippers(
 
 
 def setup_follower_bot(bot: InterbotixManipulatorXS):
-    bot.core.robot_reboot_motors('single', 'gripper', True)
+    bot.core.robot_reboot_motors('single', 'gripper', enable=True)('single', 'gripper', True)
     bot.core.robot_set_operating_modes('group', 'arm', 'position')
     bot.core.robot_set_operating_modes('single', 'gripper', 'current_based_position')
     torque_on(bot)

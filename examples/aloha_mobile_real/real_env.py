@@ -68,6 +68,7 @@ class RealEnv:
     def __init__(
         self,
         node: InterbotixRobotNode,
+        *,
         setup_robots: bool = True,
         setup_base: bool = False,
         is_mobile: bool = IS_MOBILE,
@@ -196,7 +197,7 @@ class RealEnv:
             moving_time=1.0,
         )
 
-    def get_observation(self, get_base_vel=False):
+    def get_observation(self, *, get_base_vel=False):
         obs = collections.OrderedDict()
         obs['qpos'] = self.get_qpos()
         obs['qvel'] = self.get_qvel()
@@ -210,11 +211,11 @@ class RealEnv:
     def get_reward(self):
         return 0
 
-    def reset(self, fake=False):
+    def reset(self, *, fake=False):
         if not fake:
             # Reboot follower robot gripper motors
-            self.follower_bot_left.core.robot_reboot_motors('single', 'gripper', True)
-            self.follower_bot_right.core.robot_reboot_motors('single', 'gripper', True)
+            self.follower_bot_left.core.robot_reboot_motors('single', 'gripper', enable=True)('single', 'gripper', True)
+            self.follower_bot_right.core.robot_reboot_motors('single', 'gripper', enable=True)('single', 'gripper', True)
             self._reset_joints()
             self._reset_gripper()
         return dm_env.TimeStep(

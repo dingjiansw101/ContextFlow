@@ -4,6 +4,7 @@ import einops
 from openpi_client import image_tools
 from openpi_client.runtime import environment as _environment
 from typing_extensions import override
+from contextlib import suppress
 from interbotix_common_modules.common_robot.robot import (
     create_interbotix_global_node,
     get_interbotix_global_node,
@@ -31,10 +32,8 @@ class AlohaRealEnvironment(_environment.Environment):
             node = create_interbotix_global_node('aloha')
         self._env = _real_env.make_real_env(node=node, setup_robots=True, setup_base=True)
 
-        try:
+        with suppress(InterbotixException):
             robot_startup(node)
-        except InterbotixException:
-            pass
         self._render_height = render_height
         self._render_width = render_width
 
