@@ -225,7 +225,7 @@ class RealEnv:
             base_action_linear, base_action_angular = base_action
             self.base.base.command_velocity_xyaw(x=base_action_linear, yaw=base_action_angular)
 
-        obs = self.get_observation(get_base_vel) if get_obs else None
+        obs = self.get_observation(get_base_vel=get_base_vel) if get_obs else None
 
         return dm_env.TimeStep(step_type=dm_env.StepType.MID, reward=self.get_reward(), discount=None, observation=obs)
 
@@ -247,7 +247,7 @@ def make_real_env(node: InterbotixRobotNode = None, *, setup_robots: bool = True
         node = get_interbotix_global_node()
         if node is None:
             node = create_interbotix_global_node("aloha")
-    return RealEnv(node, setup_robots, setup_base)
+    return RealEnv(node, setup_robots=setup_robots, setup_base=setup_base)
 
 
 def test_real_teleop():

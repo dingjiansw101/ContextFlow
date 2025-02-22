@@ -69,4 +69,4 @@ class AlohaRealEnvironment(_environment.Environment):
 
     @override
     def apply_action(self, action: dict) -> None:
-        self._ts = self._env.step(action["actions"])
+        self._ts = self._env.step(action=action["actions"])
