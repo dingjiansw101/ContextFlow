@@ -214,8 +214,8 @@ class RealEnv:
     def reset(self, *, fake=False):
         if not fake:
             # Reboot follower robot gripper motors
-            self.follower_bot_left.core.robot_reboot_motors('single', 'gripper', enable=True)('single', 'gripper', True)
-            self.follower_bot_right.core.robot_reboot_motors('single', 'gripper', enable=True)('single', 'gripper', True)
+            self.follower_bot_left.core.robot_reboot_motors('single', 'gripper', enable=True)
+            self.follower_bot_right.core.robot_reboot_motors('single', 'gripper', enable=True)
             self._reset_joints()
             self._reset_gripper()
         return dm_env.TimeStep(
