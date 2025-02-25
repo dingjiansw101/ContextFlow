@@ -1,7 +1,7 @@
 """
 Script to convert Aloha hdf5 data to the LeRobot dataset v2.0 format.
 
-Example usage: uv run examples/aloha_real/convert_aloha_data_to_lerobot.py --raw-dir /path/to/raw/data --repo-id <org>/<dataset-name>
+Example usage: uv run examples/aloha_mobile_real/convert_aloha_mobile_data_to_lerobot.py --raw-dir /path/to/raw/data --repo-id <org>/<dataset-name>
 """
 
 import dataclasses

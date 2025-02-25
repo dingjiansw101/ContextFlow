@@ -22,6 +22,8 @@ class EnvMode(enum.Enum):
     ALOHA_MOBILE = "trossen_mobile"
     ALOHA_HANDOVER_LOW_MEM = "aloha_handover_low_mem"
     FAST_ALOHA_HANDOVER = "pi0_fast_aloha_handover"
+    ALOHA_PEN_UNCAP_LOW_MEM = "pi0_aloha_pen_uncap_low_mem_finetune"
+    ALOHA_FOLD_TSHIRT_LOW_MEM = "pi0_aloha_fold_tshirt_low_mem_finetune"
 
 
 @dataclasses.dataclass
@@ -92,8 +94,17 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.FAST_ALOHA_HANDOVER: Checkpoint(
         config="pi0_fast_aloha_handover",
-        dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_handover/pi0_fast_aloha_handover/10000",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_handover/pi0_fast_aloha_handover/19999",
     ),
+    EnvMode.ALOHA_PEN_UNCAP_LOW_MEM: Checkpoint(
+        config="pi0_aloha_pen_uncap_low_mem_finetune",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_pen_uncap_low_mem_finetune/pi0_aloha_pen_uncap_low_mem_finetune/10000",
+    ),
+    EnvMode.ALOHA_FOLD_TSHIRT_LOW_MEM: Checkpoint(
+        config="pi0_aloha_fold_tshirt_low_mem_finetune",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_fold_tshirt_low_mem_finetune/pi0_aloha_fold_tshirt_low_mem_finetune/10000",
+    ),
+
 }
 
 
