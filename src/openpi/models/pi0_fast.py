@@ -108,6 +108,8 @@ class Pi0FASTConfig(_model.BaseModelConfig):
                     "base_1_rgb": image_mask_spec,
                     "wrist_0_rgb": image_mask_spec,
                 },
+                # TODO: check, the state and action dimension are different in aloha.
+                # However, it is the same here
                 state=jax.ShapeDtypeStruct([batch_size, self.action_dim], jnp.float32),
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),
@@ -178,6 +180,8 @@ class Pi0FAST(_model.BaseModel):
         assert obs.token_ar_mask is not None, "Token auto-regressive mask is required"
         tokenized_inputs_embeddings = self.PaliGemma.llm(obs.tokenized_prompt, embed_only=True)
         token_embeddings.append(tokenized_inputs_embeddings)
+        # TODO: add the prompt embeddings here
+        # import ipdb; ipdb.set_trace()
         input_mask.append(obs.tokenized_prompt_mask)
         ar_mask.append(obs.token_ar_mask)
 
@@ -205,7 +209,8 @@ class Pi0FAST(_model.BaseModel):
             observation.tokenized_prompt[:, 1:],
             self.PaliGemma.llm.module.vocab_size,
         )
-
+        # jax.debug.print("targets: {}", targets)
+        # import ipdb; ipdb.set_trace()
         # Each input predicts *next* token, so we don't input the last token.
         pre_logits, _, _ = self.PaliGemma.llm(
             embedded_prefix=input_token_embeddings[:, :-1],
@@ -236,9 +241,10 @@ class Pi0FAST(_model.BaseModel):
         temperature: float = 0.0,
     ) -> _model.Actions:
         # TODO: this is a hack to get the image keys.
+        # import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation(
             None, observation, train=False, image_keys=list(observation.images.keys())
-        )
+        ) # shape of observation.state is the same as action_dim
 
         # embed inputs
         prefix_token_embeddings, prefix_mask, prefix_ar_mask = self.embed_inputs(observation)

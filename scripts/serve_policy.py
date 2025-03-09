@@ -23,7 +23,9 @@ class EnvMode(enum.Enum):
     ALOHA_HANDOVER_LOW_MEM = "aloha_handover_low_mem"
     FAST_ALOHA_HANDOVER = "pi0_fast_aloha_handover"
     ALOHA_PEN_UNCAP_LOW_MEM = "pi0_aloha_pen_uncap_low_mem_finetune"
+    ALOHA_PEN_UNCAP_B5_LOW_MEM = "pi0_aloha_pen_uncap_b5_low_mem_finetune"
     ALOHA_FOLD_TSHIRT_LOW_MEM = "pi0_aloha_fold_tshirt_low_mem_finetune"
+    FAST_ALOHA_PEN_UNCAP_B5 = "pi0_fast_aloha_pen_uncap_b5"
 
 
 @dataclasses.dataclass
@@ -104,7 +106,14 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_aloha_fold_tshirt_low_mem_finetune",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_fold_tshirt_low_mem_finetune/pi0_aloha_fold_tshirt_low_mem_finetune/10000",
     ),
-
+    EnvMode.ALOHA_PEN_UNCAP_B5_LOW_MEM: Checkpoint(
+        config="pi0_aloha_pen_uncap_b5_low_mem_finetune",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_pen_uncap_b5_low_mem_finetune/pi0_aloha_pen_uncap_b5_low_mem_finetune/19999",
+    ),
+    EnvMode.FAST_ALOHA_PEN_UNCAP_B5: Checkpoint(
+        config="pi0_fast_aloha_pen_uncap_b5",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_b5/pi0_fast_aloha_pen_uncap_b5/9999",
+    ),
 }
 
 

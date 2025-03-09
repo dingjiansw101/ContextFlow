@@ -178,6 +178,7 @@ def _decode_aloha(data: dict, *, adapt_to_pi: bool = False) -> dict:
         return einops.rearrange(img, "c h w -> h w c")
 
     images = data["images"]
+
     images_dict = {name: convert_image(img) for name, img in images.items()}
 
     data["images"] = images_dict

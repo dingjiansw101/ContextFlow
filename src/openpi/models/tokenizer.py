@@ -18,6 +18,7 @@ class PaligemmaTokenizer:
     def tokenize(self, prompt: str) -> tuple[np.ndarray, np.ndarray]:
         cleaned_text = prompt.strip().replace("_", " ").replace("\n", " ")
         # tokenize "\n" separately as the "start of answer" token
+        # import ipdb; ipdb.set_trace()
         tokens = self._tokenizer.encode(cleaned_text, add_bos=True) + self._tokenizer.encode("\n")
         tokens_len = len(tokens)
         if tokens_len < self._max_len:
@@ -53,10 +54,11 @@ class FASTTokenizer:
         self, prompt: str, state: np.ndarray, actions: np.ndarray | None
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         cleaned_text = prompt.lower().strip().replace("_", " ")
-
+        # import ipdb; ipdb.set_trace()
         # Convention: state gets discretized into 256 discrete bins (assumed range after normalization: [-1, 1])
+        # The state for mobile aloha is 14, however, it is set to be the same size as action dim 16
+        # therefore, it is padded to 16 with zero
         discretized_state = np.digitize(state, bins=np.linspace(-1, 1, 256 + 1)[:-1]) - 1
-
         # Convention: prefix includes prompt and string-representation of state, followed by ';'
         state_str = " ".join(map(str, discretized_state))
         prefix = f"Task: {cleaned_text}, State: {state_str};\n"
@@ -64,6 +66,8 @@ class FASTTokenizer:
 
         if actions is not None:
             # Tokenize actions with FAST tokenizer --> map to last tokens in PaliGemma vocab
+            # print("actions shape: ", actions.shape)
+            # print("actions: ", actions)
             action_tokens = self._fast_tokenizer(actions[None])[0]
             action_tokens_in_pg = self._act_tokens_to_paligemma_tokens(action_tokens)
 
@@ -82,7 +86,7 @@ class FASTTokenizer:
         token_mask = [True] * len(tokens)
         ar_mask = [0] * len(prefix_tokens) + [1] * len(postfix_tokens)
         loss_mask = [False] * len(prefix_tokens) + [True] * len(postfix_tokens)  # Loss on postfix only
-
+        
         # Pad tokens to max length
         tokens_len = len(tokens)
         if tokens_len < self._max_len:
@@ -106,6 +110,7 @@ class FASTTokenizer:
 
     def extract_actions(self, tokens: np.ndarray, action_horizon: int, action_dim: int) -> np.ndarray:
         # Decode predicted output tokens
+        import ipdb; ipdb.set_trace()
         decoded_tokens = self._paligemma_tokenizer.decode(tokens.tolist())
 
         # Extract actions from FAST model outputs
@@ -117,6 +122,8 @@ class FASTTokenizer:
             self._paligemma_tokenizer.encode(decoded_tokens.split("Action: ")[1].split("|")[0].strip())
         )
         action_tokens = self._act_tokens_to_paligemma_tokens(raw_action_tokens)
+        import ipdb; ipdb.set_trace()
+        
         return self._fast_tokenizer.decode(
             [action_tokens.tolist()], time_horizon=action_horizon, action_dim=action_dim
         )[0]

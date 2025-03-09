@@ -115,7 +115,7 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
             )
         norm_stats = data_config.norm_stats
-
+    import ipdb; ipdb.set_trace()   
     return TransformedDataset(
         dataset,
         [
@@ -150,6 +150,7 @@ def create_data_loader(
         num_workers: The number of worker processes to use. If zero, the data loader will
             execute in the main process.
     """
+    # import ipdb; ipdb.set_trace()
     data_config = config.data.create(config.assets_dirs, config.model)
     # import ipdb; ipdb.set_trace()
     dataset = create_dataset(data_config, config.model)

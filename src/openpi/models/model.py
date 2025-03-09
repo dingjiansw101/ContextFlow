@@ -154,6 +154,7 @@ def preprocess_observation(
     out_images = {}
     for key in image_keys:
         image = observation.images[key]
+        # print("image_resolution: ", image_resolution)
         if image.shape[1:3] != image_resolution:
             logger.info(f"Resizing image {key} from {image.shape[1:3]} to {image_resolution}")
             image = image_tools.resize_with_pad(image, *image_resolution)
