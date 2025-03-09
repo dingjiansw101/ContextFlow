@@ -1,20 +1,12 @@
 import dataclasses
 
-import jax
-
-from openpi.models import model as _model
-from openpi.policies import droid_policy
-from openpi.policies import policy_config as _policy_config
-from openpi.shared import download
-from openpi.training import config as _config
-from openpi.training import data_loader as _data_loader
-from openpi.training.data_loader import create_dataset, TorchDataLoader, DataLoader
-import numpy as np
 from aloha_mobile_real.convert_aloha_mobile_data_to_lerobot import load_raw_episode_data
-import torch
-from openpi_client import image_tools
 import einops
+from openpi_client import image_tools
+import torch
 
+from openpi.policies import policy_config as _policy_config
+from openpi.training import config as _config
 
 config = _config.get_config("pi0_fast_aloha_pen_uncap_b5")
 checkpoint_dir = "/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_b5/pi0_fast_aloha_pen_uncap_b5/9999"
@@ -38,23 +30,25 @@ config = dataclasses.replace(config, batch_size=4)
 # loader = _data_loader.create_data_loader(config, num_batches=4, skip_norm_stats=False)
 # obs, act = next(iter(loader))
 
-imgs_per_cam, state, action, velocity, effort = load_raw_episode_data("/home/dingj0b/datasets/trossen_aloha_real/pen_uncap_b5/episode_0.hdf5")
+imgs_per_cam, state, action, velocity, effort = load_raw_episode_data(
+    "/home/dingj0b/datasets/trossen_aloha_real/pen_uncap_b5/episode_0.hdf5"
+)
 
 
 def image_transform(img):
-    img = image_tools.convert_to_uint8(
-    image_tools.resize_with_pad(img, 224, 224)
-    )
+    img = image_tools.convert_to_uint8(image_tools.resize_with_pad(img, 224, 224))
     return einops.rearrange(img, "h w c -> c h w")
+
+
 # data_config = config.data.create(config.assets_dirs, config.model)
 # dataset = create_dataset(data_config, config.model)
 # Sample actions from the model.
 # option 1: use dataset without transform, check the lerobot dataset
-# option 2: directly use model.action_samples, then use output transform 
+# option 2: directly use model.action_samples, then use output transform
 # for i in range(len(dataset)):
 #     data_config.repack_transforms.inputs[0](dataset[i])
 # data_config.repack_transforms.inputs[0](obs.to_dict())
-for i in range(imgs_per_cam['cam_high'].shape[0]):
+for i in range(imgs_per_cam["cam_high"].shape[0]):
     obs = {
         "state": state[i],
         "images": {
@@ -63,18 +57,15 @@ for i in range(imgs_per_cam['cam_high'].shape[0]):
             "cam_left_wrist": image_transform(imgs_per_cam["cam_left_wrist"][i]),
             "cam_right_wrist": image_transform(imgs_per_cam["cam_right_wrist"][i]),
         },
-        "prompt": "uncap the pen"
+        "prompt": "uncap the pen",
     }
 
-
-
-
     # import ipdb; ipdb.set_trace()
-    act_pred = policy.infer(obs)['actions'] # predicted action for the next 32 steps
+    act_pred = policy.infer(obs)["actions"]  # predicted action for the next 32 steps
     act_pred = torch.from_numpy(act_pred)
     # import ipdb; ipdb.set_trace()
     print("i: ", i)
-    act_gt = action[i: i + act_pred.shape[0]] # 
+    act_gt = action[i : i + act_pred.shape[0]]  #
 
     mse = torch.mean((act_pred - act_gt) ** 2)
     print("mse: ", mse)

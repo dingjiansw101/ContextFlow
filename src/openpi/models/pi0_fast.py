@@ -244,7 +244,7 @@ class Pi0FAST(_model.BaseModel):
         # import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation(
             None, observation, train=False, image_keys=list(observation.images.keys())
-        ) # shape of observation.state is the same as action_dim
+        )  # shape of observation.state is the same as action_dim
 
         # embed inputs
         prefix_token_embeddings, prefix_mask, prefix_ar_mask = self.embed_inputs(observation)

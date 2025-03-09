@@ -544,7 +544,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     TrainConfig(
         name="pi0_aloha_fold_tshirt_low_mem_finetune",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
@@ -577,7 +576,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     TrainConfig(
         name="pi0_aloha_pen_uncap_low_mem_finetune",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
@@ -610,7 +608,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     TrainConfig(
         name="pi0_aloha_pen_uncap_b5_low_mem_finetune",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
@@ -643,7 +640,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     TrainConfig(
         name="pi0_fast_aloha_pen_uncap_b5",
         model=pi0_fast.Pi0FASTConfig(action_dim=16, max_token_len=340),
@@ -673,8 +669,6 @@ _CONFIGS = [
         num_train_steps=10_000,
         wandb_enabled=False,
     ),
-
-
     TrainConfig(
         name="pi0_fast_aloha_handover",
         model=pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=50, max_token_len=128),
@@ -703,7 +697,6 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
     ),
-
     TrainConfig(
         name="pi0_fast_aloha_handover_low_mem_finetune",
         model=pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora"),
@@ -736,7 +729,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     #
     # Inference DROID configs.
     #

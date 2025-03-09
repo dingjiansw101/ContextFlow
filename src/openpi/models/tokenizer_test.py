@@ -26,6 +26,7 @@ def test_fast_tokenizer():
     act = tokenizer.extract_actions(tokens, 3, 2)
     assert act.shape == (3, 2)
 
+
 if __name__ == "__main__":
     test_tokenize()
     test_fast_tokenizer()

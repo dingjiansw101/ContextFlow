@@ -86,7 +86,7 @@ class FASTTokenizer:
         token_mask = [True] * len(tokens)
         ar_mask = [0] * len(prefix_tokens) + [1] * len(postfix_tokens)
         loss_mask = [False] * len(prefix_tokens) + [True] * len(postfix_tokens)  # Loss on postfix only
-        
+
         # Pad tokens to max length
         tokens_len = len(tokens)
         if tokens_len < self._max_len:
@@ -121,7 +121,7 @@ class FASTTokenizer:
             self._paligemma_tokenizer.encode(decoded_tokens.split("Action: ")[1].split("|")[0].strip())
         )
         action_tokens = self._act_tokens_to_paligemma_tokens(raw_action_tokens)
-        
+
         return self._fast_tokenizer.decode(
             [action_tokens.tolist()], time_horizon=action_horizon, action_dim=action_dim
         )[0]
