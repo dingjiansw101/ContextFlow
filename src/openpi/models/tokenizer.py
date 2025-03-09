@@ -110,7 +110,6 @@ class FASTTokenizer:
 
     def extract_actions(self, tokens: np.ndarray, action_horizon: int, action_dim: int) -> np.ndarray:
         # Decode predicted output tokens
-        import ipdb; ipdb.set_trace()
         decoded_tokens = self._paligemma_tokenizer.decode(tokens.tolist())
 
         # Extract actions from FAST model outputs
@@ -122,7 +121,6 @@ class FASTTokenizer:
             self._paligemma_tokenizer.encode(decoded_tokens.split("Action: ")[1].split("|")[0].strip())
         )
         action_tokens = self._act_tokens_to_paligemma_tokens(raw_action_tokens)
-        import ipdb; ipdb.set_trace()
         
         return self._fast_tokenizer.decode(
             [action_tokens.tolist()], time_horizon=action_horizon, action_dim=action_dim
