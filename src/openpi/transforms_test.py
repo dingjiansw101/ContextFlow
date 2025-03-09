@@ -119,6 +119,3 @@ def test_extract_prompt_from_task():
 
     with pytest.raises(ValueError, match="task_index=2 not found in task mapping"):
         transform({"task_index": 2})
-
-# if __name__ == "__main__":
-#     test_repack_transform()
