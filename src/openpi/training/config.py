@@ -483,132 +483,6 @@ _CONFIGS = [
         ),
     ),
     TrainConfig(
-        name="pi0_aloha_handover",
-        model=pi0.Pi0Config(),
-        data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/bottle_handover",
-            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
-            repack_transforms=_transforms.Group(
-                inputs=[
-                    _transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "s3://openpi-assets/checkpoints/pi0_base/params"
-        ),  # TODO: check the weight_loader
-        num_train_steps=20_000,
-    ),
-    TrainConfig(
-        name="pi0_aloha_handover_low_mem_finetune",
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/bottle_handover",
-            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
-            repack_transforms=_transforms.Group(
-                inputs=[
-                    _transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        ema_decay=None,
-    ),
-    TrainConfig(
-        name="pi0_aloha_fold_tshirt_low_mem_finetune",
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/bottle_handover",
-            default_prompt="fold the t-shirt",
-            repack_transforms=_transforms.Group(
-                inputs=[
-                    _transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        ema_decay=None,
-    ),
-    TrainConfig(
-        name="pi0_aloha_pen_uncap_low_mem_finetune",
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/pen_uncap",
-            default_prompt="uncap the pen",
-            repack_transforms=_transforms.Group(
-                inputs=[
-                    _transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        ema_decay=None,
-    ),
-    TrainConfig(
         name="pi0_aloha_pen_uncap_b5_low_mem_finetune",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotAlohaMobileDataConfig(
@@ -668,66 +542,6 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         wandb_enabled=False,
-    ),
-    TrainConfig(
-        name="pi0_fast_aloha_handover",
-        model=pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=50, max_token_len=128),
-        data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/bottle_handover",
-            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
-            repack_transforms=_transforms.Group(
-                inputs=[
-                    _transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-    ),
-    TrainConfig(
-        name="pi0_fast_aloha_handover_low_mem_finetune",
-        model=pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora"),
-        data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/bottle_handover",
-            default_prompt="grab the can on the left and give it to the right gripper, then put it on the right",
-            repack_transforms=_transforms.Group(
-                inputs=[
-                    _transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        freeze_filter=pi0_fast.Pi0FASTConfig(
-            action_dim=16, action_horizon=50, max_token_len=128, paligemma_variant="gemma_2b_lora"
-        ).get_freeze_filter(),
-        ema_decay=None,
     ),
     TrainConfig(
         name="pi0_fast_aloha_pen_uncap_low_mem_finetune",
@@ -888,6 +702,7 @@ _CONFIGS = [
     ),
     TrainConfig(
         name="pi0_fast_libero_low_mem_finetune",
+        wandb_enabled=False,
         model=pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora"),
         data=LeRobotLiberoDataConfig(
             repo_id="physical-intelligence/libero",
