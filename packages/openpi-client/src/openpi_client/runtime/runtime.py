@@ -94,7 +94,6 @@ class Runtime:
             print(f"observation: {observation['state']}")
             print(f"action: {action['actions'][:14]}")
             import ipdb
-
             ipdb.set_trace()
         self._environment.apply_action(action)
 
