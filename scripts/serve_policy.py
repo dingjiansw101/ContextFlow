@@ -26,6 +26,7 @@ class EnvMode(enum.Enum):
     ALOHA_PEN_UNCAP_B5_LOW_MEM = "pi0_aloha_pen_uncap_b5_low_mem_finetune"
     ALOHA_FOLD_TSHIRT_LOW_MEM = "pi0_aloha_fold_tshirt_low_mem_finetune"
     FAST_ALOHA_PEN_UNCAP_B5 = "pi0_fast_aloha_pen_uncap_b5"
+    FAST_ALOHA_PEN_UNCAP_LOW_MEM = "pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30"
 
 
 @dataclasses.dataclass
@@ -113,6 +114,10 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     EnvMode.FAST_ALOHA_PEN_UNCAP_B5: Checkpoint(
         config="pi0_fast_aloha_pen_uncap_b5",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_b5/pi0_fast_aloha_pen_uncap_b5/9999",
+    ),
+    EnvMode.FAST_ALOHA_PEN_UNCAP_LOW_MEM: Checkpoint(
+        config="pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30/pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30/19999",
     ),
 }
 
