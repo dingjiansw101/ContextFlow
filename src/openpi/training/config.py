@@ -568,7 +568,6 @@ _CONFIGS = [
                     )
                 ]
             ),
-
             base_config=DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
@@ -581,7 +580,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     TrainConfig(
         name="pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30",
         batch_size=30,
@@ -609,7 +607,6 @@ _CONFIGS = [
                     )
                 ]
             ),
-
             base_config=DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
@@ -622,7 +619,6 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
     #
     # Inference DROID configs.
     #
