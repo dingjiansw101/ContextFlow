@@ -2,6 +2,7 @@
 assets/
 checkpoints/
 checkpoints
+nohup.out
 data/
 wandb/
 jobs/
