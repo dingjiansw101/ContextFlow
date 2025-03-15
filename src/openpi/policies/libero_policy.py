@@ -66,7 +66,7 @@ class LiberoInputs(transforms.DataTransformFn):
             # For pi0-FAST, this is a no-op (since action_dim = 7).
             actions = transforms.pad_to_dim(data["actions"], self.action_dim)
             inputs["actions"] = actions
-
+        # import ipdb; ipdb.set_trace()
         if "prompt" in data:
             inputs["prompt"] = data["prompt"]
 

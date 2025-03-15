@@ -5,6 +5,8 @@ import jax
 from openpi.models import pi0
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
+from openpi.training.data_loader import create_dataset
+from openpi.training.data_loader import transform_dataset
 
 
 def test_torch_data_loader():
@@ -82,3 +84,33 @@ def test_with_real_dataset():
 
     for _, actions in batches:
         assert actions.shape == (config.batch_size, config.model.action_horizon, config.model.action_dim)
+
+
+def test_libero_dataset():
+    config = _config.get_config("pi0_libero")
+
+    data_config = config.data.create(config.assets_dirs, config.model)
+    dataset = create_dataset(data_config, config.model)
+    for i in range(len(dataset)):
+        print(dataset[i].keys())
+        # dict_keys(['image', 'wrist_image', 'state', 'actions',
+        # 'timestamp', 'frame_index', 'episode_index', 'index',
+        # 'task_index', 'actions_is_pad', 'prompt'])
+        # The dataset sample orders are the exactly the same as shown in huggingface
+        # TODO: write a transform to randomly read a demonstration according to tha task index
+        # select the data with a specific episode index.
+        # Then add the demonstration to the dataset
+        # check the details of LeRobotDataset to see if we can use its functions
+        # import ipdb
+        # ipdb.set_trace()
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=False)
+    for i in range(len(dataset)):
+        print(dataset[i].keys())
+        # dict_keys(['state', 'image', 'image_mask', 'actions',
+        # 'tokenized_prompt', 'tokenized_prompt_mask'])
+        # import ipdb;
+        # ipdb.set_trace()
+
+
+if __name__ == "__main__":
+    test_libero_dataset()

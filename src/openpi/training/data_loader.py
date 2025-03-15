@@ -98,8 +98,8 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
         },
         local_files_only=data_config.local_files_only,
     )
-
     if data_config.prompt_from_task:
+        # TODO: language instrucitons of libero are stored here
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
 
     return dataset
@@ -149,9 +149,7 @@ def create_data_loader(
         num_workers: The number of worker processes to use. If zero, the data loader will
             execute in the main process.
     """
-    # import ipdb; ipdb.set_trace()
     data_config = config.data.create(config.assets_dirs, config.model)
-    # import ipdb; ipdb.set_trace()
     dataset = create_dataset(data_config, config.model)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
 
