@@ -95,7 +95,6 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         # dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_low_mem_finetune/pi0_libero_low_mem_finetune/19999",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_low_mem_finetune/pi0_libero_low_mem_finetune/29999",
     ),
-
     EnvMode.ALOHA_HANDOVER: Checkpoint(
         config="pi0_aloha_handover",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_handover/pi0_aloha_handover/19999",

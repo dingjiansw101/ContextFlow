@@ -199,7 +199,6 @@ class Pi0FAST(_model.BaseModel):
         observation = _model.preprocess_observation(
             rng, observation, train=train, image_keys=list(observation.images.keys())
         )
-
         # Compute inputs: one big forward pass of prefix + suffix at once
         input_token_embeddings, input_mask, ar_mask = self.embed_inputs(observation)
         attn_mask = make_attn_mask(input_mask, ar_mask)
@@ -271,8 +270,10 @@ class Pi0FAST(_model.BaseModel):
         output_tokens = jnp.zeros((last_logit.shape[0], max_decoding_steps))
 
         def step(carry):
+            # one step only predict one token, it will stop when eos is predicted. Then output_tokens will be decoded
+            # as H actions.
             last_logit, output_tokens, cache, _, step = carry
-
+            # jax.debug.print("output_tokens = {}", output_tokens)
             # Sample token from last logit
             if temperature > 0.0:
                 last_logit = last_logit / temperature
@@ -283,6 +284,7 @@ class Pi0FAST(_model.BaseModel):
 
             # Check for early stopping --> stop if all batch elements have EOS token
             has_eos = jnp.any(token == PALIGEMMA_EOS_TOKEN, axis=-1)
+            # jax.debug.print("has_eos = {} ", has_eos)
             all_eos = jnp.all(has_eos)
 
             # Decode one step
