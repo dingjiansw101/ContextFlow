@@ -33,6 +33,7 @@ class EnvMode(enum.Enum):
     ALOHA_PEN_UNCAP_B5_LOW_MEM_TROSSWN_NORM = "pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm"
     FAST_ALOHA_PEN_UNCAP_B5_TROSSEN_NORM = "pi0_fast_aloha_pen_uncap_b5_trossen_norm"
 
+
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -125,8 +126,6 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30/pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30/19999",
     ),
-
-
     EnvMode.ALOHA_PEN_UNCAP_B5_LOW_MEM: Checkpoint(
         config="pi0_aloha_pen_uncap_b5_low_mem_finetune",
         dir="checkpoints/pi0_aloha_pen_uncap_b5_low_mem_finetune/pi0_aloha_pen_uncap_b5_low_mem_finetune/9999",
