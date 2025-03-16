@@ -29,7 +29,9 @@ class EnvMode(enum.Enum):
     ALOHA_FOLD_TSHIRT_LOW_MEM = "pi0_aloha_fold_tshirt_low_mem_finetune"
     FAST_ALOHA_PEN_UNCAP_B5 = "pi0_fast_aloha_pen_uncap_b5"
     FAST_ALOHA_PEN_UNCAP_LOW_MEM = "pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30"
-
+    FAST_ALOHA_PEN_UNCAP_LOW_MEM_CUSTOM_NORM = "pi0_fast_aloha_pen_uncap_low_mem_finetune"
+    ALOHA_PEN_UNCAP_B5_LOW_MEM_TROSSWN_NORM = "pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm"
+    FAST_ALOHA_PEN_UNCAP_B5_TROSSEN_NORM = "pi0_fast_aloha_pen_uncap_b5_trossen_norm"
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -119,17 +121,31 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_aloha_fold_tshirt_low_mem_finetune",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_fold_tshirt_low_mem_finetune/pi0_aloha_fold_tshirt_low_mem_finetune/10000",
     ),
-    EnvMode.ALOHA_PEN_UNCAP_B5_LOW_MEM: Checkpoint(
-        config="pi0_aloha_pen_uncap_b5_low_mem_finetune",
-        dir="/home/dingj0b/code/openpi/checkpoints/pi0_aloha_pen_uncap_b5_low_mem_finetune/pi0_aloha_pen_uncap_b5_low_mem_finetune/19999",
-    ),
-    EnvMode.FAST_ALOHA_PEN_UNCAP_B5: Checkpoint(
-        config="pi0_fast_aloha_pen_uncap_b5",
-        dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_b5/pi0_fast_aloha_pen_uncap_b5/9999",
-    ),
     EnvMode.FAST_ALOHA_PEN_UNCAP_LOW_MEM: Checkpoint(
         config="pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30/pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30/19999",
+    ),
+
+
+    EnvMode.ALOHA_PEN_UNCAP_B5_LOW_MEM: Checkpoint(
+        config="pi0_aloha_pen_uncap_b5_low_mem_finetune",
+        dir="checkpoints/pi0_aloha_pen_uncap_b5_low_mem_finetune/pi0_aloha_pen_uncap_b5_low_mem_finetune/9999",
+    ),
+    EnvMode.FAST_ALOHA_PEN_UNCAP_LOW_MEM_CUSTOM_NORM: Checkpoint(
+        config="pi0_fast_aloha_pen_uncap_low_mem_finetune",
+        dir="checkpoints/pi0_fast_aloha_pen_uncap_low_mem_finetune/pi0_fast_aloha_pen_uncap_low_mem_finetune/9999",
+    ),
+    EnvMode.ALOHA_PEN_UNCAP_B5_LOW_MEM_TROSSWN_NORM: Checkpoint(
+        config="pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm",
+        dir="checkpoints/pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm/pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm/10000",
+    ),
+    EnvMode.FAST_ALOHA_PEN_UNCAP_B5: Checkpoint(
+        config="pi0_fast_aloha_pen_uncap_b5",
+        dir="checkpoints/pi0_fast_aloha_pen_uncap_b5/pi0_fast_aloha_pen_uncap_b5/9999",
+    ),
+    EnvMode.FAST_ALOHA_PEN_UNCAP_B5_TROSSEN_NORM: Checkpoint(
+        config="pi0_fast_aloha_pen_uncap_b5_trossen_norm",
+        dir="checkpoints/pi0_fast_aloha_pen_uncap_b5_trossen_norm/pi0_fast_aloha_pen_uncap_b5_trossen_norm/9999",
     ),
 }
 
