@@ -28,6 +28,7 @@ class ModelType(enum.Enum):
 
     PI0 = "pi0"
     PI0_FAST = "pi0_fast"
+    PI0_INCONTEXT = "pi0_incontext"
 
 
 # The model always expects these images
@@ -128,6 +129,84 @@ class Observation(Generic[ArrayT]):
         result["image_mask"] = result.pop("image_masks")
         return result
 
+
+@at.typecheck
+@struct.dataclass
+class ObservationIncontext(Generic[ArrayT]):
+    """Holds observations, i.e., inputs to the model.
+
+    See `Observation.from_dict` to see the expected dictionary form. This is the format
+    that should be produced by the data transforms.
+    """
+
+    # Images, in [-1, 1] float32.
+    images: dict[str, at.Float[ArrayT, "*b h w c"]]
+    # Image masks, with same keys as images.
+    image_masks: dict[str, at.Bool[ArrayT, "*b"]]
+    # Low-dimensional robot state.
+    state: at.Float[ArrayT, "*b s"]
+
+    # In-context data.
+    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]]
+    incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]]
+    # incontext states.
+    incontext_states: at.Float[ArrayT, "*b t s"]
+    # incontext actions
+    incontext_actions: at.Float[ArrayT, "*b t n a"]
+
+    # Tokenized prompt.
+    tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
+    # Tokenized prompt mask.
+    tokenized_prompt_mask: at.Bool[ArrayT, "*b l"] | None = None
+
+    # pi0-fast model specific fields.
+
+    # Token auto-regressive mask (for FAST autoregressive model).
+    token_ar_mask: at.Int[ArrayT, "*b l"] | None = None
+    # Token loss mask (for FAST autoregressive model).
+    token_loss_mask: at.Bool[ArrayT, "*b l"] | None = None
+
+    @classmethod
+    def from_dict(cls, data: at.PyTree[ArrayT]) -> "Observation[ArrayT]":
+        """This method defines the mapping between unstructured data (i.e., nested dict) to the structured Observation format."""
+        # Ensure that tokenized_prompt and tokenized_prompt_mask are provided together.
+        import ipdb; ipdb.set_trace()
+        if ("tokenized_prompt" in data) != ("tokenized_prompt_mask" in data):
+            raise ValueError("tokenized_prompt and tokenized_prompt_mask must be provided together.")
+        # If images are uint8, convert them to [-1, 1] float32.
+        for key in data["image"]:
+            if data["image"][key].dtype == np.uint8:
+                data["image"][key] = data["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+
+        for key in data['dem_prompt_items']["image"]:
+            if data['dem_prompt_items']["image"][key].dtype == np.uint8:
+                data['dem_prompt_items']["image"][key] = data['dem_prompt_items']["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+
+        return cls(
+            images=data["image"],
+            image_masks=data["image_mask"],
+            state=data["state"],
+            incontext_images=data['dem_prompt_items']["image"],
+            incontext_image_masks=data['dem_prompt_items']["image_mask"],
+            incontext_states=data['dem_prompt_items']["state"],
+            incontext_actions=data['dem_prompt_items']["actions"],
+            tokenized_prompt=data.get("tokenized_prompt"),
+            tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
+            token_ar_mask=data.get("token_ar_mask"),
+            token_loss_mask=data.get("token_loss_mask"),
+        )
+
+    def to_dict(self) -> at.PyTree[ArrayT]:
+        """Convert the Observation to a nested dict."""
+        result = dataclasses.asdict(self)
+        result["image"] = result.pop("images")
+        result["image_mask"] = result.pop("image_masks")
+        result["dem_prompt_items"] = {
+            "image": result.pop("incontext_images"),
+            "image_mask": result.pop("incontext_image_masks"),
+            "state": result.pop("incontext_states"),
+            "actions": result.pop("incontext_actions"),}
+        return result
 
 # Defines the format of the actions. This field is included as "actions" inside the dictionary
 # produced by the data transforms.
