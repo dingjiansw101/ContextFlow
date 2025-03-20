@@ -81,16 +81,19 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0":
-        return Pi0(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontext":
+        return Pi0Incontext(self, rngs=nnx.Rngs(rng))
 
     @override
-    def inputs_spec(self, *, batch_size: int = 1) -> tuple[_model.Observation, _model.Actions]:
+    def inputs_spec(self, *, batch_size: int = 1, keyframe_size: int = 16) -> tuple[_model.ObservationIncontext, _model.Actions]:
+        # TODO: rewrite this part
         image_spec = jax.ShapeDtypeStruct([batch_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
         image_mask_spec = jax.ShapeDtypeStruct([batch_size], jnp.bool_)
 
+        prompt_image_spec = jax.ShapeDtypeStruct([batch_size, keyframe_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
+        prompt_mask_spec = jax.ShapeDtypeStruct([batch_size, keyframe_size], jnp.bool_)
         with at.disable_typechecking():
-            observation_spec = _model.Observation(
+            observation_spec = _model.ObservationIncontext(
                 images={
                     "base_0_rgb": image_spec,
                     "left_wrist_0_rgb": image_spec,
@@ -101,10 +104,19 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
                     "left_wrist_0_rgb": image_mask_spec,
                     "right_wrist_0_rgb": image_mask_spec,
                 },
-                # TODO: it seems that there is a similar issue.
-                # The action_dim is directly assigned to state
-                # but the action_dim used the default 32
                 state=jax.ShapeDtypeStruct([batch_size, self.action_dim], jnp.float32),
+                incontext_images={
+                    "base_0_rgb": prompt_image_spec,
+                    "left_wrist_0_rgb": prompt_image_spec,
+                    "right_wrist_0_rgb": prompt_image_spec,
+                },
+                incontext_image_masks={
+                    "base_0_rgb": prompt_mask_spec,
+                    "left_wrist_0_rgb": prompt_mask_spec,
+                    "right_wrist_0_rgb": prompt_mask_spec,
+                },
+                incontext_states=jax.ShapeDtypeStruct([batch_size, keyframe_size, self.action_dim], jnp.float32),
+                incontext_actions=jax.ShapeDtypeStruct([batch_size, keyframe_size, self.action_horizon, self.action_dim], jnp.float32),
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),
             )
@@ -168,17 +180,20 @@ class Pi0Incontext(_model.BaseModel):
         )
         img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
         self.PaliGemma = nnx.Dict(llm=llm, img=img)
-        # TODO: the action_dim here may also be a issue, check here
         self.state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.action_in_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.action_time_mlp_in = nnx.Linear(2 * action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
 
+        # TODO: add some layers to process in-context prompts
+
     @at.typecheck
     def embed_prefix(
-        self, obs: _model.Observation
+        self, obs: _model.ObservationIncontext
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
+        # TODO: add some layers to process in-context prompts
+
         input_mask = []
         ar_mask = []
         tokens = []
@@ -186,8 +201,8 @@ class Pi0Incontext(_model.BaseModel):
         # import ipdb; ipdb.set_trace()
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
-
-            tokens.append(image_tokens)
+            tokens.append(image_tokens) # image_tokens (32, 256, 2048)
+            import ipdb; ipdb.set_trace()
             input_mask.append(
                 einops.repeat(
                     obs.image_masks[name],
@@ -205,6 +220,19 @@ class Pi0Incontext(_model.BaseModel):
             input_mask.append(obs.tokenized_prompt_mask)
             # full attention between image and language inputs
             ar_mask += [False] * tokenized_inputs.shape[1]
+
+        # embed in-context images
+        for name in obs.incontext_images:
+            image_sequence = obs.incontext_images[name]
+            image_sequence = image_sequence.reshape(
+                image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:])
+            image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+            image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
+            import ipdb; ipdb.set_trace()
+            # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+            #     image_sequence.shape[0], -1, image_sqeuence_tokens.shape[1])
+
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
@@ -212,7 +240,7 @@ class Pi0Incontext(_model.BaseModel):
 
     @at.typecheck
     def embed_suffix(
-        self, obs: _model.Observation, noisy_actions: _model.Actions, timestep: at.Float[at.Array, " b"]
+        self, obs: _model.ObservationIncontext, noisy_actions: _model.Actions, timestep: at.Float[at.Array, " b"]
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
         input_mask = []
         ar_mask = []
@@ -244,10 +272,12 @@ class Pi0Incontext(_model.BaseModel):
 
     @override
     def compute_loss(
-        self, rng: at.KeyArrayLike, observation: _model.Observation, actions: _model.Actions, *, train: bool = False
+        self, rng: at.KeyArrayLike, observation: _model.ObservationIncontext, actions: _model.Actions, *, train: bool = False
     ) -> at.Float[at.Array, "*b ah"]:
+        # jax.debug.print("observation = {} ", observation)
+        import ipdb; ipdb.set_trace()
         preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
-        observation = _model.preprocess_observation(preprocess_rng, observation, train=train)
+        observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
 
         batch_shape = actions.shape[:-2]
         noise = jax.random.normal(noise_rng, actions.shape)
@@ -274,11 +304,11 @@ class Pi0Incontext(_model.BaseModel):
     def sample_actions(
         self,
         rng: at.KeyArrayLike,
-        observation: _model.Observation,
+        observation: _model.ObservationIncontext,
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
     ) -> _model.Actions:
-        observation = _model.preprocess_observation(None, observation, train=False)
+        observation = _model.preprocess_observation_incontext(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.
         dt = -1.0 / num_steps

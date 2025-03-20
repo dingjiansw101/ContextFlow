@@ -16,6 +16,7 @@ import tyro
 import openpi.models.model as _model
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
+import openpi.models.pi0_incontext as pi0_incontext
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
 import openpi.policies.aloha_policy as aloha_policy
@@ -108,6 +109,17 @@ class ModelTransformFactory(GroupFactory):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
         match model_config.model_type:
             case _model.ModelType.PI0:
+                return _transforms.Group(
+                    inputs=[
+                        _transforms.InjectDefaultPrompt(self.default_prompt),
+                        _transforms.ResizeImages(224, 224),
+                        _transforms.TokenizePrompt(
+                            _tokenizer.PaligemmaTokenizer(model_config.max_token_len),
+                        ),
+                    ],
+                )
+            case _model.ModelType.PI0_INCONTEXT:
+                # TODO: do we need to modify the model transform for incontext?
                 return _transforms.Group(
                     inputs=[
                         _transforms.InjectDefaultPrompt(self.default_prompt),
@@ -497,7 +509,7 @@ class TrainConfig:
 # Use `get_config` if you need to get a config by name in your code.
 _CONFIGS = [
     #
-    # Inference Aloha configs.
+    # In`fe`rence Aloha configs.
     #
     TrainConfig(
         name="pi0_aloha",
@@ -811,7 +823,7 @@ _CONFIGS = [
     # TODO: write a new model config for libero incontext
     TrainConfig(
         name="pi0_libero_incontext_low_mem_finetune",
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        model=pi0_incontext.Pi0IncontextConfig(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=DataConfig(
@@ -821,7 +833,7 @@ _CONFIGS = [
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=30_000,
-        freeze_filter=pi0.Pi0Config(
+        freeze_filter=pi0_incontext.Pi0IncontextConfig(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,

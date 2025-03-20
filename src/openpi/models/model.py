@@ -170,7 +170,7 @@ class ObservationIncontext(Generic[ArrayT]):
     def from_dict(cls, data: at.PyTree[ArrayT]) -> "Observation[ArrayT]":
         """This method defines the mapping between unstructured data (i.e., nested dict) to the structured Observation format."""
         # Ensure that tokenized_prompt and tokenized_prompt_mask are provided together.
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         if ("tokenized_prompt" in data) != ("tokenized_prompt_mask" in data):
             raise ValueError("tokenized_prompt and tokenized_prompt_mask must be provided together.")
         # If images are uint8, convert them to [-1, 1] float32.
@@ -181,7 +181,7 @@ class ObservationIncontext(Generic[ArrayT]):
         for key in data['dem_prompt_items']["image"]:
             if data['dem_prompt_items']["image"][key].dtype == np.uint8:
                 data['dem_prompt_items']["image"][key] = data['dem_prompt_items']["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
-
+        # import ipdb; ipdb.set_trace()
         return cls(
             images=data["image"],
             image_masks=data["image_mask"],
@@ -280,6 +280,142 @@ def preprocess_observation(
         token_loss_mask=observation.token_loss_mask,
     )
 
+def preprocess_observation_incontext(
+    rng: at.KeyArrayLike | None,
+    observation: ObservationIncontext,
+    *,
+    train: bool = False,
+    image_keys: Sequence[str] = IMAGE_KEYS,
+    image_resolution: tuple[int, int] = IMAGE_RESOLUTION,
+) -> ObservationIncontext:
+    """Preprocess the observations by performing image augmentations (if train=True), resizing (if necessary), and
+    filling in a default image mask (if necessary).
+    """
+    def process_images(
+        observation_images,
+        image_keys,
+        image_resolution,
+        train: bool,
+        rng,
+    ):
+        """
+        Process and optionally augment images in `observation_images`.
+
+        Args:
+            observation_images: An object or dict that has an attribute/dict `images`
+                        containing images keyed by `image_keys`.
+            image_keys (list[str]): Keys to the images you want to process.
+            image_resolution (tuple[int, int]): (height, width) to resize images.
+            train (bool): If True, apply data augmentation.
+            rng: A JAX PRNG key for random operations.
+
+        Returns:
+            dict: A dictionary of processed images, keyed by the same keys in `image_keys`.
+        """
+        out_images = {}
+
+        for key in image_keys:
+            image = observation_images[key]
+            if image.shape[1:3] != image_resolution:
+                logger.info(
+                    f"Resizing image {key} from {image.shape[1:3]} to {image_resolution}"
+                )
+                image = image_tools.resize_with_pad(image, *image_resolution)
+
+            if train:
+                # Convert from [-1, 1] to [0, 1] for augmax
+                image = image / 2.0 + 0.5
+
+                # Build a list of augmentation transforms
+                transforms = []
+                if "wrist" not in key:
+                    height, width = image.shape[1:3]
+                    transforms += [
+                        augmax.RandomCrop(int(width * 0.95), int(height * 0.95)),
+                        augmax.Resize(width, height),
+                        augmax.Rotate((-5, 5)),
+                    ]
+                transforms += [
+                    augmax.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5),
+                ]
+
+                # Apply augmentations with vmap
+                sub_rngs = jax.random.split(rng, image.shape[0])
+                image = jax.vmap(augmax.Chain(*transforms))(sub_rngs, image)
+
+                # Convert back to [-1, 1]
+                image = image * 2.0 - 1.0
+
+            out_images[key] = image
+
+        return out_images
+
+
+    if not set(image_keys).issubset(observation.images):
+        raise ValueError(f"images dict missing keys: expected {image_keys}, got {list(observation.images)}")
+
+    batch_shape = observation.state.shape[:-1]
+
+    out_images = process_images(
+        observation.images,
+        image_keys,
+        image_resolution,
+        train,
+        rng
+    )
+
+    # obtain mask
+    out_masks = {}
+    for key in out_images:
+        if key not in observation.image_masks:
+            # do not mask by default
+            out_masks[key] = jnp.ones(batch_shape, dtype=jnp.bool)
+        else:
+            out_masks[key] = jnp.asarray(observation.image_masks[key])
+
+    # reshape incontext images
+    batch_size, length, height, width, channel = observation.incontext_images[image_keys[0]].shape
+    for key in observation.incontext_images:
+        observation.incontext_images[key] = observation.incontext_images[key].reshape(
+            batch_size * length, height, width, channel)
+        
+    out_incontext_images = process_images(
+        observation.incontext_images,
+        image_keys,
+        image_resolution,
+        train,
+        rng
+    )
+
+    # reshape incontext images back
+    for key in out_incontext_images:
+        out_incontext_images[key] = out_incontext_images[key].reshape(
+            batch_size, length, height, width, channel)
+
+    # obtain incontext mask
+    out_incontext_masks = {}
+    for key in out_incontext_images:
+        if key not in observation.incontext_image_masks:
+            # do not mask by default
+            out_incontext_masks[key] = jnp.ones((batch_size, length), dtype=jnp.bool)
+        else:
+            out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
+
+    
+
+    return ObservationIncontext(
+        images=out_images,
+        image_masks=out_masks,
+        state=observation.state,
+        incontext_images=out_incontext_images,
+        incontext_image_masks=out_incontext_masks,
+        incontext_states=observation.incontext_states,
+        incontext_actions=observation.incontext_actions,
+        tokenized_prompt=observation.tokenized_prompt,
+        tokenized_prompt_mask=observation.tokenized_prompt_mask,
+        token_ar_mask=observation.token_ar_mask,
+        token_loss_mask=observation.token_loss_mask,
+    )
 
 @dataclasses.dataclass(frozen=True)
 class BaseModelConfig(abc.ABC):
