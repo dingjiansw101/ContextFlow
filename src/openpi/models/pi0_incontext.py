@@ -228,21 +228,21 @@ class Pi0Incontext(_model.BaseModel):
 
         # embed in-context images
 
-        # for name in obs.incontext_images:
-        #     image_sequence = obs.incontext_images[name]
-        #     batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
-        #     image_sequence = image_sequence.reshape(
-        #         image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:])
-        #     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-        #     # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-        #         # image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
-        #     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-        #         batch_size, seq_len, -1, image_sqeuence_tokens.shape[2])
-        #     # import ipdb; ipdb.set_trace()
-        #     image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
-        #     tokens.append(image_sqeuence_tokens)
-        #     input_mask.append(obs.incontext_image_masks[name])
-        #     ar_mask += [False] * image_sqeuence_tokens.shape[1]
+        for name in obs.incontext_images:
+            image_sequence = obs.incontext_images[name]
+            batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
+            image_sequence = image_sequence.reshape(
+                image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:])
+            image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+            # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                # image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
+            image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                batch_size, seq_len, -1, image_sqeuence_tokens.shape[2])
+            # import ipdb; ipdb.set_trace()
+            image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+            tokens.append(image_sqeuence_tokens)
+            input_mask.append(obs.incontext_image_masks[name])
+            ar_mask += [False] * image_sqeuence_tokens.shape[1]
 
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
@@ -263,6 +263,8 @@ class Pi0Incontext(_model.BaseModel):
         input_mask.append(jnp.ones((obs.state.shape[0], 1), dtype=jnp.bool_))
         # image/language inputs do not attend to state or actions
         ar_mask += [True]
+
+        # TODO: embed the entire trajectory of states and actions here
 
         # embed timestep using sine-cosine positional encoding with sensitivity in the range [0, 1]
         time_emb = posemb_sincos(timestep, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)

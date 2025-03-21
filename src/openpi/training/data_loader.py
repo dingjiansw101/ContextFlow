@@ -13,6 +13,8 @@ import torch
 import openpi.models.model as _model
 import openpi.training.config as _config
 import openpi.transforms as _transforms
+import json
+from tqdm import tqdm
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -64,9 +66,82 @@ class TransformedDataset(Dataset[T_co]):
         return len(self._dataset)
 
 
+def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
+    """
+    Converts each NumPy array to a Python list, then dumps to JSON.
+    """
+    # Convert episode_id to string (JSON keys must be strings)
+    json_dict = {}
+    for episode_id, states_array in episode_to_all_states.items():
+        json_dict[str(episode_id)] = states_array.tolist()
+
+    with open(filename, "w") as f:
+        json.dump(json_dict, f)
+
+def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
+    """
+    Loads the JSON file and reconstructs each list into a NumPy array.
+    """
+    with open(filename, "r") as f:
+        json_dict = json.load(f)
+
+    episode_to_all_states = {}
+    for episode_id_str, state_list in json_dict.items():
+        episode_id = int(episode_id_str)
+        # Recreate the NumPy array (optionally specify dtype if needed)
+        episode_to_all_states[episode_id] = np.array(state_list, dtype=np.float32)
+
+    return episode_to_all_states
+
+
 class AddDemoPromptDataset(Dataset[T_co]):
     def __init__(self, dataset: Dataset):
+
         self._dataset = dataset
+
+        # --- Option A: If cache exists, load from JSON ---
+        try:
+            self.episode_to_all_states = load_episode_states_from_json("episode_states_cache.json")
+            self.episode_to_all_first_actions = load_episode_states_from_json("episode_actions_first_cache.json")
+            print("Loaded states/actions from JSON cache.")
+        except FileNotFoundError:
+            # --- Option B: Build from scratch, then save ---
+            # Load or build the episode_to_indexes
+            episode_to_indexes_path = "metadata/libero/episode_to_indexes.json"
+            with open(episode_to_indexes_path) as f:
+                episode_to_indexes_str = json.load(f)
+            self.episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+
+            self.episode_to_all_states = {}
+            self.episode_to_all_first_actions = {}
+
+            # for episode_id, idx_list in self.episode_to_indexes.items():
+            for episode_id, idx_list in tqdm(
+                self.episode_to_indexes.items(),
+                desc="Building lookup tables for episodes",
+                total=len(self.episode_to_indexes)
+            ):
+                states_list = []
+                first_actions_list = []
+                for idx in idx_list:
+                    item = self._dataset[idx]
+                    states_list.append(item["state"])
+                    first_actions_list.append(item["actions"][0])
+
+                assert len(states_list) > 0
+                assert len(first_actions_list) > 0
+                self.episode_to_all_states[episode_id] = np.stack(states_list, axis=0)
+                self.episode_to_all_first_actions[episode_id] = np.stack(first_actions_list, axis=0)
+                # import ipdb; ipdb.set_trace()
+                # else:
+                #     # TODO: check this
+                #     self.episode_to_all_states[episode_id] = np.zeros((0, 32), dtype=np.float32)
+                #     self.episode_to_all_first_actions[episode_id] = np.zeros((0, 32), dtype=np.float32)
+
+            # Save to JSON so next time we can load it
+            save_episode_states_to_json(self.episode_to_all_states, "metadata/libero/episode_states_cache.json")
+            save_episode_states_to_json(self.episode_to_all_first_actions, "metadata/libero/episode_actions_first_cache.json")
+            print("Built and saved states/actions JSON cache.")
 
     def __getitem__(self, index: SupportsIndex) -> T_co:
         item = self._dataset[index]
@@ -74,9 +149,16 @@ class AddDemoPromptDataset(Dataset[T_co]):
         dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         item["dem_prompt_items"] = dem_prompt_items
-        # TODO: the action shape here is (16, 50, 32), optimize it later
-        # TODO: the state shape here is (16, 32), optimize it later
-        # import ipdb; ipdb.set_trace()
+
+        import ipdb; ipdb.set_trace()
+        # Suppose item["episode_id"] tells us which episode
+        episode_id = item["episode_id"]
+
+        # Retrieve precomputed states and first actions
+        # TODO: padding the actions
+        item["dem_prompt_all_states"] = self.episode_to_all_states[episode_id]
+        item["dem_prompt_all_actions_first"] = self.episode_to_all_first_actions[episode_id]
+
         return item
 
     def __len__(self) -> int:

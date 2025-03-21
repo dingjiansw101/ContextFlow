@@ -844,6 +844,7 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,
+        num_workers=32,
         # batch_size=16,
     ),
     #
@@ -878,6 +879,7 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,
+        num_workers=16,
     ),
     TrainConfig(
         name="pi0_fast_libero",

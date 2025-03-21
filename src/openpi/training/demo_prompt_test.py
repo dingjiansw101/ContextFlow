@@ -79,7 +79,7 @@ def test_libero_dataset():
     # import ipdb; ipdb.set_trace()
     hf_dataset = dataset._dataset.hf_dataset
     task_to_episode, episode_to_index = build_lookup_tables(hf_dataset)
-    save_lookup_tables(task_to_episode, episode_to_index, "assets/pi0_libero/")
+    save_lookup_tables(task_to_episode, episode_to_index, "metadata/libero/")
 
     inject_transform = InjectDemoPrompt(dataset)
     import ipdb

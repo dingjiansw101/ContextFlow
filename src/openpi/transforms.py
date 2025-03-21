@@ -116,14 +116,14 @@ class InjectDemoPrompt(DataTransformFn):
 
     dataset: Any  # For compatibility if your pipeline expects a dataset
     # TODO: fix the hard coding issue in the future
-    task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json"
-    episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json"
+    task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+    episode_to_indexes_path: str = "metadata/libero/episode_to_indexes.json"
 
     def __init__(
         self,
         dataset: Any,
-        task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json",
-        episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json",
+        task_to_episode_path: str = "metadata/libero/task_to_episode.json",
+        episode_to_indexes_path: str = "metadata/libero/episode_to_indexes.json",
     ):
         # Because this is a frozen dataclass, we must assign fields with object.__setattr__
         object.__setattr__(self, "dataset", dataset)
@@ -195,14 +195,16 @@ class InjectDemoIndexes(DataTransformFn):
     and converts their keys to integers.
     """
 
-    task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json"
-    episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json"
+    task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+    episode_to_indexes_path: str = "metadata/libero/episode_to_indexes.json"
+    # TODO: refactor max_frames to sample_frames
     max_frames: int = 16
+    max_len: int = 512
 
     def __init__(
         self,
-        task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json",
-        episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json",
+        task_to_episode_path: str = "metadata/libero/task_to_episode.json",
+        episode_to_indexes_path: str = "metadata/libero/episode_to_indexes.json",
         max_frames: int = 16,
     ):
         # Because this is a frozen dataclass, we must assign fields with object.__setattr__
@@ -250,6 +252,26 @@ class InjectDemoIndexes(DataTransformFn):
 
         # 4) Store both the chosen indexes and the items in `data`
         data["dem_prompt_indexes"] = np.array(chosen_indexes)
+
+        # Original (untrimmed) indexes
+        # We'll pad these to a fixed length (e.g. 512)
+        array_all_indexes = np.array(all_indexes, dtype=np.int32)
+
+        # Create a padded array and a mask
+        padded_all_indexes = np.zeros((self.max_len,), dtype=np.int32)
+        # Initialize mask with np.False_ (i.e. all False), then set valid positions to np.True_
+        mask = np.full((self.max_len,), np.False_, dtype=bool)
+        # Determine how many indices to copy
+        length = min(len(array_all_indexes), self.max_len)
+        padded_all_indexes[:length] = array_all_indexes[:length]
+        mask[:length] = np.True_ 
+
+        # Store padded indexes and mask in the data
+        # TODO: remove the all_indexes
+        data["dem_all_indexes"] = padded_all_indexes
+        data["dem_all_indexes_mask"] = mask
+
+        # TODO: the maximum length of dem_all_indexes is 505, we can set it as 512 and use padding
         return data
 
 
