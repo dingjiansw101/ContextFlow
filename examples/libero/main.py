@@ -139,7 +139,7 @@ def eval_libero(args: Args) -> None:
                                 )
                             ),
                             "prompt": str(task_description),
-                        } # TODO: add a task_index here
+                        }  # TODO: add a task_index here
 
                         # Query model to get action
                         action_chunk = client.infer(element)["actions"]

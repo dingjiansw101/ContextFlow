@@ -21,8 +21,8 @@ import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
 import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
-import openpi.policies.libero_policy as libero_policy
 import openpi.policies.libero_incontext_policy as libero_incontext_policy
+import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.optimizer as _optimizer
@@ -309,6 +309,7 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
             model_transforms=model_transforms,
         )
 
+
 @dataclasses.dataclass(frozen=True)
 class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
     @override
@@ -340,7 +341,11 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
 
         # Convert images to uint8 numpy arrays, add masks
         data_transforms = data_transforms.push(
-            inputs=[libero_incontext_policy.LiberoIncontextInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
+            inputs=[
+                libero_incontext_policy.LiberoIncontextInputs(
+                    action_dim=model_config.action_dim, model_type=model_config.model_type
+                )
+            ],
             outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
         )
         # Use delta actions (not for gripper)
@@ -358,6 +363,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
         )
+
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotAlohaMobileDataConfig(DataConfigFactory):
@@ -819,11 +825,12 @@ _CONFIGS = [
     #
     # Fine-tuning Libero configs.
     #
-    
     # TODO: write a new model config for libero incontext
     TrainConfig(
         name="pi0_libero_incontext_low_mem_finetune",
-        model=pi0_incontext.Pi0IncontextConfig(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        model=pi0_incontext.Pi0IncontextConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ),
         data=LeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=DataConfig(
@@ -837,6 +844,7 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,
+        # batch_size=16,
     ),
     #
     # Fine-tuning Libero configs.

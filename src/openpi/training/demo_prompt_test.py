@@ -1,16 +1,13 @@
-import dataclasses
+from collections import defaultdict
+import json
 
-import jax
+from tqdm import tqdm
 
-from openpi.models import pi0
 from openpi.training import config as _config
-from openpi.training import data_loader as _data_loader
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
 from openpi.transforms import InjectDemoPrompt
-from collections import defaultdict
-import json
-from tqdm import tqdm
+
 
 def build_lookup_tables(hf_dataset):
     """
@@ -29,7 +26,7 @@ def build_lookup_tables(hf_dataset):
     for i in tqdm(range(len(hf_dataset)), desc="Building lookup tables"):
         row = hf_dataset[i]
         # Convert to Python ints if they're 0-dim tensors
-        task_idx = int(row["task_index"])   # e.g. tensor(3) -> 3
+        task_idx = int(row["task_index"])  # e.g. tensor(3) -> 3
         episode_idx = int(row["episode_index"])
         index_idx = int(row["index"])
 
@@ -44,10 +41,11 @@ def build_lookup_tables(hf_dataset):
 
     return dict(task_to_episode), dict(episode_to_indexes)
 
+
 def save_lookup_tables(task_to_episode, episode_to_indexes, output_dir="."):
     """
     Saves the two lookup dictionaries as JSON files in 'output_dir'.
-    
+
     Args:
         task_to_episode (dict): {task_index: [episode_index, ...]}
         episode_to_indexes (dict): {episode_index: [index_idx, ...]}
@@ -55,6 +53,7 @@ def save_lookup_tables(task_to_episode, episode_to_indexes, output_dir="."):
     """
     # Ensure the output directory exists
     import os
+
     os.makedirs(output_dir, exist_ok=True)
 
     task_to_episode_path = os.path.join(output_dir, "task_to_episode.json")
@@ -71,6 +70,7 @@ def save_lookup_tables(task_to_episode, episode_to_indexes, output_dir="."):
     print(f"Wrote task_to_episode to {task_to_episode_path}")
     print(f"Wrote episode_to_indexes to {episode_to_indexes_path}")
 
+
 def test_libero_dataset():
     config = _config.get_config("pi0_libero")
 
@@ -82,13 +82,15 @@ def test_libero_dataset():
     save_lookup_tables(task_to_episode, episode_to_index, "assets/pi0_libero/")
 
     inject_transform = InjectDemoPrompt(dataset)
-    import ipdb; ipdb.set_trace()
-    
-    
+    import ipdb
+
+    ipdb.set_trace()
+
     for i in range(len(dataset)):
         print(dataset[i].keys())
         item = inject_transform(dataset[i])
         import ipdb
+
         ipdb.set_trace()
         # dict_keys(['image', 'wrist_image', 'state', 'actions',
         # 'timestamp', 'frame_index', 'episode_index', 'index',

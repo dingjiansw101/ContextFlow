@@ -1,7 +1,9 @@
 from collections.abc import Callable, Mapping, Sequence
 import dataclasses
+import json
+import random
 import re
-from typing import Protocol, TypeAlias, TypeVar, runtime_checkable, Any, Dict, List
+from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable
 
 import flax.traverse_util as traverse_util
 import jax
@@ -11,9 +13,6 @@ from openpi_client import image_tools
 from openpi.models import tokenizer as _tokenizer
 from openpi.shared import array_typing as at
 from openpi.shared import normalize as _normalize
-from collections import defaultdict
-import json
-import random
 
 # from openpi.training.data_loader import Dataset
 
@@ -98,6 +97,7 @@ class RepackTransform(DataTransformFn):
         "actions": "action",
     }
     """
+
     structure: at.PyTree[str]
 
     def __call__(self, data: DataDict) -> DataDict:
@@ -113,7 +113,8 @@ class InjectDemoPrompt(DataTransformFn):
       2) episode_to_indexes: {episode_index (str): list of index_idx (int)}
     and converts their keys to integers.
     """
-    dataset: Any      # For compatibility if your pipeline expects a dataset
+
+    dataset: Any  # For compatibility if your pipeline expects a dataset
     # TODO: fix the hard coding issue in the future
     task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json"
     episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json"
@@ -122,7 +123,7 @@ class InjectDemoPrompt(DataTransformFn):
         self,
         dataset: Any,
         task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json",
-        episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json"
+        episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json",
     ):
         # Because this is a frozen dataclass, we must assign fields with object.__setattr__
         object.__setattr__(self, "dataset", dataset)
@@ -130,9 +131,9 @@ class InjectDemoPrompt(DataTransformFn):
         object.__setattr__(self, "episode_to_indexes_path", episode_to_indexes_path)
 
         # Load JSON files
-        with open(task_to_episode_path, "r") as f:
+        with open(task_to_episode_path) as f:
             task_to_episode_str = json.load(f)
-        with open(episode_to_indexes_path, "r") as f:
+        with open(episode_to_indexes_path) as f:
             episode_to_indexes_str = json.load(f)
 
         # Convert dictionary keys from strings to integers
@@ -143,8 +144,7 @@ class InjectDemoPrompt(DataTransformFn):
         object.__setattr__(self, "task_to_episode", task_to_episode)
         object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
 
-    
-    def get_items_from_indexes(self, indexes: List[int]) -> List[Dict[str, Any]]:
+    def get_items_from_indexes(self, indexes: list[int]) -> list[dict[str, Any]]:
         """
         Given a list of row indexes, return the corresponding items
         from the underlying Hugging Face dataset.
@@ -153,7 +153,7 @@ class InjectDemoPrompt(DataTransformFn):
         items = [hf_dataset[i] for i in indexes]
         return items
 
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Example transform: randomly select a demonstration as prompt for the data,
         storing both the chosen indexes and the retrieved items.
@@ -194,6 +194,7 @@ class InjectDemoIndexes(DataTransformFn):
       2) episode_to_indexes: {episode_index (str): list of index_idx (int)}
     and converts their keys to integers.
     """
+
     task_to_episode_path: str = "assets/pi0_libero/task_to_episode.json"
     episode_to_indexes_path: str = "assets/pi0_libero/episode_to_indexes.json"
     max_frames: int = 16
@@ -210,9 +211,9 @@ class InjectDemoIndexes(DataTransformFn):
         object.__setattr__(self, "max_frames", max_frames)
 
         # Load JSON files
-        with open(task_to_episode_path, "r") as f:
+        with open(task_to_episode_path) as f:
             task_to_episode_str = json.load(f)
-        with open(episode_to_indexes_path, "r") as f:
+        with open(episode_to_indexes_path) as f:
             episode_to_indexes_str = json.load(f)
 
         # Convert dictionary keys from strings to integers
@@ -223,7 +224,7 @@ class InjectDemoIndexes(DataTransformFn):
         object.__setattr__(self, "task_to_episode", task_to_episode)
         object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
 
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         """
         Example transform: randomly select a demonstration as prompt for the data,
         storing both the chosen indexes and the retrieved items.
@@ -248,7 +249,7 @@ class InjectDemoIndexes(DataTransformFn):
             chosen_indexes = all_indexes
 
         # 4) Store both the chosen indexes and the items in `data`
-        data["dem_prompt_indexes"] = np.array(chosen_indexes) 
+        data["dem_prompt_indexes"] = np.array(chosen_indexes)
         return data
 
 

@@ -86,6 +86,7 @@ def test_with_real_dataset():
     for _, actions in batches:
         assert actions.shape == (config.batch_size, config.model.action_horizon, config.model.action_dim)
 
+
 def test_injectdemoprompt():
     # config = _config.get_config("pi0_libero")
     config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
@@ -93,12 +94,15 @@ def test_injectdemoprompt():
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_dataset(data_config, config.model)
     inject_transform = InjectDemoPrompt(dataset)
-    import ipdb; ipdb.set_trace()
-    
+    import ipdb
+
+    ipdb.set_trace()
+
     for i in range(len(dataset)):
         print(dataset[i].keys())
         item = inject_transform(dataset[i])
         import ipdb
+
         ipdb.set_trace()
         # dict_keys(['image', 'wrist_image', 'state', 'actions',
         # 'timestamp', 'frame_index', 'episode_index', 'index',
@@ -116,19 +120,26 @@ def test_libero_incontext_dataset():
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=True)
     for i in range(len(dataset)):
         print(dataset[i].keys())
-        import ipdb; ipdb.set_trace()
+        import ipdb
+
+        ipdb.set_trace()
         # dict_keys(['state', 'image', 'image_mask', 'actions',
         # 'tokenized_prompt', 'tokenized_prompt_mask'])
         # import ipdb;
         # ipdb.set_trace()
 
+
 def test_libero_incontext_data_loader():
     config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
     # TODO: use the norm_stats in the future
-    data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=True, num_batches=2) 
+    data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=True, num_batches=2)
     data_iter = iter(data_loader)
     batch = next(data_iter)
-    import ipdb; ipdb.set_trace()
+    import ipdb
+
+    ipdb.set_trace()
+
+
 if __name__ == "__main__":
     # test_libero_incontext_dataset()
     test_libero_incontext_data_loader()

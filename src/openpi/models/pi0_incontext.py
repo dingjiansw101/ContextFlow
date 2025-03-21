@@ -85,7 +85,9 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
         return Pi0Incontext(self, rngs=nnx.Rngs(rng))
 
     @override
-    def inputs_spec(self, *, batch_size: int = 1, keyframe_size: int = 16) -> tuple[_model.ObservationIncontext, _model.Actions]:
+    def inputs_spec(
+        self, *, batch_size: int = 1, keyframe_size: int = 16
+    ) -> tuple[_model.ObservationIncontext, _model.Actions]:
         # TODO: rewrite this part
         image_spec = jax.ShapeDtypeStruct([batch_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
         image_mask_spec = jax.ShapeDtypeStruct([batch_size], jnp.bool_)
@@ -116,7 +118,9 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
                     "right_wrist_0_rgb": prompt_mask_spec,
                 },
                 incontext_states=jax.ShapeDtypeStruct([batch_size, keyframe_size, self.action_dim], jnp.float32),
-                incontext_actions=jax.ShapeDtypeStruct([batch_size, keyframe_size, self.action_horizon, self.action_dim], jnp.float32),
+                incontext_actions=jax.ShapeDtypeStruct(
+                    [batch_size, keyframe_size, self.action_horizon, self.action_dim], jnp.float32
+                ),
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),
             )
@@ -201,8 +205,9 @@ class Pi0Incontext(_model.BaseModel):
         # import ipdb; ipdb.set_trace()
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
-            tokens.append(image_tokens) # image_tokens (32, 256, 2048)
-            import ipdb; ipdb.set_trace()
+            tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
+            # import ipdb; ipdb.set_trace()
+            # jax.debug.print("obs.image_masks = {}", obs.image_masks[name])
             input_mask.append(
                 einops.repeat(
                     obs.image_masks[name],
@@ -222,20 +227,27 @@ class Pi0Incontext(_model.BaseModel):
             ar_mask += [False] * tokenized_inputs.shape[1]
 
         # embed in-context images
-        for name in obs.incontext_images:
-            image_sequence = obs.incontext_images[name]
-            image_sequence = image_sequence.reshape(
-                image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:])
-            image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-            image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-                image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
-            import ipdb; ipdb.set_trace()
-            # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-            #     image_sequence.shape[0], -1, image_sqeuence_tokens.shape[1])
+
+        # for name in obs.incontext_images:
+        #     image_sequence = obs.incontext_images[name]
+        #     batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
+        #     image_sequence = image_sequence.reshape(
+        #         image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:])
+        #     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+        #     # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+        #         # image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
+        #     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+        #         batch_size, seq_len, -1, image_sqeuence_tokens.shape[2])
+        #     # import ipdb; ipdb.set_trace()
+        #     image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+        #     tokens.append(image_sqeuence_tokens)
+        #     input_mask.append(obs.incontext_image_masks[name])
+        #     ar_mask += [False] * image_sqeuence_tokens.shape[1]
 
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
+        # import ipdb; ipdb.set_trace()
         return tokens, input_mask, ar_mask
 
     @at.typecheck
@@ -272,10 +284,15 @@ class Pi0Incontext(_model.BaseModel):
 
     @override
     def compute_loss(
-        self, rng: at.KeyArrayLike, observation: _model.ObservationIncontext, actions: _model.Actions, *, train: bool = False
+        self,
+        rng: at.KeyArrayLike,
+        observation: _model.ObservationIncontext,
+        actions: _model.Actions,
+        *,
+        train: bool = False,
     ) -> at.Float[at.Array, "*b ah"]:
         # jax.debug.print("observation = {} ", observation)
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
         observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
 

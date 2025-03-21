@@ -16,17 +16,20 @@ import openpi.transforms as _transforms
 
 T_co = TypeVar("T_co", covariant=True)
 
+
 def tree_stack_np(list_of_trees, axis=0):
     """
     Stack a list of similarly structured PyTrees along `axis`,
     ensuring the leaves are NumPy arrays.
     """
+
     def stack_fn(*leaves):
         # Convert each leaf to a NumPy array, then stack
         leaves_np = [leaf for leaf in leaves]
         return np.stack(leaves_np, axis=axis)
 
     return jax.tree_map(stack_fn, *list_of_trees)
+
 
 class Dataset(Protocol[T_co]):
     """Interface for a dataset with random access."""
@@ -60,10 +63,11 @@ class TransformedDataset(Dataset[T_co]):
     def __len__(self) -> int:
         return len(self._dataset)
 
+
 class AddDemoPromptDataset(Dataset[T_co]):
     def __init__(self, dataset: Dataset):
         self._dataset = dataset
-    
+
     def __getitem__(self, index: SupportsIndex) -> T_co:
         item = self._dataset[index]
         dem_prompt_indexes = item.get("dem_prompt_indexes", [])
@@ -77,6 +81,7 @@ class AddDemoPromptDataset(Dataset[T_co]):
 
     def __len__(self) -> int:
         return len(self._dataset)
+
 
 class FakeDataset(Dataset):
     def __init__(self, model_config: _model.BaseModelConfig, num_samples: int):
@@ -245,6 +250,7 @@ def create_incontext_data_loader(
         num_workers=num_workers,
         seed=config.seed,
     )
+
     # import ipdb; ipdb.set_trace()
     class DataLoaderImpl(DataLoader):
         def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader, dataset: Dataset):
@@ -262,6 +268,7 @@ def create_incontext_data_loader(
                 yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
 
     return DataLoaderImpl(data_config, data_loader, dataset)
+
 
 class TorchDataLoader:
     def __init__(

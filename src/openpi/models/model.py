@@ -178,18 +178,20 @@ class ObservationIncontext(Generic[ArrayT]):
             if data["image"][key].dtype == np.uint8:
                 data["image"][key] = data["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
 
-        for key in data['dem_prompt_items']["image"]:
-            if data['dem_prompt_items']["image"][key].dtype == np.uint8:
-                data['dem_prompt_items']["image"][key] = data['dem_prompt_items']["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+        for key in data["dem_prompt_items"]["image"]:
+            if data["dem_prompt_items"]["image"][key].dtype == np.uint8:
+                data["dem_prompt_items"]["image"][key] = (
+                    data["dem_prompt_items"]["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+                )
         # import ipdb; ipdb.set_trace()
         return cls(
             images=data["image"],
             image_masks=data["image_mask"],
             state=data["state"],
-            incontext_images=data['dem_prompt_items']["image"],
-            incontext_image_masks=data['dem_prompt_items']["image_mask"],
-            incontext_states=data['dem_prompt_items']["state"],
-            incontext_actions=data['dem_prompt_items']["actions"],
+            incontext_images=data["dem_prompt_items"]["image"],
+            incontext_image_masks=data["dem_prompt_items"]["image_mask"],
+            incontext_states=data["dem_prompt_items"]["state"],
+            incontext_actions=data["dem_prompt_items"]["actions"],
             tokenized_prompt=data.get("tokenized_prompt"),
             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
             token_ar_mask=data.get("token_ar_mask"),
@@ -205,8 +207,10 @@ class ObservationIncontext(Generic[ArrayT]):
             "image": result.pop("incontext_images"),
             "image_mask": result.pop("incontext_image_masks"),
             "state": result.pop("incontext_states"),
-            "actions": result.pop("incontext_actions"),}
+            "actions": result.pop("incontext_actions"),
+        }
         return result
+
 
 # Defines the format of the actions. This field is included as "actions" inside the dictionary
 # produced by the data transforms.
@@ -280,6 +284,7 @@ def preprocess_observation(
         token_loss_mask=observation.token_loss_mask,
     )
 
+
 def preprocess_observation_incontext(
     rng: at.KeyArrayLike | None,
     observation: ObservationIncontext,
@@ -291,6 +296,7 @@ def preprocess_observation_incontext(
     """Preprocess the observations by performing image augmentations (if train=True), resizing (if necessary), and
     filling in a default image mask (if necessary).
     """
+
     def process_images(
         observation_images,
         image_keys,
@@ -317,9 +323,7 @@ def preprocess_observation_incontext(
         for key in image_keys:
             image = observation_images[key]
             if image.shape[1:3] != image_resolution:
-                logger.info(
-                    f"Resizing image {key} from {image.shape[1:3]} to {image_resolution}"
-                )
+                logger.info(f"Resizing image {key} from {image.shape[1:3]} to {image_resolution}")
                 image = image_tools.resize_with_pad(image, *image_resolution)
 
             if train:
@@ -350,19 +354,12 @@ def preprocess_observation_incontext(
 
         return out_images
 
-
     if not set(image_keys).issubset(observation.images):
         raise ValueError(f"images dict missing keys: expected {image_keys}, got {list(observation.images)}")
 
     batch_shape = observation.state.shape[:-1]
 
-    out_images = process_images(
-        observation.images,
-        image_keys,
-        image_resolution,
-        train,
-        rng
-    )
+    out_images = process_images(observation.images, image_keys, image_resolution, train, rng)
 
     # obtain mask
     out_masks = {}
@@ -377,20 +374,14 @@ def preprocess_observation_incontext(
     batch_size, length, height, width, channel = observation.incontext_images[image_keys[0]].shape
     for key in observation.incontext_images:
         observation.incontext_images[key] = observation.incontext_images[key].reshape(
-            batch_size * length, height, width, channel)
-        
-    out_incontext_images = process_images(
-        observation.incontext_images,
-        image_keys,
-        image_resolution,
-        train,
-        rng
-    )
+            batch_size * length, height, width, channel
+        )
+
+    out_incontext_images = process_images(observation.incontext_images, image_keys, image_resolution, train, rng)
 
     # reshape incontext images back
     for key in out_incontext_images:
-        out_incontext_images[key] = out_incontext_images[key].reshape(
-            batch_size, length, height, width, channel)
+        out_incontext_images[key] = out_incontext_images[key].reshape(batch_size, length, height, width, channel)
 
     # obtain incontext mask
     out_incontext_masks = {}
@@ -400,8 +391,6 @@ def preprocess_observation_incontext(
             out_incontext_masks[key] = jnp.ones((batch_size, length), dtype=jnp.bool)
         else:
             out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
-
-    
 
     return ObservationIncontext(
         images=out_images,
@@ -416,6 +405,7 @@ def preprocess_observation_incontext(
         token_ar_mask=observation.token_ar_mask,
         token_loss_mask=observation.token_loss_mask,
     )
+
 
 @dataclasses.dataclass(frozen=True)
 class BaseModelConfig(abc.ABC):
