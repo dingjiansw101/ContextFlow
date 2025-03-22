@@ -197,20 +197,18 @@ class InjectDemoIndexes(DataTransformFn):
 
     task_to_episode_path: str = "metadata/libero/task_to_episode.json"
     episode_to_indexes_path: str = "metadata/libero/episode_to_indexes.json"
-    # TODO: refactor max_frames to sample_frames
-    max_frames: int = 16
-    max_len: int = 512
+    sample_frames: int = 16
 
     def __init__(
         self,
         task_to_episode_path: str = "metadata/libero/task_to_episode.json",
         episode_to_indexes_path: str = "metadata/libero/episode_to_indexes.json",
-        max_frames: int = 16,
+        sample_frames: int = 16,
     ):
         # Because this is a frozen dataclass, we must assign fields with object.__setattr__
         object.__setattr__(self, "task_to_episode_path", task_to_episode_path)
         object.__setattr__(self, "episode_to_indexes_path", episode_to_indexes_path)
-        object.__setattr__(self, "max_frames", max_frames)
+        object.__setattr__(self, "sample_frames", sample_frames)
 
         # Load JSON files
         with open(task_to_episode_path) as f:
@@ -240,11 +238,11 @@ class InjectDemoIndexes(DataTransformFn):
         # 2) Get all indexes for that episode
         all_indexes = self.episode_to_indexes.get(selected_episode, [])
 
-        # 3) Uniformly sample up to self.max_frames frames
+        # 3) Uniformly sample up to self.sample_frames frames
         total_frames = len(all_indexes)
-        if total_frames > self.max_frames:
-            # Generate self.max_frames evenly spaced positions
-            positions = np.linspace(0, total_frames - 1, num=self.max_frames)
+        if total_frames > self.sample_frames:
+            # Generate self.sample_frames evenly spaced positions
+            positions = np.linspace(0, total_frames - 1, num=self.sample_frames)
             positions = np.round(positions).astype(int).tolist()
             chosen_indexes = [all_indexes[pos] for pos in positions]
         else:
@@ -252,26 +250,8 @@ class InjectDemoIndexes(DataTransformFn):
 
         # 4) Store both the chosen indexes and the items in `data`
         data["dem_prompt_indexes"] = np.array(chosen_indexes)
+        data["selected_episode"] = selected_episode
 
-        # Original (untrimmed) indexes
-        # We'll pad these to a fixed length (e.g. 512)
-        array_all_indexes = np.array(all_indexes, dtype=np.int32)
-
-        # Create a padded array and a mask
-        padded_all_indexes = np.zeros((self.max_len,), dtype=np.int32)
-        # Initialize mask with np.False_ (i.e. all False), then set valid positions to np.True_
-        mask = np.full((self.max_len,), np.False_, dtype=bool)
-        # Determine how many indices to copy
-        length = min(len(array_all_indexes), self.max_len)
-        padded_all_indexes[:length] = array_all_indexes[:length]
-        mask[:length] = np.True_ 
-
-        # Store padded indexes and mask in the data
-        # TODO: remove the all_indexes
-        data["dem_all_indexes"] = padded_all_indexes
-        data["dem_all_indexes_mask"] = mask
-
-        # TODO: the maximum length of dem_all_indexes is 505, we can set it as 512 and use padding
         return data
 
 

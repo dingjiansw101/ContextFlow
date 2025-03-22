@@ -38,15 +38,15 @@ def create_dataset(config: _config.TrainConfig) -> tuple[_config.DataConfig, _da
     return data_config, dataset
 
 
-def main(config_name: str, max_frames: int | None = None):
+def main(config_name: str, sample_frames: int | None = None):
     config = _config.get_config(config_name)
     data_config, dataset = create_dataset(config)
 
     num_frames = len(dataset)
     shuffle = False
 
-    if max_frames is not None and max_frames < num_frames:
-        num_frames = max_frames
+    if sample_frames is not None and sample_frames < num_frames:
+        num_frames = sample_frames
         shuffle = True
 
     data_loader = _data_loader.TorchDataLoader(

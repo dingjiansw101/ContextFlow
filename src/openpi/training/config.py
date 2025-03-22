@@ -348,6 +348,8 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             ],
             outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
         )
+        # TODO: fix the bug of libero actions.
+        # fix it and re-train on libero
         # Use delta actions (not for gripper)
         delta_action_mask = _transforms.make_bool_mask(6, -1)
         data_transforms = data_transforms.push(
@@ -825,7 +827,6 @@ _CONFIGS = [
     #
     # Fine-tuning Libero configs.
     #
-    # TODO: write a new model config for libero incontext
     TrainConfig(
         name="pi0_libero_incontext_low_mem_finetune",
         model=pi0_incontext.Pi0IncontextConfig(
@@ -838,14 +839,15 @@ _CONFIGS = [
                 prompt_from_task=True,
             ),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=30_000,
         freeze_filter=pi0_incontext.Pi0IncontextConfig(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=32,
+        num_workers=16,
         # batch_size=16,
+        wandb_enabled=False,
     ),
     #
     # Fine-tuning Libero configs.

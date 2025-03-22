@@ -131,8 +131,7 @@ def test_libero_incontext_dataset():
 
 def test_libero_incontext_data_loader():
     config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
-    # TODO: use the norm_stats in the future
-    data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=True, num_batches=2)
+    data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=False, num_batches=2)
     data_iter = iter(data_loader)
     batch = next(data_iter)
     import ipdb

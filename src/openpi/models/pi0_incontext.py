@@ -86,7 +86,11 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
 
     @override
     def inputs_spec(
-        self, *, batch_size: int = 1, keyframe_size: int = 16
+        self,
+        *,
+        batch_size: int = 1,
+        keyframe_size: int = 16,
+        max_len: int = 512,
     ) -> tuple[_model.ObservationIncontext, _model.Actions]:
         # TODO: rewrite this part
         image_spec = jax.ShapeDtypeStruct([batch_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
@@ -117,10 +121,11 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
                     "left_wrist_0_rgb": prompt_mask_spec,
                     "right_wrist_0_rgb": prompt_mask_spec,
                 },
-                incontext_states=jax.ShapeDtypeStruct([batch_size, keyframe_size, self.action_dim], jnp.float32),
-                incontext_actions=jax.ShapeDtypeStruct(
-                    [batch_size, keyframe_size, self.action_horizon, self.action_dim], jnp.float32
-                ),
+                # TODO: add key_frames, and max_len to config
+                incontext_states=jax.ShapeDtypeStruct([batch_size, max_len, self.action_dim], jnp.float32),
+                incontext_state_masks=jax.ShapeDtypeStruct([batch_size, max_len], jnp.bool_),
+                incontext_actions=jax.ShapeDtypeStruct([batch_size, max_len, self.action_dim], jnp.float32),
+                incontext_action_masks=jax.ShapeDtypeStruct([batch_size, max_len], jnp.bool_),
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),
             )
@@ -185,6 +190,7 @@ class Pi0Incontext(_model.BaseModel):
         img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
         self.PaliGemma = nnx.Dict(llm=llm, img=img)
         self.state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
+        self.demo_action_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.action_in_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.action_time_mlp_in = nnx.Linear(2 * action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
@@ -226,18 +232,23 @@ class Pi0Incontext(_model.BaseModel):
             # full attention between image and language inputs
             ar_mask += [False] * tokenized_inputs.shape[1]
 
+        # -------------------------------------------------------------------------
+        # start of in-context prompts
         # embed in-context images
+        # TODO: set a ratio to randomly mask input or prompt
 
         for name in obs.incontext_images:
             image_sequence = obs.incontext_images[name]
             batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
             image_sequence = image_sequence.reshape(
-                image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:])
+                image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
+            )
             image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
             # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-                # image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
+            # image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
             image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-                batch_size, seq_len, -1, image_sqeuence_tokens.shape[2])
+                batch_size, seq_len, -1, image_sqeuence_tokens.shape[2]
+            )
             # import ipdb; ipdb.set_trace()
             image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
             tokens.append(image_sqeuence_tokens)
@@ -247,7 +258,6 @@ class Pi0Incontext(_model.BaseModel):
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
-        # import ipdb; ipdb.set_trace()
         return tokens, input_mask, ar_mask
 
     @at.typecheck
@@ -257,14 +267,26 @@ class Pi0Incontext(_model.BaseModel):
         input_mask = []
         ar_mask = []
         tokens = []
+
+        # TODO: check the attention design
+        dem_state_tokens = self.state_proj(obs.incontext_states)
+        tokens.append(dem_state_tokens)
+        input_mask.append(obs.incontext_state_masks)
+        ar_mask += [False] * dem_state_tokens.shape[1]
+
+        dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
+        tokens.append(dem_action_tokens)
+        input_mask.append(obs.incontext_action_masks)
+        ar_mask += [False] * dem_action_tokens.shape[1]
+
+        # end of in-context prompts
+        # ---------------------------------------------------------
         # add a single state token
         state_token = self.state_proj(obs.state)[:, None, :]
         tokens.append(state_token)
         input_mask.append(jnp.ones((obs.state.shape[0], 1), dtype=jnp.bool_))
         # image/language inputs do not attend to state or actions
         ar_mask += [True]
-
-        # TODO: embed the entire trajectory of states and actions here
 
         # embed timestep using sine-cosine positional encoding with sensitivity in the range [0, 1]
         time_emb = posemb_sincos(timestep, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
@@ -312,6 +334,7 @@ class Pi0Incontext(_model.BaseModel):
         ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
         attn_mask = make_attn_mask(input_mask, ar_mask)
         positions = jnp.cumsum(input_mask, axis=1) - 1
+        # import ipdb; ipdb.set_trace()
         (prefix_out, suffix_out), _ = self.PaliGemma.llm(
             [prefix_tokens, suffix_tokens], mask=attn_mask, positions=positions
         )

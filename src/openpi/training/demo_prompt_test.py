@@ -96,9 +96,6 @@ def test_libero_dataset():
         # 'timestamp', 'frame_index', 'episode_index', 'index',
         # 'task_index', 'actions_is_pad', 'prompt'])
         # The dataset sample orders are the exactly the same as shown in huggingface
-        # TODO: write a transform to randomly read a demonstration according to tha task index
-        # select the data with a specific episode index.
-        # Then add the demonstration to the dataset
         # check the details of LeRobotDataset to see if we can use its functions
 
     # dataset = transform_dataset(dataset, data_config, skip_norm_stats=False)

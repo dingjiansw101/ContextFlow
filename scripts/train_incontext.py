@@ -92,6 +92,7 @@ def init_train_state(
         model = config.model.create(model_rng)
 
         # Merge the partial params into the model.
+        # import ipdb; ipdb.set_trace()
         if partial_params is not None:
             graphdef, state = nnx.split(model)
             # This will produce an error if the partial params are not a subset of the state.

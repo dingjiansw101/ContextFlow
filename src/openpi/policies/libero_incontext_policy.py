@@ -71,10 +71,12 @@ class LiberoIncontextInputs(transforms.DataTransformFn):
             inputs["prompt"] = data["prompt"]
         if "dem_prompt_indexes" in data:
             inputs["dem_prompt_indexes"] = data["dem_prompt_indexes"]
-        if "dem_all_indexes" in data:
-            inputs["dem_all_indexes"] = data["dem_all_indexes"]
-        if "dem_all_indexes_mask" in data:
-            inputs["dem_all_indexes_mask"] = data["dem_all_indexes_mask"]
+        # if "dem_all_indexes" in data:
+        #     inputs["dem_all_indexes"] = data["dem_all_indexes"]
+        # if "dem_all_indexes_mask" in data:
+        #     inputs["dem_all_indexes_mask"] = data["dem_all_indexes_mask"]
+        if "selected_episode" in data:
+            inputs["selected_episode"] = data["selected_episode"]
         if "index" in data:
             inputs["index"] = data["index"]
         return inputs

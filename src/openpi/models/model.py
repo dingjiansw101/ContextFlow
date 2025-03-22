@@ -149,10 +149,12 @@ class ObservationIncontext(Generic[ArrayT]):
     # In-context data.
     incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]]
     incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]]
-    # incontext states.
-    incontext_states: at.Float[ArrayT, "*b t s"]
+    # incontext states, q is the max_len of episode
+    incontext_states: at.Float[ArrayT, "*b q s"]
+    incontext_state_masks: at.Bool[ArrayT, "*b q"]
     # incontext actions
-    incontext_actions: at.Float[ArrayT, "*b t n a"]
+    incontext_actions: at.Float[ArrayT, "*b q s"]
+    incontext_action_masks: at.Bool[ArrayT, "*b q"]
 
     # Tokenized prompt.
     tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
@@ -183,15 +185,18 @@ class ObservationIncontext(Generic[ArrayT]):
                 data["dem_prompt_items"]["image"][key] = (
                     data["dem_prompt_items"]["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
                 )
-        # import ipdb; ipdb.set_trace()
+        # in the current implementation, the incontext images only sampeld 16 frames
+        # for the states and actions, we used the full length of the episode
         return cls(
             images=data["image"],
             image_masks=data["image_mask"],
             state=data["state"],
             incontext_images=data["dem_prompt_items"]["image"],
             incontext_image_masks=data["dem_prompt_items"]["image_mask"],
-            incontext_states=data["dem_prompt_items"]["state"],
-            incontext_actions=data["dem_prompt_items"]["actions"],
+            incontext_states=data["dem_prompt_all_states"],
+            incontext_state_masks=data["dem_prompt_all_states_mask"],
+            incontext_actions=data["dem_prompt_all_actions"],
+            incontext_action_masks=data["dem_prompt_all_actions_mask"],
             tokenized_prompt=data.get("tokenized_prompt"),
             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
             token_ar_mask=data.get("token_ar_mask"),
@@ -209,6 +214,10 @@ class ObservationIncontext(Generic[ArrayT]):
             "state": result.pop("incontext_states"),
             "actions": result.pop("incontext_actions"),
         }
+        result["dem_prompt_all_states"] = result.pop("incontext_states")
+        result["dem_prompt_all_states_mask"] = result.pop("incontext_state_masks")
+        result["dem_prompt_all_actions"] = result.pop("incontext_actions")
+        result["dem_prompt_all_actions_mask"] = result.pop("incontext_action_masks")
         return result
 
 
@@ -391,7 +400,6 @@ def preprocess_observation_incontext(
             out_incontext_masks[key] = jnp.ones((batch_size, length), dtype=jnp.bool)
         else:
             out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
-
     return ObservationIncontext(
         images=out_images,
         image_masks=out_masks,
@@ -399,7 +407,9 @@ def preprocess_observation_incontext(
         incontext_images=out_incontext_images,
         incontext_image_masks=out_incontext_masks,
         incontext_states=observation.incontext_states,
+        incontext_state_masks=observation.incontext_state_masks,
         incontext_actions=observation.incontext_actions,
+        incontext_action_masks=observation.incontext_action_masks,
         tokenized_prompt=observation.tokenized_prompt,
         tokenized_prompt_mask=observation.tokenized_prompt_mask,
         token_ar_mask=observation.token_ar_mask,

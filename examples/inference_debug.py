@@ -60,7 +60,6 @@ for i in range(imgs_per_cam["cam_high"].shape[0]):
         "prompt": "uncap the pen",
     }
 
-    # import ipdb; ipdb.set_trace()
     # TODO: to get in-context prompts, just add a task_index to the obs
     act_pred = policy.infer(obs)["actions"]  # predicted action for the next 32 steps
     act_pred = torch.from_numpy(act_pred)

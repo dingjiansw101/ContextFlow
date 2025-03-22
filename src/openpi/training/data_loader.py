@@ -1,4 +1,5 @@
 from collections.abc import Iterator, Sequence
+import json
 import multiprocessing
 import os
 import typing
@@ -9,12 +10,11 @@ import jax.numpy as jnp
 import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
+from tqdm import tqdm
 
 import openpi.models.model as _model
 import openpi.training.config as _config
 import openpi.transforms as _transforms
-import json
-from tqdm import tqdm
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -78,11 +78,12 @@ def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], fi
     with open(filename, "w") as f:
         json.dump(json_dict, f)
 
+
 def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
     """
     Loads the JSON file and reconstructs each list into a NumPy array.
     """
-    with open(filename, "r") as f:
+    with open(filename) as f:
         json_dict = json.load(f)
 
     episode_to_all_states = {}
@@ -96,13 +97,14 @@ def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
 
 class AddDemoPromptDataset(Dataset[T_co]):
     def __init__(self, dataset: Dataset):
-
         self._dataset = dataset
-
+        self._max_len = 512
         # --- Option A: If cache exists, load from JSON ---
         try:
-            self.episode_to_all_states = load_episode_states_from_json("episode_states_cache.json")
-            self.episode_to_all_first_actions = load_episode_states_from_json("episode_actions_first_cache.json")
+            self.episode_to_all_states = load_episode_states_from_json("metadata/libero/episode_states_cache.json")
+            self.episode_to_all_first_actions = load_episode_states_from_json(
+                "metadata/libero/episode_actions_first_cache.json"
+            )
             print("Loaded states/actions from JSON cache.")
         except FileNotFoundError:
             # --- Option B: Build from scratch, then save ---
@@ -119,7 +121,7 @@ class AddDemoPromptDataset(Dataset[T_co]):
             for episode_id, idx_list in tqdm(
                 self.episode_to_indexes.items(),
                 desc="Building lookup tables for episodes",
-                total=len(self.episode_to_indexes)
+                total=len(self.episode_to_indexes),
             ):
                 states_list = []
                 first_actions_list = []
@@ -132,15 +134,11 @@ class AddDemoPromptDataset(Dataset[T_co]):
                 assert len(first_actions_list) > 0
                 self.episode_to_all_states[episode_id] = np.stack(states_list, axis=0)
                 self.episode_to_all_first_actions[episode_id] = np.stack(first_actions_list, axis=0)
-                # import ipdb; ipdb.set_trace()
-                # else:
-                #     # TODO: check this
-                #     self.episode_to_all_states[episode_id] = np.zeros((0, 32), dtype=np.float32)
-                #     self.episode_to_all_first_actions[episode_id] = np.zeros((0, 32), dtype=np.float32)
-
             # Save to JSON so next time we can load it
             save_episode_states_to_json(self.episode_to_all_states, "metadata/libero/episode_states_cache.json")
-            save_episode_states_to_json(self.episode_to_all_first_actions, "metadata/libero/episode_actions_first_cache.json")
+            save_episode_states_to_json(
+                self.episode_to_all_first_actions, "metadata/libero/episode_actions_first_cache.json"
+            )
             print("Built and saved states/actions JSON cache.")
 
     def __getitem__(self, index: SupportsIndex) -> T_co:
@@ -150,14 +148,48 @@ class AddDemoPromptDataset(Dataset[T_co]):
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         item["dem_prompt_items"] = dem_prompt_items
 
-        import ipdb; ipdb.set_trace()
         # Suppose item["episode_id"] tells us which episode
-        episode_id = item["episode_id"]
+        episode_id = item["selected_episode"]
 
         # Retrieve precomputed states and first actions
-        # TODO: padding the actions
-        item["dem_prompt_all_states"] = self.episode_to_all_states[episode_id]
-        item["dem_prompt_all_actions_first"] = self.episode_to_all_first_actions[episode_id]
+        all_states = self.episode_to_all_states[episode_id]  # shape: (T, D)
+        all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
+
+        # --- Pad States ---
+        t, d = all_states.shape
+        length_to_copy = min(t, self._max_len)
+
+        padded_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
+        # Copy the real portion
+        padded_states[:length_to_copy] = all_states[:length_to_copy]
+        # Pad with the last valid state (if any)
+        if length_to_copy < self._max_len and t > 0:
+            padded_states[length_to_copy:] = all_states[length_to_copy - 1]
+
+        # Create a boolean mask for states
+        states_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
+        states_mask[:length_to_copy] = np.True_
+
+        # --- Pad Actions ---
+        t_actions, a_dim = all_actions_first.shape
+        length_to_copy_actions = min(t_actions, self._max_len)
+
+        padded_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
+        # Copy the real portion
+        padded_actions[:length_to_copy_actions] = all_actions_first[:length_to_copy_actions]
+        # Pad with the last valid action (if any)
+        if length_to_copy_actions < self._max_len and t_actions > 0:
+            padded_actions[length_to_copy_actions:] = all_actions_first[length_to_copy_actions - 1]
+
+        # Create a boolean mask for actions
+        actions_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
+        actions_mask[:length_to_copy_actions] = np.True_
+
+        # Store them in the item
+        item["dem_prompt_all_states"] = padded_states
+        item["dem_prompt_all_states_mask"] = states_mask
+        item["dem_prompt_all_actions"] = padded_actions
+        item["dem_prompt_all_actions_mask"] = actions_mask
 
         return item
 
