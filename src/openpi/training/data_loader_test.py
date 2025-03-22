@@ -7,7 +7,6 @@ from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
-from openpi.transforms import InjectDemoPrompt
 
 
 def test_torch_data_loader():
@@ -86,28 +85,6 @@ def test_with_real_dataset():
     for _, actions in batches:
         assert actions.shape == (config.batch_size, config.model.action_horizon, config.model.action_dim)
 
-
-def test_injectdemoprompt():
-    # config = _config.get_config("pi0_libero")
-    config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
-    # TODO: add assets_dirs to the config in the future
-    data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_dataset(data_config, config.model)
-    inject_transform = InjectDemoPrompt(dataset)
-    import ipdb
-
-    ipdb.set_trace()
-
-    for i in range(len(dataset)):
-        print(dataset[i].keys())
-        item = inject_transform(dataset[i])
-        import ipdb
-
-        ipdb.set_trace()
-        # dict_keys(['image', 'wrist_image', 'state', 'actions',
-        # 'timestamp', 'frame_index', 'episode_index', 'index',
-        # 'task_index', 'actions_is_pad', 'prompt'])
-        # The dataset sample orders are the exactly the same as shown in huggingface
 
 
 def test_libero_incontext_dataset():

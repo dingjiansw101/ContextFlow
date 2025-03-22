@@ -6,7 +6,6 @@ from tqdm import tqdm
 from openpi.training import config as _config
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
-from openpi.transforms import InjectDemoPrompt
 
 
 def build_lookup_tables(hf_dataset):
@@ -81,14 +80,9 @@ def test_libero_dataset():
     task_to_episode, episode_to_index = build_lookup_tables(hf_dataset)
     save_lookup_tables(task_to_episode, episode_to_index, "metadata/libero/")
 
-    inject_transform = InjectDemoPrompt(dataset)
-    import ipdb
-
-    ipdb.set_trace()
 
     for i in range(len(dataset)):
         print(dataset[i].keys())
-        item = inject_transform(dataset[i])
         import ipdb
 
         ipdb.set_trace()
