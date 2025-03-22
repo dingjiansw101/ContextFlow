@@ -845,7 +845,7 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=16,
+        # num_workers=16,
         # batch_size=16,
         wandb_enabled=False,
     ),

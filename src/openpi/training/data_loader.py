@@ -26,9 +26,7 @@ def tree_stack_np(list_of_trees, axis=0):
     """
 
     def stack_fn(*leaves):
-        # Convert each leaf to a NumPy array, then stack
-        leaves_np = [leaf for leaf in leaves]
-        return np.stack(leaves_np, axis=axis)
+        return np.stack(leaves, axis=axis)
 
     return jax.tree_map(stack_fn, *list_of_trees)
 

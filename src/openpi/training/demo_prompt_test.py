@@ -6,6 +6,7 @@ from tqdm import tqdm
 from openpi.training import config as _config
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
+from pathlib import Path
 
 
 def build_lookup_tables(hf_dataset):
@@ -80,12 +81,10 @@ def test_libero_dataset():
     task_to_episode, episode_to_index = build_lookup_tables(hf_dataset)
     save_lookup_tables(task_to_episode, episode_to_index, "metadata/libero/")
 
-
     for i in range(len(dataset)):
         print(dataset[i].keys())
-        import ipdb
-
-        ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         # dict_keys(['image', 'wrist_image', 'state', 'actions',
         # 'timestamp', 'frame_index', 'episode_index', 'index',
         # 'task_index', 'actions_is_pad', 'prompt'])
@@ -102,5 +101,5 @@ def test_libero_dataset():
         # ipdb.set_trace()
 
 
-if __name__ == "__main__":
-    test_libero_dataset()
+# if __name__ == "__main__":
+#     test_libero_dataset()
