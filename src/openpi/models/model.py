@@ -387,7 +387,7 @@ def preprocess_observation_incontext(
             batch_size * length, height, width, channel
         )
 
-    out_incontext_images = process_images(observation.incontext_images, image_keys, image_resolution, train, rng)
+    out_incontext_images = process_images(observation.incontext_images, image_keys, image_resolution, train=train, rng=rng)
 
     # reshape incontext images back
     for key in out_incontext_images:
