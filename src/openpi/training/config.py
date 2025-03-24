@@ -335,7 +335,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
         # Prepare data for policy training
         # inject the indexes of demo prompt, TODO: provide json file_paths here
         data_transforms = _transforms.Group(
-            inputs=[_transforms.InjectDemoIndexes()],
+            inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames)],
             outputs=[],
         )
 
@@ -843,6 +843,28 @@ _CONFIGS = [
         num_train_steps=20_000,
         freeze_filter=pi0_incontext.Pi0IncontextConfig(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        batch_size=36,
+        # wandb_enabled=False,
+    ),
+    TrainConfig(
+        name="pi0_libero_incontext_low_mem_finetune_sample2",
+        model=pi0_incontext.Pi0IncontextConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontext.Pi0IncontextConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=16,

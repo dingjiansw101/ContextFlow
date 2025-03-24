@@ -75,6 +75,9 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
     action_horizon: int = 50
     max_token_len: int = 48
 
+    # params for pi0 incontext
+    sample_frames: int = 16
+
     @property
     @override
     def model_type(self) -> _model.ModelType:
@@ -240,6 +243,7 @@ class Pi0Incontext(_model.BaseModel):
         for name in obs.incontext_images:
             image_sequence = obs.incontext_images[name]
             batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
+            # jax.debug.print("seq_len = {}", seq_len)
             image_sequence = image_sequence.reshape(
                 image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
             )
