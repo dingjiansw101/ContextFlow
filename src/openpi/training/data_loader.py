@@ -2,6 +2,7 @@ from collections.abc import Iterator, Sequence
 import json
 import multiprocessing
 import os
+from pathlib import Path
 import typing
 from typing import Protocol, SupportsIndex, TypeVar
 
@@ -68,12 +69,13 @@ def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], fi
     """
     Converts each NumPy array to a Python list, then dumps to JSON.
     """
-    # Convert episode_id to string (JSON keys must be strings)
+    filename = Path(filename)  # Convert string path to a Path object
+
     json_dict = {}
     for episode_id, states_array in episode_to_all_states.items():
         json_dict[str(episode_id)] = states_array.tolist()
 
-    with open(filename, "w") as f:
+    with filename.open("w") as f:  # Use Path.open()
         json.dump(json_dict, f)
 
 
@@ -81,13 +83,13 @@ def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
     """
     Loads the JSON file and reconstructs each list into a NumPy array.
     """
-    with open(filename) as f:
+    filename = Path(filename)  # Convert string path to Path
+    with filename.open("r") as f:  # Use Path.open() instead of open()
         json_dict = json.load(f)
 
     episode_to_all_states = {}
     for episode_id_str, state_list in json_dict.items():
         episode_id = int(episode_id_str)
-        # Recreate the NumPy array (optionally specify dtype if needed)
         episode_to_all_states[episode_id] = np.array(state_list, dtype=np.float32)
 
     return episode_to_all_states
@@ -107,8 +109,8 @@ class AddDemoPromptDataset(Dataset[T_co]):
         except FileNotFoundError:
             # --- Option B: Build from scratch, then save ---
             # Load or build the episode_to_indexes
-            episode_to_indexes_path = "metadata/libero/episode_to_indexes.json"
-            with open(episode_to_indexes_path) as f:
+            episode_to_indexes_path = Path("metadata/libero/episode_to_indexes.json")
+            with episode_to_indexes_path.open("r") as f:
                 episode_to_indexes_str = json.load(f)
             self.episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
 

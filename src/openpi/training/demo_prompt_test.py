@@ -6,7 +6,6 @@ from tqdm import tqdm
 from openpi.training import config as _config
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
-from pathlib import Path
 
 
 def build_lookup_tables(hf_dataset):

@@ -310,6 +310,7 @@ def preprocess_observation_incontext(
         observation_images,
         image_keys,
         image_resolution,
+        *,
         train: bool,
         rng,
     ):
@@ -368,7 +369,7 @@ def preprocess_observation_incontext(
 
     batch_shape = observation.state.shape[:-1]
 
-    out_images = process_images(observation.images, image_keys, image_resolution, train, rng)
+    out_images = process_images(observation.images, image_keys, image_resolution, train=train, rng=rng)
 
     # obtain mask
     out_masks = {}
