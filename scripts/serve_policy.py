@@ -20,6 +20,7 @@ class EnvMode(enum.Enum):
     LIBERO = "libero"
     LIBERO_FM = "pi0_libero"
     LIBERO_FM_LORA = "pi0_libero_low_mem_finetune"
+    LIBERO_FM_LORA_INCONTEXT = "pi0_libero_incontext_low_mem_finetune"
     ALOHA_HANDOVER = "aloha_handover"
     ALOHA_MOBILE = "trossen_mobile"
     ALOHA_HANDOVER_LOW_MEM = "aloha_handover_low_mem"
@@ -99,6 +100,10 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         # dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_low_mem_finetune/pi0_libero_low_mem_finetune/10000",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_low_mem_finetune/pi0_libero_low_mem_finetune/20000",
         # dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_low_mem_finetune/pi0_libero_low_mem_finetune/29999",
+    ),
+    EnvMode.LIBERO_FM_LORA_INCONTEXT: Checkpoint(
+        config="pi0_libero_incontext_low_mem_finetune",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune/pi0_libero_incontext_low_mem_finetune/10000"
     ),
     EnvMode.ALOHA_HANDOVER: Checkpoint(
         config="pi0_aloha_handover",

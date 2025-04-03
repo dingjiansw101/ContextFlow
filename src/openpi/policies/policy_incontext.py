@@ -19,7 +19,7 @@ from openpi.shared import nnx_utils
 BasePolicy: TypeAlias = _base_policy.BasePolicy
 
 
-class Policy(BasePolicy):
+class PolicyIncontext(BasePolicy):
     def __init__(
         self,
         model: _model.BaseModel,
@@ -41,6 +41,8 @@ class Policy(BasePolicy):
     def infer(self, obs: dict) -> dict:  # type: ignore[misc]
         # Make a copy since transformations may modify the inputs in place.
         inputs = jax.tree.map(lambda x: x, obs)
+        # TODO: The _input_transform should be consistent with the one
+        # used in transform_dataset. The definition of _input_transform is in create_trained_policy
         inputs = self._input_transform(inputs) 
         # Make a batch and convert to jax.Array.
         inputs = jax.tree.map(lambda x: jnp.asarray(x)[np.newaxis, ...], inputs)

@@ -354,6 +354,7 @@ class Pi0Incontext(_model.BaseModel):
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
     ) -> _model.Actions:
+        import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation_incontext(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.
