@@ -13,7 +13,12 @@ from openpi.training import config as _config
 
 class EnvMode(enum.Enum):
     """Supported environments."""
+    ALOHA = "aloha"
+    ALOHA_SIM = "aloha_sim"
+    DROID = "droid"
+    LIBERO = "libero"
     LIBERO_FM_LORA_INCONTEXT = "pi0_libero_incontext_low_mem_finetune"
+    LIBERO_FM_LORA_INCONTEXT_SAMPLE2 = "pi0_libero_incontext_low_mem_finetune_sample2"
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -52,9 +57,29 @@ class Args:
 
 # Default checkpoints that should be used for each environment.
 DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
+    EnvMode.ALOHA: Checkpoint(
+        config="pi0_aloha",
+        dir="s3://openpi-assets/checkpoints/pi0_base",
+    ),
+    EnvMode.ALOHA_SIM: Checkpoint(
+        config="pi0_aloha_sim",
+        dir="s3://openpi-assets/checkpoints/pi0_aloha_sim",
+    ),
+    EnvMode.DROID: Checkpoint(
+        config="pi0_fast_droid",
+        dir="s3://openpi-assets/checkpoints/pi0_fast_droid",
+    ),
+    EnvMode.LIBERO: Checkpoint(
+        config="pi0_fast_libero",
+        dir="s3://openpi-assets/checkpoints/pi0_fast_libero",
+    ),
     EnvMode.LIBERO_FM_LORA_INCONTEXT: Checkpoint(
         config="pi0_libero_incontext_low_mem_finetune",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune/pi0_libero_incontext_low_mem_finetune/10000"
+    ),
+    EnvMode.LIBERO_FM_LORA_INCONTEXT_SAMPLE2: Checkpoint(
+        config="pi0_libero_incontext_low_mem_finetune_sample2",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2/pi0_libero_incontext_low_mem_finetune_sample2/19999"
     ),
 }
 

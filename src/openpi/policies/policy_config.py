@@ -13,7 +13,7 @@ import openpi.shared.download as download
 from openpi.training import checkpoints as _checkpoints
 from openpi.training import config as _config
 import openpi.transforms as transforms
-
+from openpi.training.data_loader import create_dataset, transform_dataset, AddDemoPromptDataset
 
 @dataclasses.dataclass
 class PolicyConfig:
@@ -123,6 +123,10 @@ def create_trained_policy_incontext(
         if data_config.asset_id is None:
             raise ValueError("Asset id is required to load norm stats.")
         norm_stats = _checkpoints.load_norm_stats(checkpoint_dir / "assets", data_config.asset_id)
+    dataset = create_dataset(data_config, train_config.model)
+    dataset = transform_dataset(dataset, data_config)
+    # dataset = AddDemoPromptDataset(dataset)
+
     return _policy_incontext.PolicyIncontext(
         model,
         # TODO: check the transforms here, if it is the same as the one in the training
@@ -132,6 +136,7 @@ def create_trained_policy_incontext(
             *data_config.data_transforms.inputs,
             transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
             *data_config.model_transforms.inputs,
+            transforms.AddDemoPromptTransform(dataset),
         ],
         output_transforms=[
             *data_config.model_transforms.outputs,

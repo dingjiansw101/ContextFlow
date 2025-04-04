@@ -183,7 +183,8 @@ class Pi0(_model.BaseModel):
         ar_mask = []
         tokens = []
         # embed images
-        # import ipdb; ipdb.set_trace()
+        # print("obs.images")
+        jax.debug.print("obs.images")
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
 

@@ -14,6 +14,7 @@ from openpi_client import image_tools
 from openpi.models import tokenizer as _tokenizer
 from openpi.shared import array_typing as at
 from openpi.shared import normalize as _normalize
+from tqdm import tqdm
 
 # from openpi.training.data_loader import Dataset
 
@@ -153,8 +154,12 @@ class InjectDemoIndexes(DataTransformFn):
         task_index = int(data["task_index"])
         episodes_for_task = self.task_to_episode.get(task_index, [])
 
-        selected_episode = random.choice(episodes_for_task)
-
+        split = data.get("split", "train")
+        if split == "train":
+            selected_episode = random.choice(episodes_for_task)
+        else:
+            selected_episode = episodes_for_task[0] if episodes_for_task else None
+            
         # 2) Get all indexes for that episode
         all_indexes = self.episode_to_indexes.get(selected_episode, [])
 
@@ -174,6 +179,148 @@ class InjectDemoIndexes(DataTransformFn):
 
         return data
 
+def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
+    """
+    Converts each NumPy array to a Python list, then dumps to JSON.
+    """
+    filename = Path(filename)  # Convert string path to a Path object
+
+    json_dict = {}
+    for episode_id, states_array in episode_to_all_states.items():
+        json_dict[str(episode_id)] = states_array.tolist()
+
+    with filename.open("w") as f:  # Use Path.open()
+        json.dump(json_dict, f)
+
+
+def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
+    """
+    Loads the JSON file and reconstructs each list into a NumPy array.
+    """
+    filename = Path(filename)  # Convert string path to Path
+    with filename.open("r") as f:  # Use Path.open() instead of open()
+        json_dict = json.load(f)
+
+    episode_to_all_states = {}
+    for episode_id_str, state_list in json_dict.items():
+        episode_id = int(episode_id_str)
+        episode_to_all_states[episode_id] = np.array(state_list, dtype=np.float32)
+
+    return episode_to_all_states
+
+def tree_stack_np(list_of_trees, axis=0):
+    """
+    Stack a list of similarly structured PyTrees along `axis`,
+    ensuring the leaves are NumPy arrays.
+    """
+
+    def stack_fn(*leaves):
+        return np.stack(leaves, axis=axis)
+
+    return jax.tree_map(stack_fn, *list_of_trees)
+
+@dataclasses.dataclass(frozen=True)
+class AddDemoPromptTransform(DataTransformFn):
+    _dataset: any  # the underlying dataset from which to fetch demo items
+    _max_len: int = 512
+
+    # These fields are not provided at initialization by the user.
+    episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
+    episode_to_all_first_actions: dict[int, np.ndarray] = dataclasses.field(init=False)
+
+    def __init__(self, dataset: any, max_len: int = 512):
+        # Since this is a frozen dataclass, we use object.__setattr__
+        object.__setattr__(self, "_dataset", dataset)
+        object.__setattr__(self, "_max_len", max_len)
+
+        # --- Option A: Try to load precomputed states/actions from JSON cache ---
+        try:
+            states = load_episode_states_from_json("metadata/libero/episode_states_cache.json")
+            actions = load_episode_states_from_json("metadata/libero/episode_actions_first_cache.json")
+            print("Loaded states/actions from JSON cache.")
+        except FileNotFoundError:
+            # --- Option B: Build from scratch, then save ---
+            episode_to_indexes_path = Path("metadata/libero/episode_to_indexes.json")
+            with episode_to_indexes_path.open("r") as f:
+                episode_to_indexes_str = json.load(f)
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+
+            states = {}
+            actions = {}
+
+            for episode_id, idx_list in tqdm(
+                episode_to_indexes.items(),
+                desc="Building lookup tables for episodes",
+                total=len(episode_to_indexes),
+            ):
+                states_list = []
+                first_actions_list = []
+                for idx in idx_list:
+                    item = dataset[int(idx)]
+                    states_list.append(item["state"])
+                    first_actions_list.append(item["actions"][0])
+                assert len(states_list) > 0
+                assert len(first_actions_list) > 0
+                states[episode_id] = np.stack(states_list, axis=0)
+                actions[episode_id] = np.stack(first_actions_list, axis=0)
+
+            save_episode_states_to_json(states, "metadata/libero/episode_states_cache.json")
+            save_episode_states_to_json(actions, "metadata/libero/episode_actions_first_cache.json")
+            print("Built and saved states/actions JSON cache.")
+
+        object.__setattr__(self, "episode_to_all_states", states)
+        object.__setattr__(self, "episode_to_all_first_actions", actions)
+
+    def __call__(self, data: dict) -> dict:
+        """
+        Transforms a single data item by:
+          1. Fetching demonstration prompt items from the underlying dataset based on 'dem_prompt_indexes'.
+          2. Retrieving and padding all states and the first actions for the selected episode.
+          3. Storing the demonstration prompt items along with padded states/actions and their masks.
+        """
+        # 1) Retrieve demonstration prompt items using the provided indexes.
+        dem_prompt_indexes = data.get("dem_prompt_indexes", [])
+        dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
+        dem_prompt_items = tree_stack_np(dem_prompt_items)
+        data["dem_prompt_items"] = dem_prompt_items
+
+        # 2) Retrieve precomputed states and actions for the selected episode.
+        # Here we assume that the key "selected_episode" exists in the data.
+        episode_id = data["selected_episode"]
+        all_states = self.episode_to_all_states[episode_id]       # shape: (T, D)
+        all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
+
+        # --- Pad States ---
+        t, d = all_states.shape
+        length_to_copy = min(t, self._max_len)
+        padded_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
+        padded_states[:length_to_copy] = all_states[:length_to_copy]
+        # If needed, pad with the last valid state.
+        if length_to_copy < self._max_len and t > 0:
+            padded_states[length_to_copy:] = all_states[length_to_copy - 1]
+        # Create a boolean mask indicating valid state entries.
+        states_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
+        states_mask[:length_to_copy] = np.True_
+
+        # --- Pad Actions ---
+        t_actions, a_dim = all_actions_first.shape
+        length_to_copy_actions = min(t_actions, self._max_len)
+        padded_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
+        padded_actions[:length_to_copy_actions] = all_actions_first[:length_to_copy_actions]
+        # If needed, pad with the last valid action.
+        if length_to_copy_actions < self._max_len and t_actions > 0:
+            padded_actions[length_to_copy_actions:] = all_actions_first[length_to_copy_actions - 1]
+        # Create a boolean mask indicating valid action entries.
+        actions_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
+        actions_mask[:length_to_copy_actions] = np.True_
+
+        # 3) Store the padded states, actions, and their masks in the data dict.
+        data["dem_prompt_all_states"] = padded_states
+        data["dem_prompt_all_states_mask"] = states_mask
+        data["dem_prompt_all_actions"] = padded_actions
+        data["dem_prompt_all_actions_mask"] = actions_mask
+
+        return data
 
 @dataclasses.dataclass(frozen=True)
 class InjectDefaultPrompt(DataTransformFn):

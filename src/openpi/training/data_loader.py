@@ -262,7 +262,6 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
             )
         norm_stats = data_config.norm_stats
-    # import ipdb; ipdb.set_trace()
     return TransformedDataset(
         dataset,
         [
@@ -377,7 +376,6 @@ def create_incontext_data_loader(
 
         def __iter__(self):
             for batch in self._data_loader:
-                # import ipdb; ipdb.set_trace()
                 # yield _model.Observation.from_dict(batch), batch["actions"]
                 yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
 

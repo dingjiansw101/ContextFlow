@@ -239,21 +239,21 @@ class Pi0Incontext(_model.BaseModel):
         # start of in-context prompts
         # embed in-context images
         # TODO: set a ratio to randomly mask input or prompt
-
+        # TODO: write a dict, mapping from selected_episode_index to prompt tokens.
+        # take the selected_episode_index from the observation. In the same task, the task_index from observation are the same
+        # for each task_index, theere is only one selected_episode_index 
+        # TODO: check if the image encoder is trained during training
+     
         for name in obs.incontext_images:
             image_sequence = obs.incontext_images[name]
             batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
-            # jax.debug.print("seq_len = {}", seq_len)
             image_sequence = image_sequence.reshape(
                 image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
             )
             image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-            # image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-            # image_tokens.shape[0], -1, image_sqeuence_tokens.shape[2])
             image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                 batch_size, seq_len, -1, image_sqeuence_tokens.shape[2]
             )
-            # import ipdb; ipdb.set_trace()
             image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
             tokens.append(image_sqeuence_tokens)
             input_mask.append(obs.incontext_image_masks[name])
@@ -262,6 +262,8 @@ class Pi0Incontext(_model.BaseModel):
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
+        # import ipdb; ipdb.set_trace()
+        # jax.debug.print("tokens.shape = {}", tokens.shape)
         return tokens, input_mask, ar_mask
 
     @at.typecheck
@@ -282,7 +284,7 @@ class Pi0Incontext(_model.BaseModel):
         tokens.append(dem_action_tokens)
         input_mask.append(obs.incontext_action_masks)
         ar_mask += [False] * dem_action_tokens.shape[1]
-
+        # import ipdb; ipdb.set_trace()
         # end of in-context prompts
         # ---------------------------------------------------------
         # add a single state token
@@ -308,6 +310,8 @@ class Pi0Incontext(_model.BaseModel):
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
+        # import ipdb; ipdb.set_trace()
+        # jax.debug.print("check masks {}", jnp.array_equal(obs.incontext_state_masks, obs.incontext_action_masks))
         return tokens, input_mask, ar_mask
 
     @override
@@ -354,17 +358,18 @@ class Pi0Incontext(_model.BaseModel):
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
     ) -> _model.Actions:
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation_incontext(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.
         dt = -1.0 / num_steps
-        # import ipdb; ipdb.set_trace()
         batch_size = observation.state.shape[0]
         noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
 
         # first fill KV cache with a forward pass of the prefix
+        # jax.debug.print("Filling KV cache with prefix...")
         prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
+        # jax.debug.print("prefix_tokens.shape = {}", prefix_tokens.shape)
         prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
         positions = jnp.cumsum(prefix_mask, axis=1) - 1
         _, kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)

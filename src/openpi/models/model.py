@@ -155,6 +155,8 @@ class ObservationIncontext(Generic[ArrayT]):
     # incontext actions
     incontext_actions: at.Float[ArrayT, "*b q s"]
     incontext_action_masks: at.Bool[ArrayT, "*b q"]
+    # selected episode for incontext prompt
+    incontext_selected_episode: at.Int[ArrayT, "*b"] | None = None
 
     # Tokenized prompt.
     tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
@@ -187,6 +189,7 @@ class ObservationIncontext(Generic[ArrayT]):
                 )
         # in the current implementation, the incontext images only sampeld 16 frames
         # for the states and actions, we used the full length of the episode
+        # jax.debug.print("data is: {}", data["selected_episode"])
         return cls(
             images=data["image"],
             image_masks=data["image_mask"],
@@ -197,6 +200,7 @@ class ObservationIncontext(Generic[ArrayT]):
             incontext_state_masks=data["dem_prompt_all_states_mask"],
             incontext_actions=data["dem_prompt_all_actions"],
             incontext_action_masks=data["dem_prompt_all_actions_mask"],
+            incontext_selected_episode=data["selected_episode"],
             tokenized_prompt=data.get("tokenized_prompt"),
             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
             token_ar_mask=data.get("token_ar_mask"),
@@ -211,13 +215,14 @@ class ObservationIncontext(Generic[ArrayT]):
         result["dem_prompt_items"] = {
             "image": result.pop("incontext_images"),
             "image_mask": result.pop("incontext_image_masks"),
-            "state": result.pop("incontext_states"),
-            "actions": result.pop("incontext_actions"),
+            # "state": result.pop("incontext_states"),
+            # "actions": result.pop("incontext_actions"),
         }
         result["dem_prompt_all_states"] = result.pop("incontext_states")
         result["dem_prompt_all_states_mask"] = result.pop("incontext_state_masks")
         result["dem_prompt_all_actions"] = result.pop("incontext_actions")
         result["dem_prompt_all_actions_mask"] = result.pop("incontext_action_masks")
+        result["selected_episode"] = result.pop("incontext_selected_episode")
         return result
 
 
@@ -411,6 +416,7 @@ def preprocess_observation_incontext(
         incontext_state_masks=observation.incontext_state_masks,
         incontext_actions=observation.incontext_actions,
         incontext_action_masks=observation.incontext_action_masks,
+        incontext_selected_episode=observation.incontext_selected_episode,
         tokenized_prompt=observation.tokenized_prompt,
         tokenized_prompt_mask=observation.tokenized_prompt_mask,
         token_ar_mask=observation.token_ar_mask,

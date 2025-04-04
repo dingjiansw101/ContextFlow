@@ -3,7 +3,6 @@ import dataclasses
 import logging
 import math
 import pathlib
-
 import imageio
 from libero.libero import benchmark
 from libero.libero import get_libero_path
@@ -13,10 +12,24 @@ from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
 import tqdm
 import tyro
+import json
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 
+def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
+    mapping = {}
+    with file_path.open('r', encoding='utf-8') as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            task_description = record.get("task")
+            task_index = record.get("task_index")
+            if task_description is not None and task_index is not None:
+                mapping[task_description] = task_index
+    return mapping
 
 @dataclasses.dataclass
 class Args:
@@ -55,6 +68,8 @@ def eval_libero(args: Args) -> None:
     num_tasks_in_suite = task_suite.n_tasks
     logging.info(f"Task suite: {args.task_suite_name}")
 
+    filename = pathlib.Path("metadata/libero/tasks.jsonl")
+    task_description2index = get_task_to_index_mapping(filename)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
     if args.task_suite_name == "libero_spatial":
@@ -71,14 +86,12 @@ def eval_libero(args: Args) -> None:
         raise ValueError(f"Unknown task suite: {args.task_suite_name}")
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
-    import ipdb; ipdb.set_trace()
 
     # Start evaluation
     total_episodes, total_successes = 0, 0
     for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
         # TODO: select tasks for testing here
         # Get task
-        import ipdb; ipdb.set_trace()
         task = task_suite.get_task(task_id)
 
         # Get default LIBERO initial states
@@ -141,8 +154,9 @@ def eval_libero(args: Args) -> None:
                                 )
                             ),
                             "prompt": str(task_description),
-                        }  # TODO: add a task_index here
-
+                            "task_index": task_description2index[task_description],
+                            "split": "test",
+                        }
                         # Query model to get action
                         action_chunk = client.infer(element)["actions"]
                         assert (
