@@ -222,13 +222,13 @@ def tree_stack_np(list_of_trees, axis=0):
 @dataclasses.dataclass(frozen=True)
 class AddDemoPromptTransform(DataTransformFn):
     _dataset: any  # the underlying dataset from which to fetch demo items
-    _max_len: int = 28 # TODO: make this configurable
+    _max_len: int = 32 # TODO: make this configurable
 
     # These fields are not provided at initialization by the user.
     episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
     episode_to_all_first_actions: dict[int, np.ndarray] = dataclasses.field(init=False)
 
-    def __init__(self, dataset: any, max_len: int = 28):
+    def __init__(self, dataset: any, max_len: int = 32):
         # Since this is a frozen dataclass, we use object.__setattr__
         object.__setattr__(self, "_dataset", dataset)
         object.__setattr__(self, "_max_len", max_len)
