@@ -222,13 +222,13 @@ def tree_stack_np(list_of_trees, axis=0):
 @dataclasses.dataclass(frozen=True)
 class AddDemoPromptTransform(DataTransformFn):
     _dataset: any  # the underlying dataset from which to fetch demo items
-    _max_len: int = 512
+    _max_len: int = 28 # TODO: make this configurable
 
     # These fields are not provided at initialization by the user.
     episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
     episode_to_all_first_actions: dict[int, np.ndarray] = dataclasses.field(init=False)
 
-    def __init__(self, dataset: any, max_len: int = 512):
+    def __init__(self, dataset: any, max_len: int = 28):
         # Since this is a frozen dataclass, we use object.__setattr__
         object.__setattr__(self, "_dataset", dataset)
         object.__setattr__(self, "_max_len", max_len)
@@ -283,41 +283,49 @@ class AddDemoPromptTransform(DataTransformFn):
         dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         data["dem_prompt_items"] = dem_prompt_items
-
+        jax.debug.print("self._max_len: {}", self._max_len)
         # 2) Retrieve precomputed states and actions for the selected episode.
         # Here we assume that the key "selected_episode" exists in the data.
         episode_id = data["selected_episode"]
         all_states = self.episode_to_all_states[episode_id]       # shape: (T, D)
         all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
 
-        # --- Pad States ---
+        # --- Process States Separately ---
         t, d = all_states.shape
-        length_to_copy = min(t, self._max_len)
-        padded_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
-        padded_states[:length_to_copy] = all_states[:length_to_copy]
-        # If needed, pad with the last valid state.
-        if length_to_copy < self._max_len and t > 0:
-            padded_states[length_to_copy:] = all_states[length_to_copy - 1]
-        # Create a boolean mask indicating valid state entries.
-        states_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
-        states_mask[:length_to_copy] = np.True_
+        if t >= self._max_len:
+            # Uniformly sample self._max_len states if enough are available.
+            state_indices = np.linspace(0, t - 1, num=self._max_len, dtype=int)
+            sampled_states = all_states[state_indices]
+            states_mask = np.ones((self._max_len,), dtype=bool)
+        else:
+            # Otherwise, pad with the last valid state.
+            sampled_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
+            sampled_states[:t] = all_states
+            if t > 0:
+                sampled_states[t:] = all_states[t - 1]
+            states_mask = np.zeros((self._max_len,), dtype=bool)
+            states_mask[:t] = np.True_
 
-        # --- Pad Actions ---
-        t_actions, a_dim = all_actions_first.shape
-        length_to_copy_actions = min(t_actions, self._max_len)
-        padded_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
-        padded_actions[:length_to_copy_actions] = all_actions_first[:length_to_copy_actions]
-        # If needed, pad with the last valid action.
-        if length_to_copy_actions < self._max_len and t_actions > 0:
-            padded_actions[length_to_copy_actions:] = all_actions_first[length_to_copy_actions - 1]
-        # Create a boolean mask indicating valid action entries.
-        actions_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
-        actions_mask[:length_to_copy_actions] = np.True_
+        # --- Process Actions Separately ---
+        t_a, a_dim = all_actions_first.shape
+        if t_a >= self._max_len:
+            # Uniformly sample self._max_len actions if enough are available.
+            action_indices = np.linspace(0, t_a - 1, num=self._max_len, dtype=int)
+            sampled_actions = all_actions_first[action_indices]
+            actions_mask = np.ones((self._max_len,), dtype=bool)
+        else:
+            # Otherwise, pad with the last valid action.
+            sampled_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
+            sampled_actions[:t_a] = all_actions_first
+            if t_a > 0:
+                sampled_actions[t_a:] = all_actions_first[t_a - 1]
+            actions_mask = np.zeros((self._max_len,), dtype=bool)
+            actions_mask[:t_a] = np.True_
 
         # 3) Store the padded states, actions, and their masks in the data dict.
-        data["dem_prompt_all_states"] = padded_states
+        data["dem_prompt_all_states"] = sampled_states
         data["dem_prompt_all_states_mask"] = states_mask
-        data["dem_prompt_all_actions"] = padded_actions
+        data["dem_prompt_all_actions"] = sampled_actions
         data["dem_prompt_all_actions_mask"] = actions_mask
 
         return data

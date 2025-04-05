@@ -98,7 +98,7 @@ def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
 class AddDemoPromptDataset(Dataset[T_co]):
     def __init__(self, dataset: Dataset):
         self._dataset = dataset
-        self._max_len = 512
+        self._max_len = 32 # TODO: make this configurable
         # --- Option A: If cache exists, load from JSON ---
         try:
             self.episode_to_all_states = load_episode_states_from_json("metadata/libero/episode_states_cache.json")
@@ -155,40 +155,42 @@ class AddDemoPromptDataset(Dataset[T_co]):
         all_states = self.episode_to_all_states[episode_id]  # shape: (T, D)
         all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
 
-        # --- Pad States ---
+        # --- Process States Separately ---
         t, d = all_states.shape
-        length_to_copy = min(t, self._max_len)
+        if t >= self._max_len:
+            # Uniformly sample self._max_len states if enough are available.
+            state_indices = np.linspace(0, t - 1, num=self._max_len, dtype=int)
+            sampled_states = all_states[state_indices]
+            states_mask = np.ones((self._max_len,), dtype=bool)
+        else:
+            # Otherwise, pad with the last valid state.
+            sampled_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
+            sampled_states[:t] = all_states
+            if t > 0:
+                sampled_states[t:] = all_states[t - 1]
+            states_mask = np.zeros((self._max_len,), dtype=bool)
+            states_mask[:t] = np.True_
 
-        padded_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
-        # Copy the real portion
-        padded_states[:length_to_copy] = all_states[:length_to_copy]
-        # Pad with the last valid state (if any)
-        if length_to_copy < self._max_len and t > 0:
-            padded_states[length_to_copy:] = all_states[length_to_copy - 1]
-
-        # Create a boolean mask for states
-        states_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
-        states_mask[:length_to_copy] = np.True_
-
-        # --- Pad Actions ---
-        t_actions, a_dim = all_actions_first.shape
-        length_to_copy_actions = min(t_actions, self._max_len)
-
-        padded_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
-        # Copy the real portion
-        padded_actions[:length_to_copy_actions] = all_actions_first[:length_to_copy_actions]
-        # Pad with the last valid action (if any)
-        if length_to_copy_actions < self._max_len and t_actions > 0:
-            padded_actions[length_to_copy_actions:] = all_actions_first[length_to_copy_actions - 1]
-
-        # Create a boolean mask for actions
-        actions_mask = np.full((self._max_len,), fill_value=np.False_, dtype=bool)
-        actions_mask[:length_to_copy_actions] = np.True_
+        # --- Process Actions Separately ---
+        t_a, a_dim = all_actions_first.shape
+        if t_a >= self._max_len:
+            # Uniformly sample self._max_len actions if enough are available.
+            action_indices = np.linspace(0, t_a - 1, num=self._max_len, dtype=int)
+            sampled_actions = all_actions_first[action_indices]
+            actions_mask = np.ones((self._max_len,), dtype=bool)
+        else:
+            # Otherwise, pad with the last valid action.
+            sampled_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
+            sampled_actions[:t_a] = all_actions_first
+            if t_a > 0:
+                sampled_actions[t_a:] = all_actions_first[t_a - 1]
+            actions_mask = np.zeros((self._max_len,), dtype=bool)
+            actions_mask[:t_a] = np.True_
 
         # Store them in the item
-        item["dem_prompt_all_states"] = padded_states
+        item["dem_prompt_all_states"] = sampled_states
         item["dem_prompt_all_states_mask"] = states_mask
-        item["dem_prompt_all_actions"] = padded_actions
+        item["dem_prompt_all_actions"] = sampled_actions
         item["dem_prompt_all_actions_mask"] = actions_mask
 
         return item
