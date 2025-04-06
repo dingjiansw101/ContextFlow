@@ -95,108 +95,109 @@ def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
     return episode_to_all_states
 
 
-class AddDemoPromptDataset(Dataset[T_co]):
-    def __init__(self, dataset: Dataset):
-        self._dataset = dataset
-        self._max_len = 32 # TODO: make this configurable
-        # --- Option A: If cache exists, load from JSON ---
-        try:
-            self.episode_to_all_states = load_episode_states_from_json("metadata/libero/episode_states_cache.json")
-            self.episode_to_all_first_actions = load_episode_states_from_json(
-                "metadata/libero/episode_actions_first_cache.json"
-            )
-            print("Loaded states/actions from JSON cache.")
-        except FileNotFoundError:
-            # --- Option B: Build from scratch, then save ---
-            # Load or build the episode_to_indexes
-            episode_to_indexes_path = Path("metadata/libero/episode_to_indexes.json")
-            with episode_to_indexes_path.open("r") as f:
-                episode_to_indexes_str = json.load(f)
-            self.episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+# class AddDemoPromptDataset(Dataset[T_co]):
+#     def __init__(self, dataset: Dataset):
+#         self._dataset = dataset
+#         self._max_len = 32 # TODO: make this configurable
+#         # --- Option A: If cache exists, load from JSON ---
+#         try:
+#             self.episode_to_all_states = load_episode_states_from_json("metadata/libero/episode_states_cache.json")
+#             self.episode_to_all_first_actions = load_episode_states_from_json(
+#                 "metadata/libero/episode_actions_first_cache.json"
+#             )
+#             print("Loaded states/actions from JSON cache.")
+#         except FileNotFoundError:
+#             # --- Option B: Build from scratch, then save ---
+#             # Load or build the episode_to_indexes
+#             episode_to_indexes_path = Path("metadata/libero/episode_to_indexes.json")
+#             with episode_to_indexes_path.open("r") as f:
+#                 episode_to_indexes_str = json.load(f)
+#             self.episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
 
-            self.episode_to_all_states = {}
-            self.episode_to_all_first_actions = {}
+#             self.episode_to_all_states = {}
+#             self.episode_to_all_first_actions = {}
 
-            # for episode_id, idx_list in self.episode_to_indexes.items():
-            for episode_id, idx_list in tqdm(
-                self.episode_to_indexes.items(),
-                desc="Building lookup tables for episodes",
-                total=len(self.episode_to_indexes),
-            ):
-                states_list = []
-                first_actions_list = []
-                for idx in idx_list:
-                    item = self._dataset[idx]
-                    states_list.append(item["state"])
-                    first_actions_list.append(item["actions"][0])
+#             # for episode_id, idx_list in self.episode_to_indexes.items():
+#             for episode_id, idx_list in tqdm(
+#                 self.episode_to_indexes.items(),
+#                 desc="Building lookup tables for episodes",
+#                 total=len(self.episode_to_indexes),
+#             ):
+#                 states_list = []
+#                 first_actions_list = []
+#                 for idx in idx_list:
+#                     item = self._dataset[idx]
+#                     states_list.append(item["state"])
+#                     first_actions_list.append(item["actions"][0])
 
-                assert len(states_list) > 0
-                assert len(first_actions_list) > 0
-                self.episode_to_all_states[episode_id] = np.stack(states_list, axis=0)
-                self.episode_to_all_first_actions[episode_id] = np.stack(first_actions_list, axis=0)
-            # Save to JSON so next time we can load it
-            save_episode_states_to_json(self.episode_to_all_states, "metadata/libero/episode_states_cache.json")
-            save_episode_states_to_json(
-                self.episode_to_all_first_actions, "metadata/libero/episode_actions_first_cache.json"
-            )
-            print("Built and saved states/actions JSON cache.")
+#                 assert len(states_list) > 0
+#                 assert len(first_actions_list) > 0
+#                 self.episode_to_all_states[episode_id] = np.stack(states_list, axis=0)
+#                 self.episode_to_all_first_actions[episode_id] = np.stack(first_actions_list, axis=0)
+#             # Save to JSON so next time we can load it
+#             save_episode_states_to_json(self.episode_to_all_states, "metadata/libero/episode_states_cache.json")
+#             save_episode_states_to_json(
+#                 self.episode_to_all_first_actions, "metadata/libero/episode_actions_first_cache.json"
+#             )
+#             print("Built and saved states/actions JSON cache.")
 
-    def __getitem__(self, index: SupportsIndex) -> T_co:
-        item = self._dataset[index]
-        dem_prompt_indexes = item.get("dem_prompt_indexes", [])
-        dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
-        dem_prompt_items = tree_stack_np(dem_prompt_items)
-        item["dem_prompt_items"] = dem_prompt_items
+#     def __getitem__(self, index: SupportsIndex) -> T_co:
+#         item = self._dataset[index]
+#         dem_prompt_indexes = item.get("dem_prompt_indexes", [])
+#         dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
+#         dem_prompt_items = tree_stack_np(dem_prompt_items)
+#         item["dem_prompt_items"] = dem_prompt_items
 
-        # Suppose item["episode_id"] tells us which episode
-        episode_id = item["selected_episode"]
+#         # Suppose item["episode_id"] tells us which episode
+#         episode_id = item["selected_episode"]
+#         jax.debug.print("episode_id: {}", episode_id)   
 
-        # Retrieve precomputed states and first actions
-        all_states = self.episode_to_all_states[episode_id]  # shape: (T, D)
-        all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
+#         # Retrieve precomputed states and first actions
+#         all_states = self.episode_to_all_states[episode_id]  # shape: (T, D)
+#         all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
 
-        # --- Process States Separately ---
-        t, d = all_states.shape
-        if t >= self._max_len:
-            # Uniformly sample self._max_len states if enough are available.
-            state_indices = np.linspace(0, t - 1, num=self._max_len, dtype=int)
-            sampled_states = all_states[state_indices]
-            states_mask = np.ones((self._max_len,), dtype=bool)
-        else:
-            # Otherwise, pad with the last valid state.
-            sampled_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
-            sampled_states[:t] = all_states
-            if t > 0:
-                sampled_states[t:] = all_states[t - 1]
-            states_mask = np.zeros((self._max_len,), dtype=bool)
-            states_mask[:t] = np.True_
+#         # --- Process States Separately ---
+#         t, d = all_states.shape
+#         if t >= self._max_len:
+#             # Uniformly sample self._max_len states if enough are available.
+#             state_indices = np.linspace(0, t - 1, num=self._max_len, dtype=int)
+#             sampled_states = all_states[state_indices]
+#             states_mask = np.ones((self._max_len,), dtype=bool)
+#         else:
+#             # Otherwise, pad with the last valid state.
+#             sampled_states = np.zeros((self._max_len, d), dtype=all_states.dtype)
+#             sampled_states[:t] = all_states
+#             if t > 0:
+#                 sampled_states[t:] = all_states[t - 1]
+#             states_mask = np.zeros((self._max_len,), dtype=bool)
+#             states_mask[:t] = np.True_
 
-        # --- Process Actions Separately ---
-        t_a, a_dim = all_actions_first.shape
-        if t_a >= self._max_len:
-            # Uniformly sample self._max_len actions if enough are available.
-            action_indices = np.linspace(0, t_a - 1, num=self._max_len, dtype=int)
-            sampled_actions = all_actions_first[action_indices]
-            actions_mask = np.ones((self._max_len,), dtype=bool)
-        else:
-            # Otherwise, pad with the last valid action.
-            sampled_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
-            sampled_actions[:t_a] = all_actions_first
-            if t_a > 0:
-                sampled_actions[t_a:] = all_actions_first[t_a - 1]
-            actions_mask = np.zeros((self._max_len,), dtype=bool)
-            actions_mask[:t_a] = np.True_
+#         # --- Process Actions Separately ---
+#         t_a, a_dim = all_actions_first.shape
+#         if t_a >= self._max_len:
+#             # Uniformly sample self._max_len actions if enough are available.
+#             action_indices = np.linspace(0, t_a - 1, num=self._max_len, dtype=int)
+#             sampled_actions = all_actions_first[action_indices]
+#             actions_mask = np.ones((self._max_len,), dtype=bool)
+#         else:
+#             # Otherwise, pad with the last valid action.
+#             sampled_actions = np.zeros((self._max_len, a_dim), dtype=all_actions_first.dtype)
+#             sampled_actions[:t_a] = all_actions_first
+#             if t_a > 0:
+#                 sampled_actions[t_a:] = all_actions_first[t_a - 1]
+#             actions_mask = np.zeros((self._max_len,), dtype=bool)
+#             actions_mask[:t_a] = np.True_
 
-        # Store them in the item
-        item["dem_prompt_all_states"] = sampled_states
-        item["dem_prompt_all_states_mask"] = states_mask
-        item["dem_prompt_all_actions"] = sampled_actions
-        item["dem_prompt_all_actions_mask"] = actions_mask
+#         # Store them in the item
+#         item["dem_prompt_all_states"] = sampled_states
+#         item["dem_prompt_all_states_mask"] = states_mask
+#         item["dem_prompt_all_actions"] = sampled_actions
+#         item["dem_prompt_all_actions_mask"] = actions_mask
 
-        return item
+#         return item
 
-    def __len__(self) -> int:
-        return len(self._dataset)
+#     def __len__(self) -> int:
+#         return len(self._dataset)
 
 
 class FakeDataset(Dataset):
@@ -352,10 +353,13 @@ def create_incontext_data_loader(
     """
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_dataset(data_config, config.model)
-    # import ipdb; ipdb.set_trace()
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
-    dataset = AddDemoPromptDataset(dataset)
+    # dataset_old = AddDemoPromptDataset(dataset)
+    # import ipdb; ipdb.set_trace()
+    add_demo_transform = _transforms.AddDemoPromptTransform(dataset=dataset, max_len=config.model.sample_actions)
+    dataset = TransformedDataset(dataset, [add_demo_transform])
 
+    # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
         dataset,
         local_batch_size=config.batch_size // jax.process_count(),

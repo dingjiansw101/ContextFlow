@@ -77,6 +77,8 @@ class Pi0IncontextConfig(_model.BaseModelConfig):
 
     # params for pi0 incontext
     sample_frames: int = 16
+    sample_actions: int = 32
+    random_select: bool = True
 
     @property
     @override

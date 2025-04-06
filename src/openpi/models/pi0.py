@@ -184,7 +184,7 @@ class Pi0(_model.BaseModel):
         tokens = []
         # embed images
         # print("obs.images")
-        jax.debug.print("obs.images")
+        # jax.debug.print("obs.images")
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
 

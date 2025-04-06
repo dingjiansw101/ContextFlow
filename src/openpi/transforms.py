@@ -119,17 +119,22 @@ class InjectDemoIndexes(DataTransformFn):
     task_to_episode_path: Path = Path("metadata/libero/task_to_episode.json")
     episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json")
     sample_frames: int = 16
+    random_select: bool = True
 
     def __init__(
         self,
         task_to_episode_path: Path = Path("metadata/libero/task_to_episode.json"),
         episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json"),
         sample_frames: int = 16,
+        random_select: bool = True,
     ):
+        # TODO: remove the init method and use __post_init__ instead
+        # remove __setattr__
         # Because this is a frozen dataclass, we must assign fields with object.__setattr__
         object.__setattr__(self, "task_to_episode_path", task_to_episode_path)
         object.__setattr__(self, "episode_to_indexes_path", episode_to_indexes_path)
         object.__setattr__(self, "sample_frames", sample_frames)
+        object.__setattr__(self, "random_select", random_select)
 
         # Load JSON files using Path.open()
         with self.task_to_episode_path.open("r") as f:
@@ -154,12 +159,18 @@ class InjectDemoIndexes(DataTransformFn):
         task_index = int(data["task_index"])
         episodes_for_task = self.task_to_episode.get(task_index, [])
 
-        split = data.get("split", "train")
-        if split == "train":
+        # split = data.get("split", "train")
+
+        # if split == "train":
+        #     selected_episode = random.choice(episodes_for_task)
+        # else:
+        #     selected_episode = episodes_for_task[0] if episodes_for_task else None
+        # jax.debug.print("random select: {}", self.random_select)    
+        if self.random_select:
             selected_episode = random.choice(episodes_for_task)
         else:
             selected_episode = episodes_for_task[0] if episodes_for_task else None
-            
+
         # 2) Get all indexes for that episode
         all_indexes = self.episode_to_indexes.get(selected_episode, [])
 
@@ -283,10 +294,11 @@ class AddDemoPromptTransform(DataTransformFn):
         dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         data["dem_prompt_items"] = dem_prompt_items
-        jax.debug.print("self._max_len: {}", self._max_len)
+        # jax.debug.print("self._max_len: {}", self._max_len)
         # 2) Retrieve precomputed states and actions for the selected episode.
         # Here we assume that the key "selected_episode" exists in the data.
         episode_id = data["selected_episode"]
+        # jax.debug.print("episode_id: {}", episode_id)   
         all_states = self.episode_to_all_states[episode_id]       # shape: (T, D)
         all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
 
