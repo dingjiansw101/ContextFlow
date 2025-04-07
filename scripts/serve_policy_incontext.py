@@ -19,7 +19,8 @@ class EnvMode(enum.Enum):
     LIBERO = "libero"
     LIBERO_FM_LORA_INCONTEXT = "pi0_libero_incontext_low_mem_finetune"
     LIBERO_FM_LORA_INCONTEXT_SAMPLE2 = "pi0_libero_incontext_low_mem_finetune_sample2"
-
+    TEST1 = "pi0_libero_incontext_low_mem_finetune_sample2_actionssample32"
+    TEST2 = "pi0_libero_incontext_low_mem_finetune_sample2_random_select"
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -81,7 +82,16 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_incontext_low_mem_finetune_sample2",
         # dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2/pi0_libero_incontext_low_mem_finetune_sample2/19999"
         # dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2/pi0_libero_incontext_low_mem_finetune_sample2_actionsample_32/39999"
-        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2/pi0_libero_incontext_low_mem_finetune_sample2_actionsample_32/30000"
+        # dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2/pi0_libero_incontext_low_mem_finetune_sample2_actionsample_32/30000"
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2/pi0_libero_incontext_low_mem_finetune_sample2_actionsample_8_random_select_false/39999"
+    ),
+    EnvMode.TEST1: Checkpoint(
+        config="pi0_libero_incontext_low_mem_finetune_sample2_actionssample32",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2_actionssample32/pi0_libero_incontext_low_mem_finetune_sample2_actionssample32/39999"
+    ),
+    EnvMode.TEST2: Checkpoint(
+        config="pi0_libero_incontext_low_mem_finetune_sample2_random_select",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontext_low_mem_finetune_sample2_random_select/pi0_libero_incontext_low_mem_finetune_sample2_random_select/30000"
     ),
 }
 

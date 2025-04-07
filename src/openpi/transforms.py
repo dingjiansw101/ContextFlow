@@ -159,17 +159,24 @@ class InjectDemoIndexes(DataTransformFn):
         task_index = int(data["task_index"])
         episodes_for_task = self.task_to_episode.get(task_index, [])
 
-        # split = data.get("split", "train")
-
+        split = data.get("split", "train")
+        # jax.debug.print("split: {}", split)
         # if split == "train":
+        #     jax.debug.print("inside train")
         #     selected_episode = random.choice(episodes_for_task)
         # else:
+        #     jax.debug.print("inside else")
         #     selected_episode = episodes_for_task[0] if episodes_for_task else None
         # jax.debug.print("random select: {}", self.random_select)    
-        if self.random_select:
+        
+        if split == "train" and self.random_select:
+            # jax.debug.print("random select: {}", self.random_select)
             selected_episode = random.choice(episodes_for_task)
         else:
+            # jax.debug.print("split: {}", split)
+            # jax.debug.print("random select2: {}", self.random_select)
             selected_episode = episodes_for_task[0] if episodes_for_task else None
+
 
         # 2) Get all indexes for that episode
         all_indexes = self.episode_to_indexes.get(selected_episode, [])
@@ -291,6 +298,7 @@ class AddDemoPromptTransform(DataTransformFn):
         """
         # 1) Retrieve demonstration prompt items using the provided indexes.
         dem_prompt_indexes = data.get("dem_prompt_indexes", [])
+        # TODO: check, there may be a bug to include self._dataset in AddDemoPromptTransform
         dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         data["dem_prompt_items"] = dem_prompt_items

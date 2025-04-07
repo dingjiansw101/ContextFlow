@@ -13,7 +13,7 @@ import openpi.shared.download as download
 from openpi.training import checkpoints as _checkpoints
 from openpi.training import config as _config
 import openpi.transforms as transforms
-from openpi.training.data_loader import create_dataset, transform_dataset, AddDemoPromptDataset
+from openpi.training.data_loader import create_dataset, transform_dataset
 
 @dataclasses.dataclass
 class PolicyConfig:
@@ -136,7 +136,7 @@ def create_trained_policy_incontext(
             *data_config.data_transforms.inputs,
             transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
             *data_config.model_transforms.inputs,
-            transforms.AddDemoPromptTransform(dataset),
+            transforms.AddDemoPromptTransform(dataset, max_len=train_config.model.sample_actions),
         ],
         output_transforms=[
             *data_config.model_transforms.outputs,
