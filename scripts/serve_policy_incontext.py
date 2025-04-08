@@ -23,6 +23,7 @@ class EnvMode(enum.Enum):
     TEST2 = "pi0_libero_incontext_low_mem_finetune_sample2_random_select"
     TEST3 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32"
     TEST4 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8"
+    TEST5 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select"
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -97,11 +98,15 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.TEST3: Checkpoint(
         config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32",
-        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32/25000"
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32/39999"
     ),
     EnvMode.TEST4: Checkpoint(
         config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8",
-        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8/15000"
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8/30000"
+    ),
+    EnvMode.TEST5: Checkpoint(
+        config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select/19999"
     ),
 }
 
