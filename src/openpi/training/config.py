@@ -17,6 +17,7 @@ import openpi.models.model as _model
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.pi0_incontext as pi0_incontext
+import openpi.models.pi0_incontextv2 as pi0_incontextv2
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
 import openpi.policies.aloha_policy as aloha_policy
@@ -471,7 +472,7 @@ class TrainConfig:
     # How often (in steps) to log training metrics.
     log_interval: int = 100
     # How often (in steps) to save checkpoints.
-    save_interval: int = 10_000
+    save_interval: int = 5_000
     # If set, any existing checkpoints matching step % keep_period == 0 will not be deleted.
     keep_period: int | None = 5000
 
@@ -920,6 +921,53 @@ _CONFIGS = [
         batch_size=36,
         # wandb_enabled=False,
     ),
+    TrainConfig(
+        name="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32",
+        model=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=40_000,
+        freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=36,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8",
+        model=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=8, random_select=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=40_000,
+        freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=8, random_select=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=36,
+        # wandb_enabled=False,
+    ),
     #
     # Fine-tuning Libero configs.
     #
@@ -931,6 +979,24 @@ _CONFIGS = [
             base_config=DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        # num_train_steps=30_000,
+        num_train_steps=10_000,
+    ),
+    TrainConfig(
+        name="pi0_libero_zero",
+        model=pi0.Pi0Config(),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            assets=AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="droid",
             ),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
