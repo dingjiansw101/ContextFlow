@@ -413,10 +413,15 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             ]
         )
 
+        # Xianjie: calculate training episode indexi first
+        train_epi = get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+
         # Prepare data for policy training
         # inject the indexes of demo prompt, TODO: provide json file_paths here
         data_transforms = _transforms.Group(
-            inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, random_select=model_config.random_select)],
+            inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, 
+                                                  random_select=model_config.random_select,
+                                                  train_task_list=train_epi)],
             outputs=[],
         )
 
@@ -445,7 +450,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
-            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
+            train_episode=train_epi,
         )
 
 

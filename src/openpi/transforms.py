@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import random
 import re
-from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable
+from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable, Optional, List
 
 import flax.traverse_util as traverse_util
 import jax
@@ -127,6 +127,8 @@ class InjectDemoIndexes(DataTransformFn):
         episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json"),
         sample_frames: int = 16,
         random_select: bool = True,
+        train_task_list: Optional[List[int]] = None,
+
     ):
         # TODO: remove the init method and use __post_init__ instead
         # remove __setattr__
@@ -144,7 +146,10 @@ class InjectDemoIndexes(DataTransformFn):
 
         # Convert dictionary keys from strings to integers
         task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
-        episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+        if train_task_list is None:
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+        else:
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items() if int(k) in train_task_list}
 
         # Store these dictionaries on the frozen dataclass
         object.__setattr__(self, "task_to_episode", task_to_episode)
