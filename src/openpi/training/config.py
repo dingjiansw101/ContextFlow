@@ -6,7 +6,7 @@ import dataclasses
 import difflib
 import logging
 import pathlib
-from typing import Any, Protocol, TypeAlias
+from typing import Any, Protocol, TypeAlias, Optional, List, Union
 
 import etils.epath as epath
 import flax.nnx as nnx
@@ -30,9 +30,75 @@ import openpi.training.optimizer as _optimizer
 import openpi.training.weight_loaders as weight_loaders
 import openpi.transforms as _transforms
 
+from pathlib import Path
+import jsonlines
+
 ModelType: TypeAlias = _model.ModelType
 # Work around a tyro issue with using nnx.filterlib.Filter directly.
 Filter: TypeAlias = nnx.filterlib.Filter
+
+DEFAULT_LIBERO_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/your_hf_username/libero/meta/episodes.jsonl"
+
+DEFAULT_LIBERO_TEST_TASK = [
+        "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+        "put both the alphabet soup and the tomato sauce in the basket",
+        "put the bowl on the plate",
+        "put the bowl on the stove",
+        "pick up the milk and place it in the basket",
+        "pick up the tomato sauce and place it in the basket",
+        "pick up the black bowl on the cookie box and place it on the plate",
+        "pick up the black bowl next to the plate and place it on the plate",
+]
+
+def get_kept_episode_indices(
+    episodes_jsonl_path: Union[str, Path],
+    exclude_task_language: List[str]
+) -> Optional[List[int]]:
+    """
+    Filters episode indices from a episodes.jsonl file by excluding those
+    whose task descriptions match any entry in the given exclude list.
+
+    Args:
+        episodes_jsonl_path (Union[str, Path]): Path to the `episodes.jsonl` file.
+        exclude_task_language (List[str]): List of task descriptions to exclude.
+
+    Returns:
+        List[int]: List of episode indices to keep (i.e., not excluded).
+
+    Raises:
+        TypeError: If argument types are incorrect.
+        FileNotFoundError: If the episodes.jsonl file does not exist.
+        ValueError: If the file content is malformed or missing required fields.
+    """
+    if episodes_jsonl_path is None or exclude_task_language is None:
+        return None
+    # Type checks
+    if not isinstance(exclude_task_language, list) or not all(isinstance(t, str) for t in exclude_task_language):
+        raise TypeError("exclude_task_language must be a list of strings.")
+    
+    if not isinstance(episodes_jsonl_path, (str, Path)):
+        raise TypeError("episodes_jsonl_path must be a string or Path.")
+
+    episodes_jsonl_path = Path(episodes_jsonl_path)
+    if not episodes_jsonl_path.exists():
+        raise FileNotFoundError(f"episodes.jsonl file not found at: {episodes_jsonl_path}")
+
+    kept_indices: List[int] = []
+
+    # Read and filter
+    with jsonlines.open(episodes_jsonl_path, mode='r') as reader:
+        for entry in reader:
+            if "episode_index" not in entry or "tasks" not in entry:
+                raise ValueError(f"Invalid entry (missing 'episode_index' or 'tasks'): {entry}")
+
+            tasks = entry["tasks"]
+            if not isinstance(tasks, list):
+                raise ValueError(f"'tasks' must be a list of strings, but got: {type(tasks)}")
+
+            if not any(task in exclude_task_language for task in tasks):
+                kept_indices.append(entry["episode_index"])
+
+    return kept_indices
 
 
 @dataclasses.dataclass(frozen=True)
@@ -93,6 +159,10 @@ class DataConfig:
 
     # If true, will disable syncing the dataset from the Hugging Face Hub. Allows training on local-only datasets.
     local_files_only: bool = False
+
+    # Xianjie: add additioanl episode field to enable train-test split
+    # the episode arg will be passed to LeRobotDataset.episodes
+    train_episode: list[int] | None = None
 
 
 class GroupFactory(Protocol):
@@ -158,6 +228,13 @@ class DataConfigFactory(abc.ABC):
     # Base config that will be updated by the factory.
     base_config: tyro.conf.Suppress[DataConfig | None] = None
 
+    # Xianjie: train-test spli config parameters
+    # remove_task_list: a list of tasks that need to be removed from training (for test)
+    remove_task_list: tyro.conf.Suppress[Optional[List[str]]] = None
+    # episode_json_path: a json that contains the episode index and task name
+    episode_json_path: tyro.conf.Suppress[Optional[str]] = None
+
+    # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         """Create a data config."""
@@ -212,6 +289,7 @@ class SimpleDataConfig(DataConfigFactory):
             data_transforms=self.data_transforms(model_config),
             model_transforms=self.model_transforms(model_config),
             use_quantile_norm=model_config.model_type == ModelType.PI0_FAST,
+            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
         )
 
 
@@ -265,6 +343,7 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
             action_sequence_keys=self.action_sequence_keys,
+            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
         )
 
 
@@ -308,6 +387,7 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
         )
 
 
@@ -365,6 +445,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
         )
 
 
@@ -424,6 +505,7 @@ class LeRobotAlohaMobileDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
             action_sequence_keys=self.action_sequence_keys,
+            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
         )
 
 
@@ -457,7 +539,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "./checkpoints"
+    checkpoint_base_dir: str = "/ibex/tmp/c2090/xianjie/checkpoints"
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
@@ -961,6 +1043,34 @@ _CONFIGS = [
         num_train_steps=40_000,
         freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=8, random_select=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=36,
+        # wandb_enabled=False,
+    ),
+
+    # Xianjie: pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32 with train_test_split
+    TrainConfig(
+        name="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split",
+        model=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            # Xianjie: newly added para for train-test split
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=None,
         ).get_freeze_filter(),
         ema_decay=None,
         # num_workers=16,
