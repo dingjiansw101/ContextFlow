@@ -130,6 +130,7 @@ class InjectDemoIndexes(DataTransformFn):
     episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json")
     sample_frames: int = 16
     random_select: bool = True
+    train_episode_index_list: Optional[List[int]] = None
 
     def __init__(
         self,
@@ -147,6 +148,8 @@ class InjectDemoIndexes(DataTransformFn):
         object.__setattr__(self, "episode_to_indexes_path", episode_to_indexes_path)
         object.__setattr__(self, "sample_frames", sample_frames)
         object.__setattr__(self, "random_select", random_select)
+        object.__setattr__(self, "train_episode_index_list", train_episode_index_list)
+
 
         # Load JSON files using Path.open()
         with self.task_to_episode_path.open("r") as f:

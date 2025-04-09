@@ -19,7 +19,7 @@ import openpi.transforms as _transforms
 
 T_co = TypeVar("T_co", covariant=True)
 
-# Xianjie: checking passed train_episode is None or not
+# TODO: refactor: checking passed train_episode is None or not
 def is_effective_none(x):
     if x is None:
         return True

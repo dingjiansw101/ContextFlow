@@ -549,7 +549,7 @@ class TrainConfig:
     # Random seed that will be used by random generators during training.
     seed: int = 42
     # Global batch size.
-    batch_size: int = 4
+    batch_size: int = 32
     # Number of workers to use for the data loader. Increasing this number will speed up data loading but
     # will increase memory and CPU usage.
     num_workers: int = 2
@@ -1075,7 +1075,7 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
         freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=None,
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
         # num_workers=16,
