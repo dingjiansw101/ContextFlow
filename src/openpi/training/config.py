@@ -421,7 +421,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
         data_transforms = _transforms.Group(
             inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, 
                                                   random_select=model_config.random_select,
-                                                  train_task_list=train_epi)],
+                                                  train_episode_index_list=train_epi)],
             outputs=[],
         )
 
@@ -549,7 +549,7 @@ class TrainConfig:
     # Random seed that will be used by random generators during training.
     seed: int = 42
     # Global batch size.
-    batch_size: int = 32
+    batch_size: int = 4
     # Number of workers to use for the data loader. Increasing this number will speed up data loading but
     # will increase memory and CPU usage.
     num_workers: int = 2

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import random
 import re
-from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable, Optional, List
+from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable, Optional, List, Dict
 
 import flax.traverse_util as traverse_util
 import jax
@@ -24,6 +24,16 @@ NormStats: TypeAlias = _normalize.NormStats
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+def reindex_filtered_dict(data: Dict[str, Any]) -> Dict[str, Any]:
+    new_data = {}
+    current_frame_index = 0
+
+    for ep_idx in data:
+        num_frames = len(data[ep_idx])
+        new_data[ep_idx] = list(range(current_frame_index, current_frame_index + num_frames))
+        current_frame_index += num_frames
+    return new_data
 
 
 @runtime_checkable
@@ -127,7 +137,7 @@ class InjectDemoIndexes(DataTransformFn):
         episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json"),
         sample_frames: int = 16,
         random_select: bool = True,
-        train_task_list: Optional[List[int]] = None,
+        train_episode_index_list: Optional[List[int]] = None,
 
     ):
         # TODO: remove the init method and use __post_init__ instead
@@ -146,10 +156,19 @@ class InjectDemoIndexes(DataTransformFn):
 
         # Convert dictionary keys from strings to integers
         task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
-        if train_task_list is None:
+        if train_episode_index_list is None:
             episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
         else:
-            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items() if int(k) in train_task_list}
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items() if int(k) in train_episode_index_list}
+
+            # XIANJIE: if train-test split, test episodes are removed and the corresponding frames are removed
+            # which leads to non-continuous frame index
+            # the frame index could exceed the length of LeRobot dataset (number of frames of all the parquet files)
+            # therefore, the frame index must be reindexed, in the continuous manner.
+            # LeRobot dataset follows the order of "train_episode_index_list"
+            # so we can simple reindex the frame index in the following way:
+            episode_to_indexes = reindex_filtered_dict(episode_to_indexes)
+
 
         # Store these dictionaries on the frozen dataclass
         object.__setattr__(self, "task_to_episode", task_to_episode)
