@@ -107,7 +107,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     
     EnvMode.TEST3_TRAIN: Checkpoint(
         config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split",
-        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/19999"
+        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/10000"
     ),
 }
 

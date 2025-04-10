@@ -544,7 +544,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "/ibex/tmp/c2090/xianjie/checkpoints"
+    checkpoint_base_dir: str = "./checkpoints",#"/ibex/tmp/c2090/xianjie/checkpoints"
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
