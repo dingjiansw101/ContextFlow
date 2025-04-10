@@ -544,7 +544,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "./checkpoints",#"/ibex/tmp/c2090/xianjie/checkpoints"
+    checkpoint_base_dir: str = "./checkpoints", #"/ibex/tmp/c2090/xianjie/checkpoints", 
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
@@ -1069,8 +1069,8 @@ _CONFIGS = [
                 prompt_from_task=True,
             ),
             # Xianjie: newly added para for train-test split
-            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
-            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,

@@ -17,6 +17,13 @@ import json
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 
+LIBERO_TEST_TASK_DICT = {
+    "libero_spatial": [3,8],
+    "libero_object":[5,7],
+    "libero_goal": [1,8],
+    "libero_10": [0,6],
+}
+
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
     with file_path.open('r', encoding='utf-8') as file:
@@ -87,11 +94,17 @@ def eval_libero(args: Args) -> None:
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
 
+    # Xianjie: get the test task list based on the task suite name
+    assigned_task_list = LIBERO_TEST_TASK_DICT[args.task_suite_name]
+
     # Start evaluation
     total_episodes, total_successes = 0, 0
-    for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
+    # for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
+    for task_id in assigned_task_list:
+
         # TODO: select tasks for testing here
         # Get task
+        
         task = task_suite.get_task(task_id)
 
         # Get default LIBERO initial states
