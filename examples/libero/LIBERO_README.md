@@ -13,6 +13,13 @@ git submodule update --init --recursive
 ## COPY META DATA
 copy the metadata from ```dingj0b@glogin.ibex.kaust.edu.sa:/home/dingj0b/code/openpi/metadata```
 
+cp -r /home/dingj0b/code/openpi/metadata /home/dingj0b/dingjian/xianjie/project/openpi/metadata
+
+## Change ckp. Save Directory
+Under config.py TrainConfig: checkpoint_base_dir:
+
+"/ibex/tmp/c2090/xianjie/checkpoints"
+
 ## TRAINING
 ```
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_incontext.py pi0_fast_libero --exp-name=my_experiment --overwrite
