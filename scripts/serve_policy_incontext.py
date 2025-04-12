@@ -25,6 +25,8 @@ class EnvMode(enum.Enum):
     TEST4 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8"
     TEST5 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select"
     TEST3_TRAIN = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split"
+    TEST6 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64"
+
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -115,6 +117,12 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split",
         dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_without_train_split/19999"
     ),
+
+    EnvMode.TEST6: Checkpoint(
+        config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64/39999"
+    ),
+
 }
 
 
