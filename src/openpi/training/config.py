@@ -234,8 +234,6 @@ class DataConfigFactory(abc.ABC):
     # episode_json_path: a json that contains the episode index and task name
     episode_json_path: tyro.conf.Suppress[Optional[str]] = None
 
-    use_delta_action: bool = True
-
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -395,6 +393,8 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
+    use_delta_joint_actions: bool = True
+
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         # Make inputs look like they come from the Libero environment
@@ -439,14 +439,14 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
         # TODO: fix the bug of libero actions.
         # fix it and re-train on libero
         # Use delta actions (not for gripper)
-        # jax.debug.print("self.use_delta_action = {}", self.use_delta_action)
-        print("self.use_delta_action = ", self.use_delta_action)
-        if self.use_delta_action:
+        if self.use_delta_joint_actions:
             delta_action_mask = _transforms.make_bool_mask(6, -1)
             data_transforms = data_transforms.push(
                 inputs=[_transforms.DeltaActions(delta_action_mask)],
                 outputs=[_transforms.AbsoluteActions(delta_action_mask)],
             )
+        # else:
+            # import ipdb; ipdb.set_trace()
         # Model transforms include things like tokenizing the prompt and action targets
         model_transforms = ModelTransformFactory()(model_config)
 
@@ -1143,7 +1143,7 @@ _CONFIGS = [
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
-            use_delta_action=False,
+            use_delta_joint_actions=False,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -1154,7 +1154,7 @@ _CONFIGS = [
         # num_workers=16,
         num_workers=4,
         batch_size=36,
-        # wandb_enabled=False,
+        wandb_enabled=False,
     ),
 
     TrainConfig(
