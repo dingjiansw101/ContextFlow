@@ -234,6 +234,8 @@ class DataConfigFactory(abc.ABC):
     # episode_json_path: a json that contains the episode index and task name
     episode_json_path: tyro.conf.Suppress[Optional[str]] = None
 
+    use_delta_action: bool = True
+
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -437,11 +439,14 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
         # TODO: fix the bug of libero actions.
         # fix it and re-train on libero
         # Use delta actions (not for gripper)
-        delta_action_mask = _transforms.make_bool_mask(6, -1)
-        data_transforms = data_transforms.push(
-            inputs=[_transforms.DeltaActions(delta_action_mask)],
-            outputs=[_transforms.AbsoluteActions(delta_action_mask)],
-        )
+        # jax.debug.print("self.use_delta_action = {}", self.use_delta_action)
+        print("self.use_delta_action = ", self.use_delta_action)
+        if self.use_delta_action:
+            delta_action_mask = _transforms.make_bool_mask(6, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
         # Model transforms include things like tokenizing the prompt and action targets
         model_transforms = ModelTransformFactory()(model_config)
 
@@ -1068,7 +1073,7 @@ _CONFIGS = [
             ),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=40_000,
+        num_train_steps=20_000,
         freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=128, random_select=True,
         ).get_freeze_filter(),
@@ -1128,6 +1133,31 @@ _CONFIGS = [
     ),
 
     TrainConfig(
+        name="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_without_delta",
+        model=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_action=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv2.Pi0IncontextConfigv2(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=36,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
         name="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8",
         model=pi0_incontextv2.Pi0IncontextConfigv2(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=8, random_select=False,
@@ -1148,7 +1178,7 @@ _CONFIGS = [
         # num_workers=16,
         num_workers=4,
         batch_size=36,
-        # wandb_enabled=False,
+        wandb_enabled=False,
     ),
 
     # Xianjie: pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32 with train_test_split
