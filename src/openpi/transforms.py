@@ -237,7 +237,7 @@ def tree_stack_np(list_of_trees, axis=0):
     return jax.tree_map(stack_fn, *list_of_trees)
 
 @dataclasses.dataclass(frozen=True)
-class AddDemoPromptTransform(DataTransformFn):
+class AddDemoPromptTransform_old(DataTransformFn):
     _dataset: any  # the underlying dataset from which to fetch demo items
     _max_len: int = 32 # TODO: make this configurable
 
@@ -351,8 +351,8 @@ class AddDemoPromptTransform(DataTransformFn):
 
 
 @dataclasses.dataclass(frozen=True)
-class AddDemoPromptTransform_refactor(DataTransformFn):
-    _dataset: any  # the underlying dataset from which to fetch demo items
+class AddDemoPromptTransform(DataTransformFn):
+    dataset: any  # the underlying dataset from which to fetch demo items
     max_len: int = 32 
 
     # These fields are not provided at initialization by the user.
@@ -389,7 +389,7 @@ class AddDemoPromptTransform_refactor(DataTransformFn):
                 states_list = []
                 first_actions_list = []
                 for idx in idx_list:
-                    item = self._dataset[int(idx)]
+                    item = self.dataset[int(idx)]
                     states_list.append(item["state"])
                     first_actions_list.append(item["actions"][0])
                 assert len(states_list) > 0
@@ -413,8 +413,8 @@ class AddDemoPromptTransform_refactor(DataTransformFn):
         """
         # 1) Retrieve demonstration prompt items using the provided indexes.
         dem_prompt_indexes = data.get("dem_prompt_indexes", [])
-        # TODO: check, there may be a bug to include self._dataset in AddDemoPromptTransform
-        dem_prompt_items = [self._dataset[int(idx)] for idx in dem_prompt_indexes]
+        # TODO: check, there may be a bug to include self.dataset in AddDemoPromptTransform
+        dem_prompt_items = [self.dataset[int(idx)] for idx in dem_prompt_indexes]
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         data["dem_prompt_items"] = dem_prompt_items
         # jax.debug.print("self.max_len: {}", self.max_len)

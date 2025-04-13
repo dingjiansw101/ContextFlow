@@ -366,8 +366,9 @@ def create_incontext_data_loader(
     dataset = create_dataset(data_config, config.model)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
     # dataset_old = AddDemoPromptDataset(dataset)
-    # import ipdb; ipdb.set_trace()
-    add_demo_transform = _transforms.AddDemoPromptTransform(dataset=dataset, max_len=config.model.sample_actions)
+    add_demo_transform = _transforms.AddDemoPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
+                                                            states_cache_path=config.data.states_cache_path,
+                                                            actions_cache_path=config.data.actions_cache_path)
     dataset = TransformedDataset(dataset, [add_demo_transform])
 
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))

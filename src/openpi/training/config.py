@@ -394,6 +394,8 @@ class LeRobotLiberoDataConfig(DataConfigFactory):
 @dataclasses.dataclass(frozen=True)
 class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
     use_delta_joint_actions: bool = True
+    states_cache_path: str = "metadata/libero/episode_states_cache.json"
+    actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
 
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -1144,6 +1146,8 @@ _CONFIGS = [
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json"
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
