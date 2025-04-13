@@ -188,21 +188,90 @@ class InjectDemoIndexes(DataTransformFn):
         episodes_for_task = self.task_to_episode.get(task_index, [])
 
         split = data.get("split", "train")
-        # jax.debug.print("split: {}", split)
-        # if split == "train":
-        #     jax.debug.print("inside train")
-        #     selected_episode = random.choice(episodes_for_task)
-        # else:
-        #     jax.debug.print("inside else")
-        #     selected_episode = episodes_for_task[0] if episodes_for_task else None
-        # jax.debug.print("random select: {}", self.random_select)    
         
         if split == "train" and self.random_select:
-            # jax.debug.print("random select: {}", self.random_select)
             selected_episode = random.choice(episodes_for_task)
         else:
-            # jax.debug.print("split: {}", split)
-            # jax.debug.print("random select2: {}", self.random_select)
+            selected_episode = episodes_for_task[0] if episodes_for_task else None
+
+
+        # 2) Get all indexes for that episode
+        all_indexes = self.episode_to_indexes.get(selected_episode, [])
+
+        # 3) Uniformly sample up to self.sample_frames frames
+        total_frames = len(all_indexes)
+        if total_frames > self.sample_frames:
+            # Generate self.sample_frames evenly spaced positions
+            positions = np.linspace(0, total_frames - 1, num=self.sample_frames)
+            positions = np.round(positions).astype(int).tolist()
+            chosen_indexes = [all_indexes[pos] for pos in positions]
+        else:
+            chosen_indexes = all_indexes
+
+        # 4) Store both the chosen indexes and the items in `data`
+        data["dem_prompt_indexes"] = np.array(chosen_indexes)
+        data["selected_episode"] = selected_episode
+
+        return data
+
+
+@dataclasses.dataclass(frozen=True)
+class InjectDemoIndexes_refactor(DataTransformFn):
+    """
+    A data transform that reads two JSON files containing:
+      1) task_to_episode: {task_index (str): list of episode_index (int)}
+      2) episode_to_indexes: {episode_index (str): list of index_idx (int)}
+    and converts their keys to integers.
+    """
+
+    task_to_episode_path: Path = Path("metadata/libero/task_to_episode.json")
+    episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json")
+    sample_frames: int = 16
+    random_select: bool = True
+    train_episode_index_list: Optional[List[int]] = None
+
+    def __post_init__(self):
+
+        # Load JSON files using Path.open()
+        with self.task_to_episode_path.open("r") as f:
+            task_to_episode_str = json.load(f)
+        with self.episode_to_indexes_path.open("r") as f:
+            episode_to_indexes_str = json.load(f)
+
+        # Convert dictionary keys from strings to integers
+        task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
+        # import ipdb; ipdb.set_trace()
+        if self.train_episode_index_list is None:
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+        else:
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items() if int(k) in self.train_episode_index_list}
+
+            # XIANJIE: if train-test split, test episodes are removed and the corresponding frames are removed
+            # which leads to non-continuous frame index
+            # the frame index could exceed the length of LeRobot dataset (number of frames of all the parquet files)
+            # therefore, the frame index must be reindexed, in the continuous manner.
+            # LeRobot dataset follows the order of "train_episode_index_list"
+            # so we can simple reindex the frame index in the following way:
+            episode_to_indexes = reindex_filtered_dict(episode_to_indexes)
+
+        # Store these dictionaries on the frozen dataclass
+        object.__setattr__(self, "task_to_episode", task_to_episode)
+        object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
+
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
+        """
+        Example transform: randomly select a demonstration as prompt for the data,
+        storing both the chosen indexes and the retrieved items.
+        """
+        # 1) Randomly pick an episode for this task
+        task_index = int(data["task_index"])
+        episodes_for_task = self.task_to_episode.get(task_index, [])
+
+        split = data.get("split", "train")
+        
+        if split == "train" and self.random_select:
+            selected_episode = random.choice(episodes_for_task)
+        else:
             selected_episode = episodes_for_task[0] if episodes_for_task else None
 
 
