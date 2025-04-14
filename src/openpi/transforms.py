@@ -396,7 +396,7 @@ class AddDemoPromptTransform(DataTransformFn):
                 assert len(first_actions_list) > 0
                 states[episode_id] = np.stack(states_list, axis=0)
                 actions[episode_id] = np.stack(first_actions_list, axis=0)
-
+                import ipdb; ipdb.set_trace()
             save_episode_states_to_json(states, self.states_cache_path)
             save_episode_states_to_json(actions, self.actions_cache_path)
             print("Built and saved states/actions JSON cache.")

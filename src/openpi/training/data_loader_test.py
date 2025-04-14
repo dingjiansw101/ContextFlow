@@ -115,5 +115,5 @@ def test_libero_incontext_data_loader():
 
 
 if __name__ == "__main__":
-    # test_libero_incontext_dataset()
-    test_libero_incontext_data_loader()
+    test_libero_incontext_dataset()
+    # test_libero_incontext_data_loader()
