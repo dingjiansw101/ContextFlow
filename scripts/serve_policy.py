@@ -34,6 +34,8 @@ class EnvMode(enum.Enum):
     FAST_ALOHA_PEN_UNCAP_LOW_MEM_CUSTOM_NORM = "pi0_fast_aloha_pen_uncap_low_mem_finetune"
     ALOHA_PEN_UNCAP_B5_LOW_MEM_TROSSWN_NORM = "pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm"
     FAST_ALOHA_PEN_UNCAP_B5_TROSSEN_NORM = "pi0_fast_aloha_pen_uncap_b5_trossen_norm"
+    XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA = "pi0_libero_low_mem_finetune_split_train"
+
 
 
 @dataclasses.dataclass
@@ -158,6 +160,10 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     EnvMode.FAST_ALOHA_PEN_UNCAP_B5_TROSSEN_NORM: Checkpoint(
         config="pi0_fast_aloha_pen_uncap_b5_trossen_norm",
         dir="checkpoints/pi0_fast_aloha_pen_uncap_b5_trossen_norm/pi0_fast_aloha_pen_uncap_b5_trossen_norm/9999",
+    ),
+    EnvMode.XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA: Checkpoint(
+        config="pi0_libero_low_mem_finetune_split_train",
+        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/29999"
     ),
 }
 

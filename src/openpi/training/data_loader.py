@@ -66,6 +66,10 @@ class TransformedDataset(Dataset[T_co]):
         self._dataset = dataset
         self._transform = _transforms.compose(transforms)
 
+        # Xianjie: for data transform debug
+        # self._transform_list = transforms
+
+
     def __getitem__(self, index: SupportsIndex) -> T_co:
         return self._transform(self._dataset[index])
 

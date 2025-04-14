@@ -234,6 +234,7 @@ class DataConfigFactory(abc.ABC):
     # episode_json_path: a json that contains the episode index and task name
     episode_json_path: tyro.conf.Suppress[Optional[str]] = None
 
+
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -416,6 +417,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
         # Xianjie: calculate training episode indexi first
         train_epi = get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
 
+
         # Prepare data for policy training
         # inject the indexes of demo prompt, TODO: provide json file_paths here
         data_transforms = _transforms.Group(
@@ -442,6 +444,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             inputs=[_transforms.DeltaActions(delta_action_mask)],
             outputs=[_transforms.AbsoluteActions(delta_action_mask)],
         )
+
         # Model transforms include things like tokenizing the prompt and action targets
         model_transforms = ModelTransformFactory()(model_config)
 
@@ -1105,6 +1108,47 @@ _CONFIGS = [
         num_workers=4,
         batch_size=36,
         wandb_enabled=False,
+    ),
+    TrainConfig(
+        name="pi0_libero_low_mem_finetune_split_train",
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=4,
+        batch_size=36,
+    ),
+
+    TrainConfig(
+        # XIANJIE: no lora; no split; with delta
+        name="pi0_libero_incontextv2_sample2_actionssample64",
+        model=pi0_incontextv2.Pi0IncontextConfigv2(
+            sample_frames=2, sample_actions=64, random_select=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=40_000,
+        num_workers=4,
+        batch_size=36,
+        # wandb_enabled=False,
     ),
     #
     # Fine-tuning Libero configs.
