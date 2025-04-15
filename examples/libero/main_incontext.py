@@ -95,7 +95,7 @@ def eval_libero(args: Args) -> None:
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
 
     # Xianjie: get the test task list based on the task suite name
-    assigned_task_list = LIBERO_TEST_TASK_DICT[args.task_suite_name]
+    # assigned_task_list = LIBERO_TEST_TASK_DICT[args.task_suite_name]
 
     # Start evaluation
     total_episodes, total_successes = 0, 0

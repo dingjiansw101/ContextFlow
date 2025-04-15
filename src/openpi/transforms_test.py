@@ -3,7 +3,7 @@ import pytest
 
 import openpi.models.tokenizer as _tokenizer
 import openpi.transforms as _transforms
-
+import jax
 
 def test_repack_transform():
     transform = _transforms.RepackTransform(
@@ -119,3 +119,17 @@ def test_extract_prompt_from_task():
 
     with pytest.raises(ValueError, match="task_index=2 not found in task mapping"):
         transform({"task_index": 2})
+
+
+
+# def test_injectdemoindexes():
+#     item = {"task_index": 0}
+#     transform = _transforms.InjectDemoIndexes(random_select=False, train_episode_index_list=[0, 1, 2])
+#     transform_refactor = _transforms.InjectDemoIndexes_refactor(random_select=False, train_episode_index_list=[0, 1, 2])
+#     data = transform(item)
+#     data_refactor = transform_refactor(item)
+#     assert jax.tree_util.tree_all(jax.tree_map(np.allclose, data, data_refactor))
+#     # import ipdb; ipdb.set_trace()
+
+# if __name__ == "__main__":
+#     test_injectdemoindexes()

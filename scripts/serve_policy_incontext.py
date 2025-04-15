@@ -24,8 +24,9 @@ class EnvMode(enum.Enum):
     TEST3 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32"
     TEST4 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample8"
     TEST5 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select"
+    TEST6 = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64"
+
     XJ_TEST3_TRAIN = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split"
-    # XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA = "pi0_libero_low_mem_finetune_split_test"
     XJ_TEST6_WITHOUT_LORA = "pi0_libero_incontextv2_sample2_actionssample64"
 
 @dataclasses.dataclass
@@ -121,6 +122,12 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_incontextv2_sample2_actionssample64",
         dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_sample2_actionssample64/pi0_libero_incontextv2_sample2_actionssample64/39999"
     ),
+
+    EnvMode.TEST6: Checkpoint(
+        config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64",
+        dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64/39999"
+    ),
+
 }
 
 

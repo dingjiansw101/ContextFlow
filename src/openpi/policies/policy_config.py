@@ -125,7 +125,6 @@ def create_trained_policy_incontext(
         norm_stats = _checkpoints.load_norm_stats(checkpoint_dir / "assets", data_config.asset_id)
     dataset = create_dataset(data_config, train_config.model)
     dataset = transform_dataset(dataset, data_config)
-    # dataset = AddDemoPromptDataset(dataset)
 
     return _policy_incontext.PolicyIncontext(
         model,
@@ -136,7 +135,9 @@ def create_trained_policy_incontext(
             *data_config.data_transforms.inputs,
             transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
             *data_config.model_transforms.inputs,
-            transforms.AddDemoPromptTransform(dataset, max_len=train_config.model.sample_actions),
+            transforms.AddDemoPromptTransform(dataset, max_len=train_config.model.sample_actions,
+                                              states_cache_path=train_config.data.states_cache_path,
+                                              actions_cache_path=train_config.data.actions_cache_path),
         ],
         output_transforms=[
             *data_config.model_transforms.outputs,
