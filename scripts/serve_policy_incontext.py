@@ -28,7 +28,7 @@ class EnvMode(enum.Enum):
 
     XJ_TEST3_TRAIN = "pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split"
     XJ_TEST6_WITHOUT_LORA = "pi0_libero_incontextv2_sample2_actionssample64"
-    XJ_TEST6_WIthOUT_LORA_TRAIN = "pi0_libero_incontextv2_sample2_actionssample64_train_split"
+    XJ_TEST6_WITHOUT_LORA_WITH_SPLIT = "pi0_libero_incontextv2_sample2_actionssample64_train_split"
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -128,7 +128,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample64/39999"
     ),
-    EnvMode.XJ_TEST6_WIthOUT_LORA_TRAIN: Checkpoint(
+    EnvMode.XJ_TEST6_WITHOUT_LORA_WITH_SPLIT: Checkpoint(
         config="pi0_libero_incontextv2_sample2_actionssample64_test_split",
         dir="/home/dingj0b/code/openpi/checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split/39999"
     ),
