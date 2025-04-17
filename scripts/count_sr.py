@@ -28,6 +28,8 @@ def parse_task_and_success_rates(filename, unseen_task_ids=None):
             # Check if this line contains a success-rate.
             rate_match = task_rate_pattern.match(line)
             if rate_match and current_task is not None:
+                # print(current_task)
+                # print(line)
                 rate_str = rate_match.group(1)  # e.g., "0.92"
                 results[current_task].append(float(rate_str))
     
@@ -48,6 +50,7 @@ def parse_task_and_success_rates(filename, unseen_task_ids=None):
     # Iterate in the order tasks were added. Task IDs are assigned using enumerate (starting at 0).
     for index, (task, rates) in enumerate(results.items()):
         assert rates
+        # import ipdb; ipdb.set_trace()
         assert len(rates) == 1
         avg_rate = sum(rates) / len(rates)
 
@@ -73,7 +76,9 @@ if __name__ == '__main__':
     # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/"
     # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_eval/"
     # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/"
-    directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_eval/"
+    # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_eval/"
+    # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv6_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
+    directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_run2"
 
     log_file = f"{directory}/spatial.log"
     # Provide the unseen task IDs as integers, corresponding to the task order (starting at 1)
