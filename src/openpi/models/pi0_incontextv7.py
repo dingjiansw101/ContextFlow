@@ -142,11 +142,11 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
     def get_freeze_filter(self) -> nnx.filterlib.Filter:
         """Returns the freeze filter based on the model config."""
         # TODO:  add the filter for the prompt_expert
-        # TODO: check if added prompt expert will change the name of params in other experts
         filters = []
         has_lora = False
         gemma_params_filter = nnx_utils.PathRegex(".*llm.*")
         action_expert_params_filter = nnx_utils.PathRegex(".*llm.*_1.*")
+        prompt_expert_params_filter = nnx_utils.PathRegex(".*llm.*_prompt_expert.*")
         if "lora" in self.paligemma_variant:
             filters.append(
                 gemma_params_filter,
@@ -168,6 +168,10 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
             filters.append(
                 nnx.Not(nnx_utils.PathRegex(".*lora.*")),
             )
+        # currently, we don't have lora for prompt_expert
+        filters.append(
+            nnx.Not(prompt_expert_params_filter),
+        )
         if not filters:
             return nnx.Nothing
         return nnx.All(*filters)
@@ -207,6 +211,8 @@ class Pi0Incontextv7(_model.BaseModel):
 
         self.demo_action_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.demo_state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
+
+        self.img_proj = nnx.Linear(paligemma_config.width, action_expert_config.width, rngs=rngs)
         # TODO: add some layers to process in-context prompts
 
     @at.typecheck
@@ -275,6 +281,7 @@ class Pi0Incontextv7(_model.BaseModel):
                 batch_size, seq_len, -1, image_sqeuence_tokens.shape[2]
             )
             image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+            image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
             tokens.append(image_sqeuence_tokens)
             input_mask.append(obs.incontext_image_masks[name])
             if count_incontext_images == 0:
@@ -284,7 +291,7 @@ class Pi0Incontextv7(_model.BaseModel):
             
             count_incontext_images += 1
         
-        dem_state_tokens = self.dem_state_proj(obs.incontext_states)
+        dem_state_tokens = self.demo_state_proj(obs.incontext_states)
         tokens.append(dem_state_tokens)
         input_mask.append(obs.incontext_state_masks)
         # ar_mask += [False] * dem_state_tokens.shape[1]
@@ -297,7 +304,7 @@ class Pi0Incontextv7(_model.BaseModel):
         # import ipdb; ipdb.set_trace()
         # end of in-context prompts
         # ---------------------------------------------------------
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
