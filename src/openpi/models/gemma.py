@@ -38,6 +38,8 @@ import openpi.models.lora as lora
 import openpi.shared.array_typing as at
 import openpi.training.sharding as sharding
 
+from functools import partial
+
 PALIGEMMA_VOCAB_SIZE = 257_152
 
 
@@ -169,7 +171,10 @@ class Attention(nn.Module):
         dtype = next(x.dtype for x in xs if x is not None)  # original dtype, could be half-precision
 
         qkvs = []
-        # import ipdb; ipdb.set_trace()
+        if self.configs[0].expert_name != None:
+            _name = partial(_namev2, expert_names=[config.expert_name for config in self.configs])
+        else:
+            _name = _namev2
         for i, (x, config) in enumerate(zip(xs, self.configs, strict=True)):
             if x is None:
                 continue
@@ -179,7 +184,7 @@ class Attention(nn.Module):
                     name=_name("qkv_einsum", i),
                     init_fn=nn.initializers.lecun_normal(in_axis=-2, out_axis=-1, batch_axis=(0, 1)),
                     lora_config=config.lora_configs.get("attn"),
-                )
+                )                    
                 qkvs.append(qkv_einsum("BSD,3KDH->3BSKH", x))
             else:
                 q_einsum = lora.Einsum(
@@ -296,6 +301,11 @@ class Block(nn.Module):
 
         attn = Attention(configs=self.configs, name="attn")
 
+        if self.configs[0].expert_name != None:
+            _name = partial(_namev2, expert_names=[config.expert_name for config in self.configs])
+        else:
+            _name = _namev2
+        
         pre_attn = []
         for i, x in enumerate(xs):
             if x is not None:
@@ -369,6 +379,11 @@ class Module(nn.Module):
             dropout=self.dropout,
             dropout_bdims=self.dropout_bdims,
         )
+        if self.configs[0].expert_name != None:
+            _name = partial(_namev2, expert_names=[config.expert_name for config in self.configs])
+        else:
+            _name = _namev2
+
         self.final_norms = [RMSNorm(name=_name("final_norm", i)) for i in range(len(self.configs))]
 
     @at.typecheck
@@ -424,15 +439,6 @@ def _apply_rope(x, *, positions, max_wavelength=10_000):
     return res.astype(x.dtype)
 
 
-# def _name(name, i):
-#     # we name layers like this because we want the first expert's weights to have no suffix (e.g., "attn"), so that they
-#     # can be loaded seamlessly from the existing PaliGemma checkpoint. subsequent experts will have a suffix (e.g.,
-#     # "attn_1") and their weights will be initialized from scratch. in practice, we only use two experts -- PaliGemma,
-#     # and the action expert.
-#     if i == 0:
-#         return name
-#     return f"{name}_{i}"
-
 def _name(name, i):
     # we name layers like this because we want the first expert's weights to have no suffix (e.g., "attn"), so that they
     # can be loaded seamlessly from the existing PaliGemma checkpoint. subsequent experts will have a suffix (e.g.,
@@ -441,3 +447,12 @@ def _name(name, i):
     if i == 0:
         return name
     return f"{name}_{i}"
+
+def _namev2(name, i, expert_names=["paligemma", "action_expert"]):
+    # we want the names of paligemma and action experts to be the same as pre-trained checkpoint names, so that they can be loaded
+    assert expert_names[i] in ["paligemma", "action_expert", "prompt_expert"]
+    if expert_names[i] == "paligemma":
+        return name
+    elif expert_names[i] == "action_expert":
+        return f"{name}_{1}"
+    return f"{name}_{expert_names[i]}"
