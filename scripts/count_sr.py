@@ -78,7 +78,8 @@ if __name__ == '__main__':
     # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/"
     # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_eval/"
     # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv6_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
-    directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_run2"
+    # directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_run2"
+    directory = "/home/dingj0b/code/openpi/logs/pi0_libero_incontextv6_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
 
     log_file = f"{directory}/spatial.log"
     # Provide the unseen task IDs as integers, corresponding to the task order (starting at 1)

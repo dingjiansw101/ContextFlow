@@ -50,12 +50,14 @@ class Config:
     num_kv_heads: int
     head_dim: int
     lora_configs: dict[str, lora.LoRAConfig] = dataclasses.field(default_factory=dict)
+    # added
+    expert_name: str | None = None     
 
 
 Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora"]
 
 
-def get_config(variant: Variant) -> Config:
+def get_config(variant: Variant, expert_name: str | None = None) -> Config:
     """Returns config for specified gemma variant."""
     if variant == "dummy":
         return Config(
@@ -65,6 +67,7 @@ def get_config(variant: Variant) -> Config:
             num_heads=8,
             num_kv_heads=1,
             head_dim=16,
+            expert_name=expert_name,
         )
     if variant == "gemma_300m":
         # 311M params
@@ -75,6 +78,7 @@ def get_config(variant: Variant) -> Config:
             num_heads=8,
             num_kv_heads=1,
             head_dim=256,
+            expert_name=expert_name,
         )
     if variant == "gemma_2b":
         return Config(
@@ -84,6 +88,7 @@ def get_config(variant: Variant) -> Config:
             num_heads=8,
             num_kv_heads=1,
             head_dim=256,
+            expert_name=expert_name,
         )
     if variant == "gemma_2b_lora":
         return Config(
@@ -94,6 +99,7 @@ def get_config(variant: Variant) -> Config:
             num_kv_heads=1,
             head_dim=256,
             lora_configs={"attn": lora.LoRAConfig(rank=16, alpha=16.0), "ffn": lora.LoRAConfig(rank=16, alpha=16.0)},
+            expert_name=expert_name,
         )
     if variant == "gemma_300m_lora":
         # 311M params
@@ -105,6 +111,7 @@ def get_config(variant: Variant) -> Config:
             num_kv_heads=1,
             head_dim=256,
             lora_configs={"attn": lora.LoRAConfig(rank=32, alpha=32.0), "ffn": lora.LoRAConfig(rank=32, alpha=32.0)},
+            expert_name=expert_name,
         )
     raise ValueError(f"Unknown variant: {variant}")
 
@@ -162,6 +169,7 @@ class Attention(nn.Module):
         dtype = next(x.dtype for x in xs if x is not None)  # original dtype, could be half-precision
 
         qkvs = []
+        # import ipdb; ipdb.set_trace()
         for i, (x, config) in enumerate(zip(xs, self.configs, strict=True)):
             if x is None:
                 continue
@@ -415,6 +423,15 @@ def _apply_rope(x, *, positions, max_wavelength=10_000):
     # here.
     return res.astype(x.dtype)
 
+
+# def _name(name, i):
+#     # we name layers like this because we want the first expert's weights to have no suffix (e.g., "attn"), so that they
+#     # can be loaded seamlessly from the existing PaliGemma checkpoint. subsequent experts will have a suffix (e.g.,
+#     # "attn_1") and their weights will be initialized from scratch. in practice, we only use two experts -- PaliGemma,
+#     # and the action expert.
+#     if i == 0:
+#         return name
+#     return f"{name}_{i}"
 
 def _name(name, i):
     # we name layers like this because we want the first expert's weights to have no suffix (e.g., "attn"), so that they
