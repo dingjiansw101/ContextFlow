@@ -1427,7 +1427,7 @@ _CONFIGS = [
     TrainConfig(
         name="pi0_libero_incontextv7_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
         model=pi0_incontextv7.Pi0IncontextConfigv7(
-            paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
+            paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
         ),
         data=LeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
