@@ -141,12 +141,16 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
 
     def get_freeze_filter(self) -> nnx.filterlib.Filter:
         """Returns the freeze filter based on the model config."""
-        # TODO:  add the filter for the prompt_expert
+        # TODO:  there should be 8 cases, we only handle 4 cases now.
+        # assuming that the prompt_expert always has no lora.
         filters = []
         has_lora = False
         gemma_params_filter = nnx_utils.PathRegex(".*llm.*")
         action_expert_params_filter = nnx_utils.PathRegex(".*llm.*_1.*")
         prompt_expert_params_filter = nnx_utils.PathRegex(".*llm.*_prompt_expert.*")
+        assert "lora" not in self.prompt_expert_variant
+        if ("lora" not in self.paligemma_variant) and ("lora" not in self.action_expert_variant):
+            return nnx.Nothing
         if "lora" in self.paligemma_variant:
             filters.append(
                 gemma_params_filter,
