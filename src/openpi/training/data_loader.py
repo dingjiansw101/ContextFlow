@@ -370,11 +370,19 @@ def create_incontext_data_loader(
     dataset = create_dataset(data_config, config.model)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
     # dataset_old = AddDemoPromptDataset(dataset)
-    add_demo_transform = _transforms.AddDemoPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
-                                                            states_cache_path=config.data.states_cache_path,
-                                                            actions_cache_path=config.data.actions_cache_path)
-    dataset = TransformedDataset(dataset, [add_demo_transform])
+    if config.model.use_action_state_prompts:
+        print("Using action-state prompt")
+        add_demo_transform = _transforms.AddDemoPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
+                                                                states_cache_path=config.data.states_cache_path,
+                                                                actions_cache_path=config.data.actions_cache_path)
+        dataset = TransformedDataset(dataset, [add_demo_transform])
 
+    if config.model.use_point_track_prompts:
+        print("Using point track prompt")
+        add_point_track_transform = _transforms.AddPointTrackPromptTransform(
+            max_len=config.model.sample_actions,
+            tracks_path=config.data.tracks_path)
+        dataset = TransformedDataset(dataset, [add_point_track_transform])
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
         dataset,

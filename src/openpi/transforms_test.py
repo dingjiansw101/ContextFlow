@@ -131,5 +131,8 @@ def test_extract_prompt_from_task():
 #     assert jax.tree_util.tree_all(jax.tree_map(np.allclose, data, data_refactor))
 #     # import ipdb; ipdb.set_trace()
 
+# def test_adddemo():
+
+
 # if __name__ == "__main__":
 #     test_injectdemoindexes()

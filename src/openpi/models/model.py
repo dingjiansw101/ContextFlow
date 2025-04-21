@@ -155,6 +155,9 @@ class ObservationIncontext(Generic[ArrayT]):
     # incontext actions
     incontext_actions: at.Float[ArrayT, "*b q s"]
     incontext_action_masks: at.Bool[ArrayT, "*b q"]
+    # incontext actions
+    incontext_tracks: at.Float[ArrayT, "*b q st"] | None = None
+    incontext_track_masks: at.Bool[ArrayT, "*b q"] | None = None
     # selected episode for incontext prompt
     incontext_selected_episode: at.Int[ArrayT, "*b"] | None = None
 
@@ -200,6 +203,8 @@ class ObservationIncontext(Generic[ArrayT]):
             incontext_state_masks=data["dem_prompt_all_states_mask"],
             incontext_actions=data["dem_prompt_all_actions"],
             incontext_action_masks=data["dem_prompt_all_actions_mask"],
+            incontext_tracks=data.get("dem_prompt_tracks"),
+            incontext_track_masks=data.get("dem_prompt_tracks_mask"),
             incontext_selected_episode=data["selected_episode"],
             tokenized_prompt=data.get("tokenized_prompt"),
             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
@@ -222,6 +227,9 @@ class ObservationIncontext(Generic[ArrayT]):
         result["dem_prompt_all_states_mask"] = result.pop("incontext_state_masks")
         result["dem_prompt_all_actions"] = result.pop("incontext_actions")
         result["dem_prompt_all_actions_mask"] = result.pop("incontext_action_masks")
+        result["dem_prompt_tracks"] = result.pop("incontext_tracks")
+        result["dem_prompt_tracks_mask"] = result.pop("incontext_track_masks")
+
         result["selected_episode"] = result.pop("incontext_selected_episode")
         return result
 
@@ -416,6 +424,8 @@ def preprocess_observation_incontext(
         incontext_state_masks=observation.incontext_state_masks,
         incontext_actions=observation.incontext_actions,
         incontext_action_masks=observation.incontext_action_masks,
+        incontext_tracks=observation.incontext_tracks,
+        incontext_track_masks=observation.incontext_track_masks,
         incontext_selected_episode=observation.incontext_selected_episode,
         tokenized_prompt=observation.tokenized_prompt,
         tokenized_prompt_mask=observation.tokenized_prompt_mask,
@@ -436,6 +446,12 @@ class BaseModelConfig(abc.ABC):
     action_horizon: int
     # Tokenized prompt maximum length.
     max_token_len: int
+
+    use_action_state_prompts: bool = True
+
+    use_point_track_prompts: bool = False
+
+    use_image_prompts: bool = True
 
     @property
     @abc.abstractmethod

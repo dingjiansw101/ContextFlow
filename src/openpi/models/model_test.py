@@ -149,7 +149,61 @@ def test_pi0_lora_model_v7_params():
 
     import ipdb; ipdb.set_trace()
 
+def test_pi0_lora_model_v7_num_params():
+    key = jax.random.key(0)
+    config = pi0_incontextv7.Pi0IncontextConfigv7(
+        paligemma_variant="gemma_2b_lora",
+        prompt_expert_variant="gemma_300m",
+        action_expert_variant="gemma_300m_lora",
+        sample_frames=2,
+        sample_actions=32,
+        random_select=True,
+        use_image_prompts=False,
+    )
+    model = config.create(key)
+
+    # 2) build filters
+    freeze_filter    = config.get_freeze_filter()
+    trainable_filter = nnx.Not(freeze_filter)
+
+    # 3) collect all trainable keys
+    trainable_paths = [
+        "/".join(map(str, path))
+        for path, node in nnx.iter_graph(model)
+        if isinstance(node, nnx.Param) and trainable_filter(path, node)
+    ]
+
+    # 4) print the count
+    print(f"Number of trainable parameter keys: {len(trainable_paths)}")
+
+def test_pi0_lora_model_v7_4_params():
+    key = jax.random.key(0)
+    config = pi0_incontextv7.Pi0IncontextConfigv7(
+        paligemma_variant="gemma_2b_lora",
+        prompt_expert_variant="gemma_300m",
+        action_expert_variant="gemma_300m_lora",
+        sample_frames=2,
+        sample_actions=32,
+        random_select=True,
+    )
+    model = config.create(key)
+
+    # 2) build filters
+    freeze_filter    = config.get_freeze_filter()
+    trainable_filter = nnx.Not(freeze_filter)
+
+    # 3) collect all trainable keys
+    trainable_paths = [
+        "/".join(map(str, path))
+        for path, node in nnx.iter_graph(model)
+        if isinstance(node, nnx.Param) and trainable_filter(path, node)
+    ]
+
+    # 4) print the count
+    print(f"Number of trainable parameter keys: {len(trainable_paths)}")
 
 
 if __name__ == "__main__":
-    test_pi0_lora_model_v7_params()
+    # test_pi0_lora_model_v7_params()
+    test_pi0_lora_model_v7_num_params()
+    test_pi0_lora_model_v7_4_params()

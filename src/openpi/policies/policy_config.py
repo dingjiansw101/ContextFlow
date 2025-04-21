@@ -126,6 +126,7 @@ def create_trained_policy_incontext(
     dataset = create_dataset(data_config, train_config.model)
     dataset = transform_dataset(dataset, data_config)
 
+    # TODO: add point track transform here
     return _policy_incontext.PolicyIncontext(
         model,
         # TODO: check the transforms here, if it is the same as the one in the training

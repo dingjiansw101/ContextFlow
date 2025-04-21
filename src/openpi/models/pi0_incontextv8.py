@@ -65,7 +65,7 @@ def posemb_sincos(
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0IncontextConfigv7(_model.BaseModelConfig):
+class Pi0IncontextConfigv8(_model.BaseModelConfig):
     dtype: str = "bfloat16"
     paligemma_variant: _gemma.Variant = "gemma_2b"
     prompt_expert_variant: _gemma.Variant = "gemma_300m"
@@ -80,8 +80,6 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
     sample_frames: int = 16
     sample_actions: int = 32
     random_select: bool = True
-    use_image_prompts: bool = True
-    use_action_state_prompts: bool = True
 
     @property
     @override
@@ -89,8 +87,8 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv7":
-        return Pi0Incontextv7(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv8":
+        return Pi0Incontextv8(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(
@@ -183,14 +181,15 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
         return nnx.All(*filters)
 
 
-class Pi0Incontextv7(_model.BaseModel):
-    def __init__(self, config: Pi0IncontextConfigv7, rngs: nnx.Rngs):
+class Pi0Incontextv8(_model.BaseModel):
+    def __init__(self, config: Pi0IncontextConfigv8, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         paligemma_config = _gemma.get_config(config.paligemma_variant, "paligemma")
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
         self.use_image_prompts = config.use_image_prompts
         self.use_action_state_prompts = config.use_action_state_prompts
+        self.use_point_track_prompts = config.use_point_track_prompts
         # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
         llm = nnx_bridge.ToNNX(
@@ -220,6 +219,10 @@ class Pi0Incontextv7(_model.BaseModel):
         if self.use_action_state_prompts:
             self.demo_action_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
             self.demo_state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
+
+        if self.use_point_track_prompts:
+            # TODO: fix the hardcoded 256
+            self.demo_track_proj = nnx.Linear(256, action_expert_config.width, rngs=rngs)
 
         if self.use_image_prompts:
             self.img_proj = nnx.Linear(paligemma_config.width, action_expert_config.width, rngs=rngs)
@@ -296,18 +299,28 @@ class Pi0Incontextv7(_model.BaseModel):
 
         #------------------------------------------------------------------------
         # embed in-context states
-        if self.use_action_state_prompts:
-            dem_state_tokens = self.demo_state_proj(obs.incontext_states)
-            tokens.append(dem_state_tokens)
-            input_mask.append(obs.incontext_state_masks)
-            ar_mask += [False] * dem_state_tokens.shape[1]
+        # if self.use_action_state_prompts:
+        #     dem_state_tokens = self.demo_state_proj(obs.incontext_states)
+        #     tokens.append(dem_state_tokens)
+        #     input_mask.append(obs.incontext_state_masks)
+        #     ar_mask += [False] * dem_state_tokens.shape[1]
 
-            #------------------------------------------------------------------------
-            # embed in-context actions
-            dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
-            tokens.append(dem_action_tokens)
-            input_mask.append(obs.incontext_action_masks)
-            ar_mask += [False] * dem_action_tokens.shape[1]
+        #     #------------------------------------------------------------------------
+        #     # embed in-context actions
+        #     dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
+        #     tokens.append(dem_action_tokens)
+        #     input_mask.append(obs.incontext_action_masks)
+        #     ar_mask += [False] * dem_action_tokens.shape[1]
+
+        # ---------------------------------------------------------
+        #------------------------------------------------------------------------
+        # embed in-context states
+        if self.use_point_track_prompts:
+            print("obs.incontext_tracks.shape = ", obs.incontext_tracks.shape)
+            dem_track_tokens = self.demo_track_proj(obs.incontext_tracks)
+            tokens.append(dem_track_tokens)
+            input_mask.append(obs.incontext_track_masks)
+            ar_mask += [False] * dem_track_tokens.shape[1]
 
         # ---------------------------------------------------------
         tokens = jnp.concatenate(tokens, axis=1)
