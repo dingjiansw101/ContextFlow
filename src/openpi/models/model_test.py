@@ -132,15 +132,15 @@ def test_pi0_lora_model_v7_params():
 
     from openpi.shared import nnx_utils            # where PathRegex lives
 
-    action_filter = nnx_utils.PathRegex(".*llm.*_1.*")  # already defined in your code
-    for path, node in nnx.iter_graph(model):      # walk the whole graph  :contentReference[oaicite:1]{index=1}
-        if isinstance(node, nnx.Param) and action_filter(path, node):
-            print("/".join(map(str, path)), node.value.shape)
-
-    # gemma_params_filter = nnx_utils.PathRegex(".*llm.*")
+    # action_filter = nnx_utils.PathRegex(".*llm.*_1.*")  # already defined in your code
     # for path, node in nnx.iter_graph(model):      # walk the whole graph  :contentReference[oaicite:1]{index=1}
-    #     if isinstance(node, nnx.Param) and gemma_params_filter(path, node):
+    #     if isinstance(node, nnx.Param) and action_filter(path, node):
     #         print("/".join(map(str, path)), node.value.shape)
+
+    gemma_params_filter = nnx_utils.PathRegex(".*llm.*")
+    for path, node in nnx.iter_graph(model):      # walk the whole graph  :contentReference[oaicite:1]{index=1}
+        if isinstance(node, nnx.Param) and gemma_params_filter(path, node):
+            print("/".join(map(str, path)), node.value.shape)
 
     # prompt_expert_params_filter = nnx_utils.PathRegex(".*llm.*_prompt_expert.*")
     # for path, node in nnx.iter_graph(model):      # walk the whole graph  :contentReference[oaicite:1]{index=1}

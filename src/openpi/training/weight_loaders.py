@@ -71,7 +71,13 @@ class CheckpointWeightLoaderIncontext(WeightLoader):
         # We are loading np.ndarray and relying on the training code to properly convert and shard the params.
         loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
         # Add all missing LoRA weights.
-        return _merge_params(loaded_params, params, missing_regex=".*")
+        # return _merge_params(loaded_params, params, missing_regex=".*")
+        fallback_pattern = r".*(?:lora|llm.*_prompt_expert|demo_action_proj|demo_state_proj|img_proj).*"
+        # print(loaded_params['PaliGemma']['llm'].keys()) 
+        # dict_keys(['embedder', 'final_norm', 'final_norm_1', 'layers']) 
+        # print(params['PaliGemma']['llm'].keys())
+        # dict_keys(['embedder', 'final_norm', 'final_norm_1', 'final_norm_prompt_expert', 'layers'])
+        return _merge_params(loaded_params, params, missing_regex=fallback_pattern)
 
 
 @dataclasses.dataclass(frozen=True)
