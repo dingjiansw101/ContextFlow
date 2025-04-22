@@ -126,20 +126,39 @@ def create_trained_policy_incontext(
     dataset = create_dataset(data_config, train_config.model)
     dataset = transform_dataset(dataset, data_config)
 
-    # TODO: add point track transform here
-    return _policy_incontext.PolicyIncontext(
-        model,
-        # TODO: check the transforms here, if it is the same as the one in the training
-        transforms=[
+    input_transforms = [
             *repack_transforms.inputs,
             transforms.InjectDefaultPrompt(default_prompt), # prompt here is language instruction for a task
             *data_config.data_transforms.inputs,
             transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
-            *data_config.model_transforms.inputs,
-            transforms.AddDemoPromptTransform(dataset, max_len=train_config.model.sample_actions,
+            *data_config.model_transforms.inputs        ]
+
+    if train_config.model.use_image_prompts:
+        print("Inference: Adding image prompts")
+        input_transforms.append(
+            transforms.AddImagePromptTransform(dataset)
+        )
+
+    if train_config.model.use_action_state_prompts:
+        print("Inference: Adding action state prompts")
+        input_transforms.append(
+                        transforms.AddStatesActionsPromptTransform(max_len=train_config.model.sample_actions,
                                               states_cache_path=train_config.data.states_cache_path,
-                                              actions_cache_path=train_config.data.actions_cache_path),
-        ],
+                                              actions_cache_path=train_config.data.actions_cache_path)
+        )
+
+    if train_config.model.use_point_track_prompts:
+        print("Inference: Adding point track prompts")
+        input_transforms.append(
+            transforms.AddPointTrackPromptTransform(max_len=train_config.model.sample_actions,
+                                                    tracks_path=train_config.data.tracks_path)
+        )
+
+
+    return _policy_incontext.PolicyIncontext(
+        model,
+        # TODO: check the transforms here, if it is the same as the one in the training
+        transforms=input_transforms,
         output_transforms=[
             *data_config.model_transforms.outputs,
             transforms.Unnormalize(norm_stats, use_quantiles=data_config.use_quantile_norm),

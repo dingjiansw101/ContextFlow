@@ -147,14 +147,14 @@ class ObservationIncontext(Generic[ArrayT]):
     state: at.Float[ArrayT, "*b s"]
 
     # In-context data.
-    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]]
-    incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]]
+    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]] | None = None
+    incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]] | None = None
     # incontext states, q is the max_len of episode
-    incontext_states: at.Float[ArrayT, "*b q s"]
-    incontext_state_masks: at.Bool[ArrayT, "*b q"]
+    incontext_states: at.Float[ArrayT, "*b q s"] | None = None
+    incontext_state_masks: at.Bool[ArrayT, "*b q"] | None = None
     # incontext actions
-    incontext_actions: at.Float[ArrayT, "*b q s"]
-    incontext_action_masks: at.Bool[ArrayT, "*b q"]
+    incontext_actions: at.Float[ArrayT, "*b q s"] | None = None
+    incontext_action_masks: at.Bool[ArrayT, "*b q"] | None = None
     # incontext actions
     incontext_tracks: at.Float[ArrayT, "*b q st"] | None = None
     incontext_track_masks: at.Bool[ArrayT, "*b q"] | None = None
@@ -185,11 +185,12 @@ class ObservationIncontext(Generic[ArrayT]):
             if data["image"][key].dtype == np.uint8:
                 data["image"][key] = data["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
 
-        for key in data["dem_prompt_items"]["image"]:
-            if data["dem_prompt_items"]["image"][key].dtype == np.uint8:
-                data["dem_prompt_items"]["image"][key] = (
-                    data["dem_prompt_items"]["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
-                )
+        if "dem_prompt_images" in data:
+            for key in data["dem_prompt_images"]:
+                if data["dem_prompt_images"][key].dtype == np.uint8:
+                    data["dem_prompt_images"][key] = (
+                        data["dem_prompt_images"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
+                    )
         # in the current implementation, the incontext images only sampeld 16 frames
         # for the states and actions, we used the full length of the episode
         # jax.debug.print("data is: {}", data["selected_episode"])
@@ -197,12 +198,12 @@ class ObservationIncontext(Generic[ArrayT]):
             images=data["image"],
             image_masks=data["image_mask"],
             state=data["state"],
-            incontext_images=data["dem_prompt_items"]["image"],
-            incontext_image_masks=data["dem_prompt_items"]["image_mask"],
-            incontext_states=data["dem_prompt_all_states"],
-            incontext_state_masks=data["dem_prompt_all_states_mask"],
-            incontext_actions=data["dem_prompt_all_actions"],
-            incontext_action_masks=data["dem_prompt_all_actions_mask"],
+            incontext_images=data.get("dem_prompt_images"),
+            incontext_image_masks=data.get("dem_prompt_images_mask"),
+            incontext_states=data.get("dem_prompt_all_states"),
+            incontext_state_masks=data.get("dem_prompt_all_states_mask"),
+            incontext_actions=data.get("dem_prompt_all_actions"),
+            incontext_action_masks=data.get("dem_prompt_all_actions_mask"),
             incontext_tracks=data.get("dem_prompt_tracks"),
             incontext_track_masks=data.get("dem_prompt_tracks_mask"),
             incontext_selected_episode=data["selected_episode"],
@@ -217,12 +218,8 @@ class ObservationIncontext(Generic[ArrayT]):
         result = dataclasses.asdict(self)
         result["image"] = result.pop("images")
         result["image_mask"] = result.pop("image_masks")
-        result["dem_prompt_items"] = {
-            "image": result.pop("incontext_images"),
-            "image_mask": result.pop("incontext_image_masks"),
-            # "state": result.pop("incontext_states"),
-            # "actions": result.pop("incontext_actions"),
-        }
+        result["dem_prompt_images"] = result.pop("incontext_images")
+        result["dem_prompt_images_mask"] = result.pop("incontext_image_masks")
         result["dem_prompt_all_states"] = result.pop("incontext_states")
         result["dem_prompt_all_states_mask"] = result.pop("incontext_state_masks")
         result["dem_prompt_all_actions"] = result.pop("incontext_actions")
@@ -394,26 +391,30 @@ def preprocess_observation_incontext(
             out_masks[key] = jnp.asarray(observation.image_masks[key])
 
     # reshape incontext images
-    batch_size, length, height, width, channel = observation.incontext_images[image_keys[0]].shape
-    for key in observation.incontext_images:
-        observation.incontext_images[key] = observation.incontext_images[key].reshape(
-            batch_size * length, height, width, channel
-        )
+    out_incontext_images = None
+    out_incontext_masks = None
+    if observation.incontext_images is not None:
+        batch_size, length, height, width, channel = observation.incontext_images[image_keys[0]].shape
+        for key in observation.incontext_images:
+            observation.incontext_images[key] = observation.incontext_images[key].reshape(
+                batch_size * length, height, width, channel
+            )
 
-    out_incontext_images = process_images(observation.incontext_images, image_keys, image_resolution, train=train, rng=rng)
+        out_incontext_images = process_images(observation.incontext_images, image_keys, image_resolution, train=train, rng=rng)
 
-    # reshape incontext images back
-    for key in out_incontext_images:
-        out_incontext_images[key] = out_incontext_images[key].reshape(batch_size, length, height, width, channel)
+        # reshape incontext images back
+        for key in out_incontext_images:
+            out_incontext_images[key] = out_incontext_images[key].reshape(batch_size, length, height, width, channel)
 
-    # obtain incontext mask
-    out_incontext_masks = {}
-    for key in out_incontext_images:
-        if key not in observation.incontext_image_masks:
-            # do not mask by default
-            out_incontext_masks[key] = jnp.ones((batch_size, length), dtype=jnp.bool)
-        else:
-            out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
+        # obtain incontext mask
+        out_incontext_masks = {}
+        for key in out_incontext_images:
+            if key not in observation.incontext_image_masks:
+                # do not mask by default
+                out_incontext_masks[key] = jnp.ones((batch_size, length), dtype=jnp.bool)
+            else:
+                out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
+
     return ObservationIncontext(
         images=out_images,
         image_masks=out_masks,

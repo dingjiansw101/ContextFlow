@@ -238,6 +238,124 @@ def tree_stack_np(list_of_trees, axis=0):
 
 
 @dataclasses.dataclass(frozen=True)
+class AddImagePromptTransform(DataTransformFn):
+    """
+    DataTransform that extracts demonstration prompt items from the dataset.
+    Currently, we only use it for the images. simplify the code.
+    """
+    dataset: any  # Underlying dataset
+    # TODO: add num_sample_frames here
+    def __call__(self, data: dict) -> dict:
+        # Retrieve demonstration prompt items using provided indexes
+        dem_prompt_indexes = data.get("dem_prompt_indexes", [])
+        # Gather and stack
+        dem_items = [self.dataset[int(idx)] for idx in dem_prompt_indexes]
+        dem_prompt_items = tree_stack_np(dem_items)
+        # TODO: extract only images for this transform
+        # data["dem_prompt_items"] = dem_prompt_items
+        # import ipdb; ipdb.set_trace()
+        data["dem_prompt_images"] = dem_prompt_items["image"]
+        data["dem_prompt_images_mask"] = dem_prompt_items["image_mask"]
+        return data
+
+@dataclasses.dataclass(frozen=True)
+class AddStatesActionsPromptTransform(DataTransformFn):
+    """
+    DataTransform that loads or builds episode states and first-action caches,
+    then samples/pads them to produce fixed-length arrays and masks.
+    """
+    max_len: int = 32
+
+    # Populated in __post_init__
+    episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
+    episode_to_all_first_actions: dict[int, np.ndarray] = dataclasses.field(init=False)
+
+    # Default cache paths
+    states_cache_path: str = "metadata/libero/episode_states_cache.json"
+    actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
+    episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
+
+    def __post_init__(self):
+        # TODO: refactor the code. consider the case only using seen tasks
+        # --- Option A: Try to load precomputed states/actions from JSON cache ---
+        try:
+            states = load_episode_states_from_json(self.states_cache_path)
+            actions = load_episode_states_from_json(self.actions_cache_path)
+            print("Loaded states/actions from JSON cache.")
+        except FileNotFoundError:
+            # Build from scratch
+            idx_path = Path(self.episode_to_indexes_file)
+            with idx_path.open("r") as f:
+                episode_to_indexes_str = json.load(f)
+            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+
+            states = {}
+            actions = {}
+            for ep_id, idx_list in tqdm(
+                episode_to_indexes.items(),
+                desc="Building lookup tables for episodes",
+                total=len(episode_to_indexes),
+                ):
+                st_list, act_list = [], []
+                for idx in idx_list:
+                    item = self.dataset[int(idx)]
+                    st_list.append(item["state"])
+                    act_list.append(item["actions"][0])
+                assert len(st_list) > 0
+                assert len(act_list) > 0
+                states[ep_id] = np.stack(st_list, axis=0)
+                actions[ep_id] = np.stack(act_list, axis=0)
+
+            save_episode_states_to_json(states, self.states_cache_path)
+            save_episode_states_to_json(actions, self.actions_cache_path)
+            print("Built and saved states/actions JSON cache.")
+
+        object.__setattr__(self, "episode_to_all_states", states)
+        object.__setattr__(self, "episode_to_all_first_actions", actions)
+
+    def __call__(self, data: dict) -> dict:
+        ep_id = data["selected_episode"]
+        all_states = self.episode_to_all_states[ep_id]
+        all_actions = self.episode_to_all_first_actions[ep_id]
+
+        # Sample/pad states
+        t, d = all_states.shape
+        if t >= self.max_len:
+            idxs = np.linspace(0, t - 1, num=self.max_len, dtype=int)
+            s_states = all_states[idxs]
+            state_mask = np.ones((self.max_len,), dtype=bool)
+        else:
+            s_states = np.zeros((self.max_len, d), dtype=all_states.dtype)
+            s_states[:t] = all_states
+            if t > 0:
+                s_states[t:] = all_states[t - 1]
+            state_mask = np.zeros((self.max_len,), dtype=bool)
+            state_mask[:t] = np.True_
+
+        # Sample/pad actions
+        t_a, a_dim = all_actions.shape
+        if t_a >= self.max_len:
+            idxs_a = np.linspace(0, t_a - 1, num=self.max_len, dtype=int)
+            s_actions = all_actions[idxs_a]
+            action_mask = np.ones((self.max_len,), dtype=bool)
+        else:
+            s_actions = np.zeros((self.max_len, a_dim), dtype=all_actions.dtype)
+            s_actions[:t_a] = all_actions
+            if t_a > 0:
+                s_actions[t_a:] = all_actions[t_a - 1]
+            action_mask = np.zeros((self.max_len,), dtype=bool)
+            action_mask[:t_a] = np.True_
+
+        data["dem_prompt_all_states"] = s_states
+        data["dem_prompt_all_states_mask"] = state_mask
+        data["dem_prompt_all_actions"] = s_actions
+        data["dem_prompt_all_actions_mask"] = action_mask
+
+        return data
+
+
+
+@dataclasses.dataclass(frozen=True)
 class AddDemoPromptTransform(DataTransformFn):
     # TODO: divid it into two parts: 1) add demo prompt, 2) add states and actions
     dataset: any  # the underlying dataset from which to fetch demo items
@@ -284,7 +402,6 @@ class AddDemoPromptTransform(DataTransformFn):
                 assert len(first_actions_list) > 0
                 states[episode_id] = np.stack(states_list, axis=0)
                 actions[episode_id] = np.stack(first_actions_list, axis=0)
-                import ipdb; ipdb.set_trace()
             save_episode_states_to_json(states, self.states_cache_path)
             save_episode_states_to_json(actions, self.actions_cache_path)
             print("Built and saved states/actions JSON cache.")

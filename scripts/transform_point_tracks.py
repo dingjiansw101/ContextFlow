@@ -63,8 +63,42 @@ def process_episode_tracks(input_json_path: str,
 
     print(f"Saved combined tracks to {output_json_path}")
 
+def merge_episode_jsons(json_path1: str,
+                        json_path2: str,
+                        output_json_path: str) -> None:
+    """
+    Reads two episode‐track JSON files, merges their top‐level keys,
+    and writes the combined dict to output_json_path.
+    If a key exists in both inputs, the value from json_path2 wins.
+    """
+    # 1) Load both files
+    with open(json_path1, 'r') as f1:
+        data1 = json.load(f1)
+    with open(json_path2, 'r') as f2:
+        data2 = json.load(f2)
+
+    # 2) Merge: entries in data2 will overwrite duplicates from data1
+    merged = {**data1, **data2}
+
+    # 3) Ensure output directory exists
+    os.makedirs(os.path.dirname(output_json_path), exist_ok=True)
+
+    # 4) Write merged JSON
+    with open(output_json_path, 'w') as fout:
+        json.dump(merged, fout, indent=2)
+    print(f"Merged {len(data1)} + {len(data2)} → {len(merged)} episodes into\n  {output_json_path}")
+
 
 if __name__ == "__main__":
-    src = "/ibex/tmp/c2090/jinjie/shared/episode_tracks_w_active_id.json"
-    dst = "/home/dingj0b/code/openpi/metadata/libero/episode_tracks_combined.json"
-    process_episode_tracks(src, dst)
+    # src = "/ibex/tmp/c2090/jinjie/shared/episode_tracks_w_active_id.json"
+    # dst = "/home/dingj0b/code/openpi/metadata/libero/episode_tracks_combined.json"
+    # process_episode_tracks(src, dst)
+
+    # src = "/ibex/tmp/c2090/jinjie/shared/episode_tracks_w_active_id_unseen.json"
+    # dst = "/home/dingj0b/code/openpi/metadata/libero/episode_tracks_combined_unseen.json"
+    # process_episode_tracks(src, dst)
+
+    src1 = "/home/dingj0b/code/openpi/metadata/libero/episode_tracks_combined.json"
+    src2 = "/home/dingj0b/code/openpi/metadata/libero/episode_tracks_combined_unseen.json"
+    dst  = "/home/dingj0b/code/openpi/metadata/libero/episode_tracks_combined_all.json"
+    merge_episode_jsons(src1, src2, dst)

@@ -80,8 +80,6 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
     sample_frames: int = 16
     sample_actions: int = 32
     random_select: bool = True
-    use_image_prompts: bool = True
-    use_action_state_prompts: bool = True
 
     @property
     @override
@@ -310,10 +308,11 @@ class Pi0Incontextv7(_model.BaseModel):
             ar_mask += [False] * dem_action_tokens.shape[1]
 
         # ---------------------------------------------------------
+        assert len(ar_mask) > 0
+
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
 
-        assert len(ar_mask) > 0
         ar_mask[0] = True
         ar_mask = jnp.array(ar_mask)
 

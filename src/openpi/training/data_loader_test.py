@@ -6,7 +6,8 @@ from openpi.models import pi0
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
 from openpi.training.data_loader import create_dataset
-from openpi.training.data_loader import transform_dataset
+from openpi.training.data_loader import transform_dataset, TransformedDataset
+import openpi.transforms as _transforms
 
 
 def test_torch_data_loader():
@@ -114,6 +115,27 @@ def test_libero_incontext_data_loader():
     # ipdb.set_trace()
 
 
+def test_AddImagePromptTransform():
+    config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
+    # TODO: add assets_dirs to the config in the future
+    data_config = config.data.create(config.assets_dirs, config.model)
+    dataset = create_dataset(data_config, config.model)
+
+    # dataset = transform_dataset(dataset, data_config, skip_norm_stats=False)
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=True)
+    add_image_transform = _transforms.AddImagePromptTransform(dataset=dataset)
+    dataset = TransformedDataset(dataset, [add_image_transform])
+
+    for i in range(len(dataset)):
+        print(dataset[i].keys())
+        # import ipdb
+        # ipdb.set_trace()
+        # dict_keys(['state', 'image', 'image_mask', 'actions',
+        # 'tokenized_prompt', 'tokenized_prompt_mask'])
+        # import ipdb;
+        # ipdb.set_trace()
+
 if __name__ == "__main__":
-    test_libero_incontext_dataset()
+    # test_libero_incontext_dataset()
     # test_libero_incontext_data_loader()
+    test_AddImagePromptTransform()

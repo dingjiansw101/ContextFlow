@@ -299,18 +299,18 @@ class Pi0Incontextv8(_model.BaseModel):
 
         #------------------------------------------------------------------------
         # embed in-context states
-        # if self.use_action_state_prompts:
-        #     dem_state_tokens = self.demo_state_proj(obs.incontext_states)
-        #     tokens.append(dem_state_tokens)
-        #     input_mask.append(obs.incontext_state_masks)
-        #     ar_mask += [False] * dem_state_tokens.shape[1]
+        if self.use_action_state_prompts:
+            dem_state_tokens = self.demo_state_proj(obs.incontext_states)
+            tokens.append(dem_state_tokens)
+            input_mask.append(obs.incontext_state_masks)
+            ar_mask += [False] * dem_state_tokens.shape[1]
 
-        #     #------------------------------------------------------------------------
-        #     # embed in-context actions
-        #     dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
-        #     tokens.append(dem_action_tokens)
-        #     input_mask.append(obs.incontext_action_masks)
-        #     ar_mask += [False] * dem_action_tokens.shape[1]
+            #------------------------------------------------------------------------
+            # embed in-context actions
+            dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
+            tokens.append(dem_action_tokens)
+            input_mask.append(obs.incontext_action_masks)
+            ar_mask += [False] * dem_action_tokens.shape[1]
 
         # ---------------------------------------------------------
         #------------------------------------------------------------------------
