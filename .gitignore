@@ -15,8 +15,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# XJ's ignored files
 dcgm/
 train_inference_transform_check.py
+get_train_video.py
 
 # C extensions
 *.so

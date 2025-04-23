@@ -2070,8 +2070,8 @@ _CONFIGS = [
                 prompt_from_task=True,
             ),
             # Xianjie: newly added para for train-test split
-            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
-            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -2111,6 +2111,7 @@ _CONFIGS = [
         batch_size=36,
         wandb_enabled=False,
     ),
+    # TODO: XIANJIE debug-inference is 0
     TrainConfig(
         name="pi0_libero_low_mem_finetune_split_train",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
@@ -2132,7 +2133,7 @@ _CONFIGS = [
         num_workers=4,
         batch_size=36,
     ),
-
+# Xianjie:
     TrainConfig(
         # XIANJIE: no lora; no split; with delta
         name="pi0_libero_incontextv2_sample2_actionssample64",
@@ -2152,8 +2153,9 @@ _CONFIGS = [
         batch_size=36,
         # wandb_enabled=False,
     ),
+    # Xianjie:
     TrainConfig(
-        # XIANJIE: no lora; no split; with delta
+        # XIANJIE: no lora; with split; with delta
         name="pi0_libero_incontextv2_sample2_actionssample64_train_split",
         model=pi0_incontextv2.Pi0IncontextConfigv2(
             sample_frames=2, sample_actions=64, random_select=True,
@@ -2173,8 +2175,9 @@ _CONFIGS = [
         batch_size=36,
         # wandb_enabled=False,
     ),   
+    # Xianjie:
     TrainConfig(
-        # XIANJIE: no lora; no split; with delta
+        # XIANJIE: no lora; with split; with delta
         name="pi0_libero_incontextv2_sample2_actionssample64_test_split",
         model=pi0_incontextv2.Pi0IncontextConfigv2(
             sample_frames=2, sample_actions=64, random_select=True,
