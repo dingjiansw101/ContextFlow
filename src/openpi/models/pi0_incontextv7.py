@@ -278,14 +278,28 @@ class Pi0Incontextv7(_model.BaseModel):
         if self.use_image_prompts:
             for name in obs.incontext_images:
                 image_sequence = obs.incontext_images[name]
-                batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
-                image_sequence = image_sequence.reshape(
-                    image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
-                )
-                image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-                image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-                    batch_size, seq_len, -1, image_sqeuence_tokens.shape[2]
-                )
+                if len(image_sequence.shape) == 6:
+                    batch_size, episode_len, seq_len = image_sequence.shape[0], image_sequence.shape[1], image_sequence.shape[2]
+                    image_sequence = image_sequence.reshape(
+                        image_sequence.shape[0] * image_sequence.shape[1] * image_sequence.shape[2], *image_sequence.shape[3:]
+                    )
+                    image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+                    # import ipdb; ipdb.set_trace()
+                    # TODO: to organize multiple episode prompts in order
+                    image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                        batch_size, episode_len * seq_len, -1, image_sqeuence_tokens.shape[-1]
+                    )
+                    obs.incontext_image_masks[name] = obs.incontext_image_masks[name].reshape(batch_size, episode_len * seq_len)
+                elif len(image_sequence.shape) == 5:
+                    batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
+                    image_sequence = image_sequence.reshape(
+                        image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
+                    )
+                    image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+                    image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                        batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
+                    )
+
                 image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
                 image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
                 tokens.append(image_sqeuence_tokens)
@@ -295,21 +309,34 @@ class Pi0Incontextv7(_model.BaseModel):
         #------------------------------------------------------------------------
         # embed in-context states
         if self.use_action_state_prompts:
-            dem_state_tokens = self.demo_state_proj(obs.incontext_states)
+            # import ipdb; ipdb.set_trace()
+            if len(obs.incontext_states.shape) == 4:
+                incontext_states_reshape = obs.incontext_states.reshape(obs.incontext_states.shape[0], -1, obs.incontext_states.shape[-1])
+                dem_state_tokens = self.demo_state_proj(incontext_states_reshape)
+                incontext_state_masks_input = obs.incontext_state_masks.reshape(obs.incontext_states.shape[0], -1)
+            else:
+                dem_state_tokens = self.demo_state_proj(obs.incontext_states)
+                incontext_state_masks_input = obs.incontext_state_masks
             tokens.append(dem_state_tokens)
-            input_mask.append(obs.incontext_state_masks)
+            input_mask.append(incontext_state_masks_input)
             ar_mask += [False] * dem_state_tokens.shape[1]
 
             #------------------------------------------------------------------------
             # embed in-context actions
-            dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
+            if len(obs.incontext_actions.shape) == 4:
+                incontext_actions_reshape = obs.incontext_actions.reshape(obs.incontext_actions.shape[0], -1, obs.incontext_actions.shape[-1])
+                dem_action_tokens = self.demo_action_proj(incontext_actions_reshape)
+                incontext_action_masks_input = obs.incontext_action_masks.reshape(obs.incontext_actions.shape[0], -1)
+            else:
+                dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
+                incontext_action_masks_input = obs.incontext_action_masks
             tokens.append(dem_action_tokens)
-            input_mask.append(obs.incontext_action_masks)
+            input_mask.append(incontext_action_masks_input)
             ar_mask += [False] * dem_action_tokens.shape[1]
 
         # ---------------------------------------------------------
         assert len(ar_mask) > 0
-
+        # import ipdb; ipdb.set_trace()
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
 

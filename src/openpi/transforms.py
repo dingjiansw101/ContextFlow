@@ -120,16 +120,19 @@ class RepackTransform(DataTransformFn):
 @dataclasses.dataclass(frozen=True)
 class InjectDemoIndexes(DataTransformFn):
     """
-    A data transform that reads two JSON files containing:
-      1) task_to_episode: {task_index (str): list of episode_index (int)}
-      2) episode_to_indexes: {episode_index (str): list of index_idx (int)}
-    and converts their keys to integers.
+    Selects up to ``sample_episodes`` episodes for the current task and
+    uniformly samples up to ``sample_frames`` frame indexes *per episode*.
+
+    On output the ``data`` dict contains:
+    ``selected_episode`` : List[int]
+    ``dem_prompt_indexes`` : List[List[int]]  (parallel to selected_episode)
     """
 
     task_to_episode_path: Path = Path("metadata/libero/task_to_episode.json")
     episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json")
     sample_frames: int = 16
     random_select: bool = True
+    sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None
 
     def __post_init__(self):
@@ -171,29 +174,29 @@ class InjectDemoIndexes(DataTransformFn):
 
         split = data.get("split", "train")
         
+        # 1) choose episodes
         if split == "train" and self.random_select:
-            selected_episode = random.choice(episodes_for_task)
+            k = min(self.sample_episodes, len(episodes_for_task))
+            selected_episodes = random.sample(episodes_for_task, k)
         else:
-            selected_episode = episodes_for_task[0] if episodes_for_task else None
+            selected_episodes = episodes_for_task[: self.sample_episodes]
 
 
-        # 2) Get all indexes for that episode
-        all_indexes = self.episode_to_indexes.get(selected_episode, [])
+        # 2) choose frames per episode
+        dem_prompt_indexes: List[List[int]] = []
+        for ep in selected_episodes:
+            frame_idxs = self.episode_to_indexes.get(ep, [])
+            n = len(frame_idxs)
+            if n > self.sample_frames:
+                pos = np.linspace(0, n - 1, num=self.sample_frames, dtype=int)
+                chosen = [frame_idxs[p] for p in pos]
+            else:
+                chosen = frame_idxs
+            dem_prompt_indexes.append(chosen)
 
-        # 3) Uniformly sample up to self.sample_frames frames
-        total_frames = len(all_indexes)
-        if total_frames > self.sample_frames:
-            # Generate self.sample_frames evenly spaced positions
-            positions = np.linspace(0, total_frames - 1, num=self.sample_frames)
-            positions = np.round(positions).astype(int).tolist()
-            chosen_indexes = [all_indexes[pos] for pos in positions]
-        else:
-            chosen_indexes = all_indexes
-
-        # 4) Store both the chosen indexes and the items in `data`
-        data["dem_prompt_indexes"] = np.array(chosen_indexes)
-        data["selected_episode"] = selected_episode
-
+        # 3) attach to data
+        data["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
+        data["dem_prompt_indexes"] = dem_prompt_indexes
         return data
 
 def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
@@ -239,118 +242,121 @@ def tree_stack_np(list_of_trees, axis=0):
 
 @dataclasses.dataclass(frozen=True)
 class AddImagePromptTransform(DataTransformFn):
-    """
-    DataTransform that extracts demonstration prompt items from the dataset.
-    Currently, we only use it for the images. simplify the code.
-    """
-    dataset: any  # Underlying dataset
-    # TODO: add num_sample_frames here
-    def __call__(self, data: dict) -> dict:
-        # Retrieve demonstration prompt items using provided indexes
-        dem_prompt_indexes = data.get("dem_prompt_indexes", [])
-        # Gather and stack
-        dem_items = [self.dataset[int(idx)] for idx in dem_prompt_indexes]
-        dem_prompt_items = tree_stack_np(dem_items)
-        # TODO: extract only images for this transform
-        # data["dem_prompt_items"] = dem_prompt_items
-        # import ipdb; ipdb.set_trace()
-        data["dem_prompt_images"] = dem_prompt_items["image"]
-        data["dem_prompt_images_mask"] = dem_prompt_items["image_mask"]
+    """Stacks image prompts per episode into dicts of arrays by key."""
+    dataset: any
+
+    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        idx_lists: List[List[int]] = data.get("dem_prompt_indexes", [])
+        images_dict: Dict[str, List[np.ndarray]] = {}
+        masks_dict: Dict[str, List[np.ndarray]] = {}
+        for idx_list in idx_lists:
+            items = [self.dataset[int(i)] for i in idx_list]
+            stacked = tree_stack_np(items)
+            for name, img_arr in stacked["image"].items():
+                images_dict.setdefault(name, []).append(img_arr)
+            for name, mask_arr in stacked["image_mask"].items():
+                masks_dict.setdefault(name, []).append(mask_arr)
+
+        # assemble outputs
+        imgs = {name: np.stack(arrs, axis=0) for name, arrs in images_dict.items()}
+        msks = {name: np.stack(arrs, axis=0) for name, arrs in masks_dict.items()}
+
+        # if only one episode, squeeze the episode dimension
+        if len(idx_lists) == 1:
+            data["dem_prompt_images"] = {name: arr[0] for name, arr in imgs.items()}
+            data["dem_prompt_images_mask"] = {name: arr[0] for name, arr in msks.items()}
+        else:
+            data["dem_prompt_images"] = imgs
+            data["dem_prompt_images_mask"] = msks
         return data
 
 @dataclasses.dataclass(frozen=True)
 class AddStatesActionsPromptTransform(DataTransformFn):
-    """
-    DataTransform that loads or builds episode states and first-action caches,
-    then samples/pads them to produce fixed-length arrays and masks.
-    """
+    """Adds state/action sequences for multiple episodes."""
     max_len: int = 32
 
-    # Populated in __post_init__
-    episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
-    episode_to_all_first_actions: dict[int, np.ndarray] = dataclasses.field(init=False)
+    episode_to_all_states: Dict[int, np.ndarray] = dataclasses.field(init=False)
+    episode_to_all_first_actions: Dict[int, np.ndarray] = dataclasses.field(init=False)
 
-    # Default cache paths
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
     episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
     def __post_init__(self):
-        # TODO: refactor the code. consider the case only using seen tasks
-        # --- Option A: Try to load precomputed states/actions from JSON cache ---
         try:
             states = load_episode_states_from_json(self.states_cache_path)
             actions = load_episode_states_from_json(self.actions_cache_path)
-            print("Loaded states/actions from JSON cache.")
         except FileNotFoundError:
-            # Build from scratch
-            idx_path = Path(self.episode_to_indexes_file)
-            with idx_path.open("r") as f:
-                episode_to_indexes_str = json.load(f)
-            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
-
-            states = {}
-            actions = {}
-            for ep_id, idx_list in tqdm(
-                episode_to_indexes.items(),
-                desc="Building lookup tables for episodes",
-                total=len(episode_to_indexes),
-                ):
-                st_list, act_list = [], []
-                for idx in idx_list:
+            with Path(self.episode_to_indexes_file).open("r") as f:
+                raw = json.load(f)
+            idx_map = {int(k): v for k, v in raw.items()}
+            states, actions = {}, {}
+            for ep, idxs in tqdm(idx_map.items(), desc="Building caches", total=len(idx_map)):
+                state_list, action_list = [], []
+                for idx in idxs:
                     item = self.dataset[int(idx)]
-                    st_list.append(item["state"])
-                    act_list.append(item["actions"][0])
-                assert len(st_list) > 0
-                assert len(act_list) > 0
-                states[ep_id] = np.stack(st_list, axis=0)
-                actions[ep_id] = np.stack(act_list, axis=0)
-
+                    state_list.append(item["state"])
+                    action_list.append(item["actions"][0])
+                states[ep] = np.stack(state_list, axis=0)
+                actions[ep] = np.stack(action_list, axis=0)
             save_episode_states_to_json(states, self.states_cache_path)
             save_episode_states_to_json(actions, self.actions_cache_path)
-            print("Built and saved states/actions JSON cache.")
-
         object.__setattr__(self, "episode_to_all_states", states)
         object.__setattr__(self, "episode_to_all_first_actions", actions)
 
-    def __call__(self, data: dict) -> dict:
-        ep_id = data["selected_episode"]
-        all_states = self.episode_to_all_states[ep_id]
-        all_actions = self.episode_to_all_first_actions[ep_id]
+    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        eps: List[int] = data.get("selected_episode", [])
+        states_b, states_mask_b, actions_b, actions_mask_b = [], [], [], []
+        for ep in eps:
+            all_states = self.episode_to_all_states[ep]
+            all_actions = self.episode_to_all_first_actions[ep]
 
-        # Sample/pad states
-        t, d = all_states.shape
-        if t >= self.max_len:
-            idxs = np.linspace(0, t - 1, num=self.max_len, dtype=int)
-            s_states = all_states[idxs]
-            state_mask = np.ones((self.max_len,), dtype=bool)
+            # Sample/pad states
+            t, d = all_states.shape
+            if t >= self.max_len:
+                idxs = np.linspace(0, t - 1, num=self.max_len, dtype=int)
+                sampled_states = all_states[idxs]
+                state_mask = np.ones((self.max_len,), dtype=bool)
+            else:
+                sampled_states = np.zeros((self.max_len, d), dtype=all_states.dtype)
+                sampled_states[:t] = all_states
+                sampled_states[t:] = all_states[t - 1] if t > 0 else 0
+                state_mask = np.zeros((self.max_len,), dtype=bool)
+                state_mask[:t] = True
+
+            # Sample/pad actions
+            t_a, a_dim = all_actions.shape
+            if t_a >= self.max_len:
+                idxs_a = np.linspace(0, t_a - 1, num=self.max_len, dtype=int)
+                sampled_actions = all_actions[idxs_a]
+                action_mask = np.ones((self.max_len,), dtype=bool)
+            else:
+                sampled_actions = np.zeros((self.max_len, a_dim), dtype=all_actions.dtype)
+                sampled_actions[:t_a] = all_actions
+                sampled_actions[t_a:] = all_actions[t_a - 1] if t_a > 0 else 0
+                action_mask = np.zeros((self.max_len,), dtype=bool)
+                action_mask[:t_a] = True
+
+            states_b.append(sampled_states)
+            states_mask_b.append(state_mask)
+            actions_b.append(sampled_actions)
+            actions_mask_b.append(action_mask)
+
+        stacked_states = np.stack(states_b, axis=0)
+        stacked_states_mask = np.stack(states_mask_b, axis=0)
+        stacked_actions = np.stack(actions_b, axis=0)
+        stacked_actions_mask = np.stack(actions_mask_b, axis=0)
+
+        if len(eps) == 1:
+            data["dem_prompt_all_states"] = stacked_states[0]
+            data["dem_prompt_all_states_mask"] = stacked_states_mask[0]
+            data["dem_prompt_all_actions"] = stacked_actions[0]
+            data["dem_prompt_all_actions_mask"] = stacked_actions_mask[0]
         else:
-            s_states = np.zeros((self.max_len, d), dtype=all_states.dtype)
-            s_states[:t] = all_states
-            if t > 0:
-                s_states[t:] = all_states[t - 1]
-            state_mask = np.zeros((self.max_len,), dtype=bool)
-            state_mask[:t] = np.True_
-
-        # Sample/pad actions
-        t_a, a_dim = all_actions.shape
-        if t_a >= self.max_len:
-            idxs_a = np.linspace(0, t_a - 1, num=self.max_len, dtype=int)
-            s_actions = all_actions[idxs_a]
-            action_mask = np.ones((self.max_len,), dtype=bool)
-        else:
-            s_actions = np.zeros((self.max_len, a_dim), dtype=all_actions.dtype)
-            s_actions[:t_a] = all_actions
-            if t_a > 0:
-                s_actions[t_a:] = all_actions[t_a - 1]
-            action_mask = np.zeros((self.max_len,), dtype=bool)
-            action_mask[:t_a] = np.True_
-
-        data["dem_prompt_all_states"] = s_states
-        data["dem_prompt_all_states_mask"] = state_mask
-        data["dem_prompt_all_actions"] = s_actions
-        data["dem_prompt_all_actions_mask"] = action_mask
-
+            data["dem_prompt_all_states"] = stacked_states
+            data["dem_prompt_all_states_mask"] = stacked_states_mask
+            data["dem_prompt_all_actions"] = stacked_actions
+            data["dem_prompt_all_actions_mask"] = stacked_actions_mask
         return data
 
 
@@ -472,47 +478,42 @@ class AddDemoPromptTransform(DataTransformFn):
 
 @dataclasses.dataclass(frozen=True)
 class AddPointTrackPromptTransform(DataTransformFn):
-    """
-    Data transform that adds a demonstration prompt of precomputed track states
-    for a selected episode. Pads or samples to a fixed sequence length.
-    """
-    max_len: int = 32                     # target sequence length
+    """Adds track sequences for multiple episodes."""
+    max_len: int = 32
     tracks_path: str = "metadata/libero/episode_tracks_combined.json"
-
-    # populated in __post_init__, mapping episode_id -> np.ndarray of shape (T, F)
     episode_to_tracks: Dict[int, np.ndarray] = dataclasses.field(init=False)
 
     def __post_init__(self):
-        # Load precomputed track sequences from JSON cache
-        ep_tracks = load_episode_states_from_json(self.tracks_path)
-        object.__setattr__(self, "episode_to_tracks", ep_tracks)
-        print(f"Loaded {len(ep_tracks)} episodes of track data from {self.tracks_path}.")
+        object.__setattr__(self, "episode_to_tracks", load_episode_states_from_json(self.tracks_path))
 
-    def __call__(self, data: Dict) -> Dict:
-        # Retrieve the ID of the selected episode
-        episode_id = data["selected_episode"]
-        # Look up the full track sequence for this episode
-        tracks = self.episode_to_tracks[episode_id]    # shape (T, F)
-        T, F = tracks.shape
+    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        eps: List[int] = data.get("selected_episode", [])
+        tracks_b, tracks_mask_b = [], []
+        for ep in eps:
+            tr = self.episode_to_tracks[ep]
+            T, F = tr.shape
+            if T >= self.max_len:
+                idxs = np.linspace(0, T - 1, num=self.max_len, dtype=int)
+                sampled_tr = tr[idxs]
+                tracks_mask = np.ones((self.max_len,), dtype=bool)
+            else:
+                sampled_tr = np.zeros((self.max_len, F), dtype=tr.dtype)
+                sampled_tr[:T] = tr
+                sampled_tr[T:] = tr[T - 1] if T > 0 else 0
+                tracks_mask = np.zeros((self.max_len,), dtype=bool)
+                tracks_mask[:T] = True
+            tracks_b.append(sampled_tr)
+            tracks_mask_b.append(tracks_mask)
 
-        # If we have at least max_len frames, sample uniformly
-        if T >= self.max_len:
-            indices = np.linspace(0, T - 1, num=self.max_len, dtype=int)
-            sampled_tracks = tracks[indices]
-            mask = np.ones((self.max_len,), dtype=bool)
+        stacked_tracks = np.stack(tracks_b, axis=0)
+        stacked_tracks_mask = np.stack(tracks_mask_b, axis=0)
+
+        if len(eps) == 1:
+            data["dem_prompt_tracks"] = stacked_tracks[0]
+            data["dem_prompt_tracks_mask"] = stacked_tracks_mask[0]
         else:
-            # Otherwise pad to max_len by repeating the last frame
-            sampled_tracks = np.zeros((self.max_len, F), dtype=tracks.dtype)
-            sampled_tracks[:T] = tracks
-            if T > 0:
-                sampled_tracks[T:] = tracks[T - 1]
-            mask = np.zeros((self.max_len,), dtype=bool)
-            mask[:T] = np.True_
-
-        # Store into the data dict for downstream use
-        data["dem_prompt_tracks"] = sampled_tracks         # np.ndarray (max_len, F)
-        data["dem_prompt_tracks_mask"] = mask              # np.ndarray (max_len,)
-
+            data["dem_prompt_tracks"] = stacked_tracks
+            data["dem_prompt_tracks_mask"] = stacked_tracks_mask
         return data
 
 @dataclasses.dataclass(frozen=True)

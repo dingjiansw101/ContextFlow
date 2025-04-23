@@ -147,19 +147,19 @@ class ObservationIncontext(Generic[ArrayT]):
     state: at.Float[ArrayT, "*b s"]
 
     # In-context data.
-    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]] | None = None
-    incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]] | None = None
+    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]] | dict[str, at.Float[ArrayT, "*b e t h w c"]] | None = None
+    incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]] | dict[str, at.Bool[ArrayT, "*b e t"]] | None = None
     # incontext states, q is the max_len of episode
-    incontext_states: at.Float[ArrayT, "*b q s"] | None = None
-    incontext_state_masks: at.Bool[ArrayT, "*b q"] | None = None
+    incontext_states: at.Float[ArrayT, "*b q s"] | at.Float[ArrayT, "*b e q s"] | None = None
+    incontext_state_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
     # incontext actions
-    incontext_actions: at.Float[ArrayT, "*b q s"] | None = None
-    incontext_action_masks: at.Bool[ArrayT, "*b q"] | None = None
+    incontext_actions: at.Float[ArrayT, "*b q s"] | at.Float[ArrayT, "*b e q s"] | None = None
+    incontext_action_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
     # incontext actions
-    incontext_tracks: at.Float[ArrayT, "*b q st"] | None = None
-    incontext_track_masks: at.Bool[ArrayT, "*b q"] | None = None
+    incontext_tracks: at.Float[ArrayT, "*b q st"] | at.Float[ArrayT, "*b e q st"] | None = None
+    incontext_track_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
     # selected episode for incontext prompt
-    incontext_selected_episode: at.Int[ArrayT, "*b"] | None = None
+    incontext_selected_episode: at.Int[ArrayT, "*b e"] | None = None
 
     # Tokenized prompt.
     tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
@@ -394,24 +394,49 @@ def preprocess_observation_incontext(
     out_incontext_images = None
     out_incontext_masks = None
     if observation.incontext_images is not None:
-        batch_size, length, height, width, channel = observation.incontext_images[image_keys[0]].shape
+        # look at the first view to infer dims
+        first = observation.incontext_images[image_keys[0]]
+        ndim = first.ndim
+        if ndim == 5:
+            # B, T, H, W, C
+            batch_size, length, height, width, channel = first.shape
+
+            def flatten(x):
+                return x.reshape(batch_size * length, height, width, channel)
+            def unflatten(x):
+                return x.reshape(batch_size, length, height, width, channel)
+            mask_shape = (batch_size, length)
+
+        elif ndim == 6:
+            # B, E, T, H, W, C
+            batch_size, episodes, length, height, width, channel = first.shape
+
+            def flatten(x):
+                return x.reshape(batch_size * episodes * length, height, width, channel)
+            def unflatten(x):
+                return x.reshape(batch_size, episodes, length, height, width, channel)
+            mask_shape = (batch_size, episodes, length)
+
+        else:
+            raise ValueError(f"incontext_images must be 5‑D or 6‑D, got ndim={ndim}")
+
+        # flatten all views
         for key in observation.incontext_images:
-            observation.incontext_images[key] = observation.incontext_images[key].reshape(
-                batch_size * length, height, width, channel
-            )
+            observation.incontext_images[key] = flatten(observation.incontext_images[key])
 
-        out_incontext_images = process_images(observation.incontext_images, image_keys, image_resolution, train=train, rng=rng)
+        out_incontext_images = process_images(
+            observation.incontext_images, image_keys, image_resolution, train=train, rng=rng
+        )
 
-        # reshape incontext images back
+        # reshape back
         for key in out_incontext_images:
-            out_incontext_images[key] = out_incontext_images[key].reshape(batch_size, length, height, width, channel)
+            out_incontext_images[key] = unflatten(out_incontext_images[key])
 
-        # obtain incontext mask
+        # build masks
         out_incontext_masks = {}
         for key in out_incontext_images:
-            if key not in observation.incontext_image_masks:
-                # do not mask by default
-                out_incontext_masks[key] = jnp.ones((batch_size, length), dtype=jnp.bool)
+            if observation.incontext_image_masks is None or key not in observation.incontext_image_masks:
+                out_incontext_masks[key] = jnp.ones(mask_shape, dtype=jnp.bool)
             else:
                 out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
 
@@ -453,6 +478,8 @@ class BaseModelConfig(abc.ABC):
     use_point_track_prompts: bool = False
 
     use_image_prompts: bool = True
+
+    sample_episodes: int = 1
 
     @property
     @abc.abstractmethod
