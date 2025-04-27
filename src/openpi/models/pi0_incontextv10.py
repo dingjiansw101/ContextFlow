@@ -65,7 +65,7 @@ def posemb_sincos(
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0IncontextConfigv7(_model.BaseModelConfig):
+class Pi0IncontextConfigv10(_model.BaseModelConfig):
     dtype: str = "bfloat16"
     paligemma_variant: _gemma.Variant = "gemma_2b"
     prompt_expert_variant: _gemma.Variant = "gemma_300m"
@@ -81,16 +81,14 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
     sample_actions: int = 32
     random_select: bool = True
 
-    block_attention: bool = True
-
     @property
     @override
     def model_type(self) -> _model.ModelType:
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv7":
-        return Pi0Incontextv7(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv10":
+        return Pi0Incontextv10(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(
@@ -183,15 +181,14 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
         return nnx.All(*filters)
 
 
-class Pi0Incontextv7(_model.BaseModel):
-    def __init__(self, config: Pi0IncontextConfigv7, rngs: nnx.Rngs):
+class Pi0Incontextv10(_model.BaseModel):
+    def __init__(self, config: Pi0IncontextConfigv10, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         paligemma_config = _gemma.get_config(config.paligemma_variant, "paligemma")
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
         self.use_image_prompts = config.use_image_prompts
         self.use_action_state_prompts = config.use_action_state_prompts
-        self.block_attention = config.block_attention
         # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
         llm = nnx_bridge.ToNNX(
@@ -303,10 +300,22 @@ class Pi0Incontextv7(_model.BaseModel):
                         batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
                     )
 
-                image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+                # image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+                num_imgs = image_sqeuence_tokens.shape[1]
+                tokens_per_img = image_sqeuence_tokens.shape[2]
+                image_sqeuence_tokens = image_sqeuence_tokens.reshape(batch_size, 
+                                        image_sqeuence_tokens.shape[1] * image_sqeuence_tokens.shape[2], 
+                                        image_sqeuence_tokens.shape[3])
                 image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
                 tokens.append(image_sqeuence_tokens)
-                input_mask.append(obs.incontext_image_masks[name])
+                incontext_image_mask = einops.repeat(
+                    obs.incontext_image_masks[name],
+                    "b n -> b n s",
+                    s=tokens_per_img,
+                )
+                incontext_image_mask = incontext_image_mask.reshape(
+                    batch_size, num_imgs * tokens_per_img)
+                input_mask.append(incontext_image_mask)
                 ar_mask += [False] * image_sqeuence_tokens.shape[1]
 
         #------------------------------------------------------------------------
@@ -342,11 +351,10 @@ class Pi0Incontextv7(_model.BaseModel):
         # import ipdb; ipdb.set_trace()
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
-    
-        if self.block_attention:
-            ar_mask[0] = True
-        ar_mask = jnp.array(ar_mask)
 
+        ar_mask[0] = True
+        ar_mask = jnp.array(ar_mask)
+        # import ipdb; ipdb.set_trace()
         return tokens, input_mask, ar_mask
 
 
