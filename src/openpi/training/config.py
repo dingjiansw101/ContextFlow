@@ -2374,6 +2374,81 @@ _CONFIGS = [
         # wandb_enabled=False,
     ),
 
+    # in the 8_1 version, we used dense point tracks
+    TrainConfig(
+        name="pi0_libero_incontextv8_1_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0_incontextv8.Pi0IncontextConfigv8(
+            paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m", 
+            action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, 
+            random_select=True, use_image_prompts=False, use_action_state_prompts=False,
+            use_point_track_prompts=True, point_track_dim=444,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            tracks_path="metadata/libero/episode_tracks_combined_grid32_all.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=30_000,
+        freeze_filter=pi0_incontextv8.Pi0IncontextConfigv8(
+            paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m", 
+            action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32,
+              random_select=True, use_image_prompts=False, use_action_state_prompts=False,
+            use_point_track_prompts=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv8_1_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0_incontextv8.Pi0IncontextConfigv8(
+            paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m", 
+            action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32,
+              random_select=True, use_image_prompts=False, use_action_state_prompts=False,
+            use_point_track_prompts=True, point_track_dim=444,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            tracks_path="metadata/libero/episode_tracks_combined_grid32_all.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv8.Pi0IncontextConfigv8(
+            paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m", 
+            action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, 
+            random_select=True, use_image_prompts=False, use_action_state_prompts=False,
+            use_point_track_prompts=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=8,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
     TrainConfig(
         name="pi0_libero_incontextv6_sample2_actionssample32_random_select_without_delta_train_split",
         model=pi0_incontextv6.Pi0IncontextConfigv6(
