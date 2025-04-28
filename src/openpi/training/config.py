@@ -2435,7 +2435,7 @@ _CONFIGS = [
 
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
+        num_train_steps=30_000,
         freeze_filter=pi0_incontextv8.Pi0IncontextConfigv8(
             paligemma_variant="gemma_2b_lora", prompt_expert_variant="gemma_300m", 
             action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, 
