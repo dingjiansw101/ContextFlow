@@ -163,7 +163,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA: Checkpoint(
         config="pi0_libero_low_mem_finetune_split_train",
-        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/29999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/19999"
     ),
 }
 

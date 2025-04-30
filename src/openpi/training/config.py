@@ -30,6 +30,9 @@ import openpi.policies.aloha_policy as aloha_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_incontext_policy as libero_incontext_policy
 import openpi.policies.libero_policy as libero_policy
+import openpi.policies.rlbench_gripper_policy as rlbench_gripper_policy
+import openpi.policies.rlbench_joint_policy as rlbench_joint_policy
+
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.optimizer as _optimizer
@@ -529,7 +532,69 @@ class LeRobotAlohaMobileDataConfig(DataConfigFactory):
             train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
         )
 
+@dataclasses.dataclass(frozen=True)
+class LeRobotRLBenchJointDataConfig(DataConfigFactory):
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/image": "image",
+                        "observation/wrist_image": "wrist_image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        # "action_joint_velocity": "action_joint_velocity",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
 
+        data_transforms = _transforms.Group(
+            inputs=[rlbench_joint_policy.RLBenchJointInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
+            outputs=[rlbench_joint_policy.RLBenchJointOutputs()],
+        )
+        
+        model_transforms = ModelTransformFactory()(model_config)
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+        )
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotRLBenchGripperDataConfig(DataConfigFactory):
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/image": "image",
+                        "observation/wrist_image": "wrist_image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+
+        data_transforms = _transforms.Group(
+            inputs=[rlbench_gripper_policy.RLBenchGripperInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
+            outputs=[rlbench_gripper_policy.RLBenchGripperOutputs()],
+        )
+        
+        model_transforms = ModelTransformFactory()(model_config)
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+        )
+     
 @dataclasses.dataclass(frozen=True)
 class TrainConfig:
     # Name of the config. Must be unique. Will be used to reference this config.
@@ -560,7 +625,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "./checkpoints" #"/ibex/tmp/c2090/xianjie/checkpoints" 
+    checkpoint_base_dir: str = "./checkpoints" #"/ibex/tmp/c2090/openpi_explore_storage/checkpoints" 
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
@@ -2125,7 +2190,7 @@ _CONFIGS = [
             episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=30_000,
+        num_train_steps=20_000,
         freeze_filter=pi0.Pi0Config(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
@@ -2133,7 +2198,7 @@ _CONFIGS = [
         num_workers=4,
         batch_size=36,
     ),
-# Xianjie:
+    # Xianjie:
     TrainConfig(
         # XIANJIE: no lora; no split; with delta
         name="pi0_libero_incontextv2_sample2_actionssample64",
@@ -2279,6 +2344,63 @@ _CONFIGS = [
             action_dim=7, action_horizon=10, max_token_len=180, paligemma_variant="gemma_2b_lora"
         ).get_freeze_filter(),
         ema_decay=None,
+    ),
+
+    #
+    # Fine-tuning RLBench configs
+    #
+    TrainConfig(
+        # no delta with split
+        name="pi0_rlbench_gripper_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRLBenchGripperDataConfig(
+            repo_id="daixianjie/rlbench_lerobot_train",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=4,
+        batch_size=36,
+    ),
+    
+    TrainConfig(
+        # no delta with split
+        name="pi0_rlbench_joint_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRLBenchJointDataConfig(
+            repo_id="daixianjie/rlbench_joint_vel_action_lerobot_train",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=4,
+        batch_size=36,
     ),
     #
     # Fine-tuning Aloha configs.

@@ -118,11 +118,11 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     
     EnvMode.XJ_TEST3_TRAIN: Checkpoint(
         config="pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split",
-        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/19999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32_random_select_train_split/19999"
     ),
     EnvMode.XJ_TEST6_WITHOUT_LORA: Checkpoint(
         config="pi0_libero_incontextv2_sample2_actionssample64",
-        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_sample2_actionssample64/pi0_libero_incontextv2_sample2_actionssample64/39999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_incontextv2_sample2_actionssample64/pi0_libero_incontextv2_sample2_actionssample64/39999"
     ),
 
     EnvMode.TEST6: Checkpoint(
@@ -131,11 +131,11 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.XJ_TEST6_WITHOUT_LORA_WITH_SPLIT: Checkpoint(
         config="pi0_libero_incontextv2_sample2_actionssample64_test_split",
-        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split/39999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split/39999"
     ),
     EnvMode.XJ_TEST6_WITHOUT_LORA_WITH_SPLIT_20K: Checkpoint(
         config="pi0_libero_incontextv2_sample2_actionssample64_test_split",
-        dir="/ibex/tmp/c2090/xianjie/checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split_20k/19999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split_20k/19999"
     ),
     
 }
