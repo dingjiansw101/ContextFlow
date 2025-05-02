@@ -1,0 +1,9 @@
+{
+    "exclude": [
+      "logs",
+      "wandb",
+      "nohup.out",
+      "checkpoints",
+    ]
+  }
+  

@@ -15,7 +15,7 @@ from openpi.shared import array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 
 logger = logging.getLogger("openpi")
-
+# This is a more clean version of v12
 
 def make_attn_mask(input_mask, mask_ar):
     """Adapted from big_vision.
@@ -65,9 +65,10 @@ def posemb_sincos(
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0IncontextConfigv3(_model.BaseModelConfig):
+class Pi0IncontextConfigv12(_model.BaseModelConfig):
+    # The version without using vlm
     dtype: str = "bfloat16"
-    paligemma_variant: _gemma.Variant = "gemma_2b"
+    prompt_expert_variant: _gemma.Variant = "gemma_300m_v2"
     action_expert_variant: _gemma.Variant = "gemma_300m"
 
     # Set the model specific defaults.
@@ -86,8 +87,8 @@ class Pi0IncontextConfigv3(_model.BaseModelConfig):
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv3":
-        return Pi0Incontextv3(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv12":
+        return Pi0Incontextv12(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(
@@ -138,13 +139,70 @@ class Pi0IncontextConfigv3(_model.BaseModelConfig):
 
         return observation_spec, action_spec
 
+    def get_freeze_filter_gpt(self) -> nnx.filterlib.Filter:
+        """
+        Freeze policy:
+
+        • If *no* expert uses LoRA  →  freeze nothing.
+        • If one or both experts use LoRA
+            – freeze the shared PaLiGemma trunk (matches “.*llm.*”)
+            – freeze the *base* weights of every LoRA-enabled expert
+            – keep the base weights of non-LoRA experts trainable
+            – always keep every `*.lora.*` adapter trainable
+        """
+        # ------------------------------------------------------------------ #
+        # 1.  Regex atoms
+        # ------------------------------------------------------------------ #
+        gemma_base        = nnx_utils.PathRegex(r".*llm.*")                  # trunk (matches everything)
+        action_base       = nnx_utils.PathRegex(r".*llm.*_1.*")              # action expert
+        prompt_base       = nnx_utils.PathRegex(r".*llm.*_prompt_expert.*")  # prompt expert
+        lora_any          = nnx_utils.PathRegex(r".*lora.*")                 # any LoRA adapter
+
+        # Which experts carry LoRA?
+        action_has_lora  = "lora" in self.action_expert_variant
+        prompt_has_lora  = "lora" in self.prompt_expert_variant
+
+        # ------------------------------------------------------------------ #
+        # 2.  Early-out: nothing to freeze
+        # ------------------------------------------------------------------ #
+        if not (action_has_lora or prompt_has_lora):
+            return nnx.Nothing             # → train the whole model
+
+        # ------------------------------------------------------------------ #
+        # 3.  Build the union-of-inclusions
+        # ------------------------------------------------------------------ #
+        inclusions: list[nnx.filterlib.Filter] = [gemma_base]                # always freeze the trunk
+        if action_has_lora:
+            inclusions.append(action_base)
+        if prompt_has_lora:
+            inclusions.append(prompt_base)
+
+        # ------------------------------------------------------------------ #
+        # 4.  Build the exclusions
+        # ------------------------------------------------------------------ #
+        exclusions: list[nnx.filterlib.Filter] = [nnx.Not(lora_any)]         # keep adapters trainable
+        if not action_has_lora:
+            exclusions.append(nnx.Not(action_base))                          # keep action base trainable
+        if not prompt_has_lora:
+            exclusions.append(nnx.Not(prompt_base))                          # keep prompt base trainable
+
+        # ------------------------------------------------------------------ #
+        # 5.  Assemble the composite filter
+        # ------------------------------------------------------------------ #
+        #   FROZEN =  ( G  ∪  A(lora)  ∪  P(lora) )   \   ( LoRA  ∪  non-LoRA bases )
+        return nnx.All(
+            nnx.Any(*inclusions),     # logical OR of everything we *may* freeze
+            *exclusions,              # logical AND of every veto rule
+        )
+
+
     def get_freeze_filter(self) -> nnx.filterlib.Filter:
         """Returns the freeze filter based on the model config."""
         filters = []
         has_lora = False
         gemma_params_filter = nnx_utils.PathRegex(".*llm.*")
         action_expert_params_filter = nnx_utils.PathRegex(".*llm.*_1.*")
-        if "lora" in self.paligemma_variant:
+        if "lora" in self.prompt_expert_variant:
             filters.append(
                 gemma_params_filter,
             )
@@ -170,22 +228,25 @@ class Pi0IncontextConfigv3(_model.BaseModelConfig):
         return nnx.All(*filters)
 
 
-class Pi0Incontextv3(_model.BaseModel):
-    def __init__(self, config: Pi0IncontextConfigv3, rngs: nnx.Rngs):
+class Pi0Incontextv12(_model.BaseModel):
+    def __init__(self, config: Pi0IncontextConfigv12, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
-        paligemma_config = _gemma.get_config(config.paligemma_variant)
-        action_expert_config = _gemma.get_config(config.action_expert_variant)
+        action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
+        prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
+        self.use_image_prompts = config.use_image_prompts
+        self.use_action_state_prompts = config.use_action_state_prompts
+        # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
         llm = nnx_bridge.ToNNX(
             _gemma.Module(
-                configs=[paligemma_config, action_expert_config],
+                configs=[prompt_expert_config, action_expert_config],
                 embed_dtype=config.dtype,
             )
         )
         llm.lazy_init(rngs=rngs, method="init")
         img = nnx_bridge.ToNNX(
             _siglip.Module(
-                num_classes=paligemma_config.width,
+                num_classes=prompt_expert_config.width,
                 variant="So400m/14",
                 pool_type="none",
                 scan=True,
@@ -194,32 +255,36 @@ class Pi0Incontextv3(_model.BaseModel):
         )
         img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
         self.PaliGemma = nnx.Dict(llm=llm, img=img)
-        
-        self.demo_action_proj = nnx.Linear(config.action_dim, paligemma_config.width, rngs=rngs)
-        self.demo_state_proj = nnx.Linear(config.action_dim, paligemma_config.width, rngs=rngs)
-        
         self.state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.action_in_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
         self.action_time_mlp_in = nnx.Linear(2 * action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_time_mlp_out = nnx.Linear(action_expert_config.width, action_expert_config.width, rngs=rngs)
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
 
-        # TODO: add some layers to process in-context prompts
-        # import ipdb; ipdb.set_trace()
+        # self.obs_img_proj = nnx.Linear(paligemma_config.width, prompt_expert_config.width, rngs=rngs)
+        # self.text_proj = nnx.Linear(paligemma_config.width, prompt_expert_config.width, rngs=rngs)
+
+        if self.use_action_state_prompts:
+            self.demo_action_proj = nnx.Linear(config.action_dim, prompt_expert_config.width, rngs=rngs)
+            self.demo_state_proj = nnx.Linear(config.action_dim, prompt_expert_config.width, rngs=rngs)
+
+        # if self.use_image_prompts:
+        #     self.img_proj = nnx.Linear(paligemma_config.width, prompt_expert_config.width, rngs=rngs)
+            # TODO: add some layers to process in-context prompts
+
 
     @at.typecheck
-    def embed_prefix(
+    def embed_midfix(
         self, obs: _model.ObservationIncontext
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
-        # TODO: add some layers to process in-context prompts
 
         input_mask = []
         ar_mask = []
         tokens = []
-        # embed images
-        # import ipdb; ipdb.set_trace()
+
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
+            # image_tokens = self.obs_img_proj(image_tokens)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
             # import ipdb; ipdb.set_trace()
             # jax.debug.print("obs.image_masks = {}", obs.image_masks[name])
@@ -236,57 +301,85 @@ class Pi0Incontextv3(_model.BaseModel):
         # add language (aka tokenized inputs)
         if obs.tokenized_prompt is not None:
             tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
+            # tokenized_inputs = self.text_proj(tokenized_inputs)
             tokens.append(tokenized_inputs)
             input_mask.append(obs.tokenized_prompt_mask)
             # full attention between image and language inputs
             ar_mask += [False] * tokenized_inputs.shape[1]
 
         # -------------------------------------------------------------------------
-        # start of in-context prompts
         # embed in-context images
         # TODO: set a ratio to randomly mask input or prompt
-        # TODO: write a dict, mapping from selected_episode_index to prompt tokens.
-        # take the selected_episode_index from the observation. In the same task, the task_index from observation are the same
-        # for each task_index, theere is only one selected_episode_index 
-        # TODO: check if the image encoder is trained during training
-     
-        for name in obs.incontext_images:
-            image_sequence = obs.incontext_images[name]
-            batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
-            image_sequence = image_sequence.reshape(
-                image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
-            )
-            image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-            image_sqeuence_tokens = image_sqeuence_tokens.reshape(
-                batch_size, seq_len, -1, image_sqeuence_tokens.shape[2]
-            )
-            image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
-            tokens.append(image_sqeuence_tokens)
-            input_mask.append(obs.incontext_image_masks[name])
-            ar_mask += [False] * image_sqeuence_tokens.shape[1]
+        if self.use_image_prompts:
+            for name in obs.incontext_images:
+                image_sequence = obs.incontext_images[name]
+                if len(image_sequence.shape) == 6:
+                    batch_size, episode_len, seq_len = image_sequence.shape[0], image_sequence.shape[1], image_sequence.shape[2]
+                    image_sequence = image_sequence.reshape(
+                        image_sequence.shape[0] * image_sequence.shape[1] * image_sequence.shape[2], *image_sequence.shape[3:]
+                    )
+                    image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+                    # import ipdb; ipdb.set_trace()
+                    # TODO: to organize multiple episode prompts in order
+                    image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                        batch_size, episode_len * seq_len, -1, image_sqeuence_tokens.shape[-1]
+                    )
+                    obs.incontext_image_masks[name] = obs.incontext_image_masks[name].reshape(batch_size, episode_len * seq_len)
+                elif len(image_sequence.shape) == 5:
+                    batch_size, seq_len = image_sequence.shape[0], image_sequence.shape[1]
+                    image_sequence = image_sequence.reshape(
+                        image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
+                    )
+                    image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+                    image_sqeuence_tokens = image_sqeuence_tokens.reshape(
+                        batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
+                    )
 
-        # TODO: check the attention design
-        # TODO: consider to add a in-context token expert
-        dem_state_tokens = self.demo_state_proj(obs.incontext_states)
-        tokens.append(dem_state_tokens)
-        input_mask.append(obs.incontext_state_masks)
-        ar_mask += [False] * dem_state_tokens.shape[1]
-        # ar_mask += [True] + ([False] * (dem_state_tokens.shape[1] - 1))
+                image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+                # image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
+                tokens.append(image_sqeuence_tokens)
+                input_mask.append(obs.incontext_image_masks[name])
+                ar_mask += [False] * image_sqeuence_tokens.shape[1]
 
-        dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
-        tokens.append(dem_action_tokens)
-        input_mask.append(obs.incontext_action_masks)
-        ar_mask += [False] * dem_action_tokens.shape[1]
-        # import ipdb; ipdb.set_trace()
-        # end of in-context prompts
+        #------------------------------------------------------------------------
+        # embed in-context states
+        if self.use_action_state_prompts:
+            # import ipdb; ipdb.set_trace()
+            if len(obs.incontext_states.shape) == 4:
+                incontext_states_reshape = obs.incontext_states.reshape(obs.incontext_states.shape[0], -1, obs.incontext_states.shape[-1])
+                dem_state_tokens = self.demo_state_proj(incontext_states_reshape)
+                incontext_state_masks_input = obs.incontext_state_masks.reshape(obs.incontext_states.shape[0], -1)
+            else:
+                dem_state_tokens = self.demo_state_proj(obs.incontext_states)
+                incontext_state_masks_input = obs.incontext_state_masks
+            tokens.append(dem_state_tokens)
+            input_mask.append(incontext_state_masks_input)
+            ar_mask += [False] * dem_state_tokens.shape[1]
+
+            #------------------------------------------------------------------------
+            # embed in-context actions
+            if len(obs.incontext_actions.shape) == 4:
+                incontext_actions_reshape = obs.incontext_actions.reshape(obs.incontext_actions.shape[0], -1, obs.incontext_actions.shape[-1])
+                dem_action_tokens = self.demo_action_proj(incontext_actions_reshape)
+                incontext_action_masks_input = obs.incontext_action_masks.reshape(obs.incontext_actions.shape[0], -1)
+            else:
+                dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
+                incontext_action_masks_input = obs.incontext_action_masks
+            tokens.append(dem_action_tokens)
+            input_mask.append(incontext_action_masks_input)
+            ar_mask += [False] * dem_action_tokens.shape[1]
+
         # ---------------------------------------------------------
-
-        tokens = jnp.concatenate(tokens, axis=1) # (36, 822, 2048)
-        input_mask = jnp.concatenate(input_mask, axis=1)
-        ar_mask = jnp.array(ar_mask)
+        assert len(ar_mask) > 0
         # import ipdb; ipdb.set_trace()
-        # jax.debug.print("tokens.shape = {}", tokens.shape)
+        tokens = jnp.concatenate(tokens, axis=1)
+        input_mask = jnp.concatenate(input_mask, axis=1)
+
+        # ar_mask[0] = True
+        ar_mask = jnp.array(ar_mask)
+
         return tokens, input_mask, ar_mask
+
 
     @at.typecheck
     def embed_suffix(
@@ -316,11 +409,9 @@ class Pi0Incontextv3(_model.BaseModel):
         input_mask.append(jnp.ones(action_time_tokens.shape[:2], dtype=jnp.bool_))
         # image/language/state inputs do not attend to action tokens
         ar_mask += [True] + ([False] * (self.action_horizon - 1))
-        tokens = jnp.concatenate(tokens, axis=1) # (36, 115, 1024)
+        tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
         ar_mask = jnp.array(ar_mask)
-        # import ipdb; ipdb.set_trace()
-        # jax.debug.print("check masks {}", jnp.array_equal(obs.incontext_state_masks, obs.incontext_action_masks))
         return tokens, input_mask, ar_mask
 
     @override
@@ -344,15 +435,15 @@ class Pi0Incontextv3(_model.BaseModel):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
+        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
         suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(observation, x_t, time)
-        input_mask = jnp.concatenate([prefix_mask, suffix_mask], axis=1)
-        ar_mask = jnp.concatenate([prefix_ar_mask, suffix_ar_mask], axis=0)
+        input_mask = jnp.concatenate([midfix_mask, suffix_mask], axis=1)
+        ar_mask = jnp.concatenate([midfix_ar_mask, suffix_ar_mask], axis=0)
         attn_mask = make_attn_mask(input_mask, ar_mask)
         positions = jnp.cumsum(input_mask, axis=1) - 1
         # import ipdb; ipdb.set_trace()
-        (prefix_out, suffix_out), _ = self.PaliGemma.llm(
-            [prefix_tokens, suffix_tokens], mask=attn_mask, positions=positions
+        (midfix_out, suffix_out), _ = self.PaliGemma.llm(
+            [midfix_tokens, suffix_tokens], mask=attn_mask, positions=positions
         )
         v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
@@ -375,11 +466,11 @@ class Pi0Incontextv3(_model.BaseModel):
         noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
 
 
-        prefix_tokens, prefix_mask, prefix_ar_mask = self.embed_prefix(observation)
-
-        prefix_attn_mask = make_attn_mask(prefix_mask, prefix_ar_mask)
-        positions = jnp.cumsum(prefix_mask, axis=1) - 1
-        _, kv_cache = self.PaliGemma.llm([prefix_tokens, None], mask=prefix_attn_mask, positions=positions)
+        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
+        
+        midfix_attn_mask = make_attn_mask(midfix_mask, midfix_ar_mask)
+        positions = jnp.cumsum(midfix_mask, axis=1) - 1
+        _, kv_cache = self.PaliGemma.llm([midfix_tokens, None], mask=midfix_attn_mask, positions=positions)
 
         def step(carry):
             x_t, time = carry
@@ -390,21 +481,20 @@ class Pi0Incontextv3(_model.BaseModel):
             # other
             suffix_attn_mask = make_attn_mask(suffix_mask, suffix_ar_mask)
 
-            prefix_attn_mask = einops.repeat(prefix_mask, "b p -> b s p", s=suffix_tokens.shape[1])
-
-            full_attn_mask = jnp.concatenate([prefix_attn_mask, suffix_attn_mask], axis=-1)
+            midfix_attn_mask = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_tokens.shape[1])
+            full_attn_mask = jnp.concatenate([midfix_attn_mask, suffix_attn_mask], axis=-1)
             assert full_attn_mask.shape == (
                 batch_size,
                 suffix_tokens.shape[1],
-                prefix_tokens.shape[1] + suffix_tokens.shape[1],
+                midfix_tokens.shape[1] + suffix_tokens.shape[1],
             )
             # `positions` is shape (b, suffix_len) indicating the positions of the suffix tokens
-            positions = jnp.sum(prefix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_mask, axis=-1) - 1
+            positions = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_mask, axis=-1) - 1
 
-            (prefix_out, suffix_out), _ = self.PaliGemma.llm(
+            (midfix_out, suffix_out), _ = self.PaliGemma.llm(
                 [None, suffix_tokens], mask=full_attn_mask, positions=positions, kv_cache=kv_cache
             )
-            assert prefix_out is None
+            assert midfix_out is None
             v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
 
             return x_t + dt * v_t, time + dt

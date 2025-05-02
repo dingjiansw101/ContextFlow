@@ -39,10 +39,16 @@ def parse_task_and_success_rates(directory, filename, unseen_task_ids=None):
     seen_count = 0
     
     for index, (task, rates) in enumerate(results.items()):
-        assert rates, f"No rates found for task: {task}"
-        assert len(rates) == 1, f"Expected one rate per task, got {len(rates)} for task: {task}"
+        try:
+            assert rates, f"No rates found for task: {task}"
+        except:
+            import ipdb; ipdb.set_trace()
+        # assert len(rates) == 1, f"Expected one rate per task, got {len(rates)} for task: {task}"
+        # if len(rates) > 1:
+        #     print(f"Warning: More than one rate found for task {task}. Using the first one.")
+        #     import ipdb; ipdb.set_trace()
         avg_rate = rates[0]
-
+        # pick up the black bowl on the cookie box and place it on the plate
         if unseen_task_ids is not None and index in unseen_task_ids:
             unseen_sum += avg_rate
             unseen_count += 1

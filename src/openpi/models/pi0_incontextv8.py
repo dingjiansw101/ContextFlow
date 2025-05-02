@@ -81,6 +81,8 @@ class Pi0IncontextConfigv8(_model.BaseModelConfig):
     sample_actions: int = 32
     random_select: bool = True
 
+    point_track_dim: int = 256
+
     @property
     @override
     def model_type(self) -> _model.ModelType:
@@ -222,7 +224,7 @@ class Pi0Incontextv8(_model.BaseModel):
 
         if self.use_point_track_prompts:
             # TODO: fix the hardcoded 256
-            self.demo_track_proj = nnx.Linear(256, action_expert_config.width, rngs=rngs)
+            self.demo_track_proj = nnx.Linear(config.point_track_dim, action_expert_config.width, rngs=rngs)
 
         if self.use_image_prompts:
             self.img_proj = nnx.Linear(paligemma_config.width, action_expert_config.width, rngs=rngs)

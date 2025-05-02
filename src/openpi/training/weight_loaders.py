@@ -72,7 +72,7 @@ class CheckpointWeightLoaderIncontext(WeightLoader):
         loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
         # Add all missing LoRA weights.
         # return _merge_params(loaded_params, params, missing_regex=".*")
-        fallback_pattern = r".*(?:lora|llm.*_prompt_expert|demo_action_proj|demo_state_proj|img_proj|demo_track_proj).*"
+        fallback_pattern = r".*(?:lora|llm.*_prompt_expert|demo_action_proj|demo_state_proj|img_proj|demo_track_proj|text_proj).*"
         # print(loaded_params['PaliGemma']['llm'].keys()) 
         # dict_keys(['embedder', 'final_norm', 'final_norm_1', 'layers']) 
         # print(params['PaliGemma']['llm'].keys())
@@ -95,9 +95,12 @@ class PaliGemmaWeightLoader(WeightLoader):
         with path.open("rb") as f:
             flat_params = dict(np.load(f, allow_pickle=False))
         loaded_params = {"PaliGemma": flax.traverse_util.unflatten_dict(flat_params, sep="/")["params"]}
+        # TODO: check the llm keys of PaliGemma
+        # import ipdb; ipdb.set_trace()
         # Add all missing weights.
         return _merge_params(loaded_params, params, missing_regex=".*")
 
+# TODO: write an empty weight loader that does not load any weights
 
 def _merge_params(loaded_params: at.Params, params: at.Params, *, missing_regex: str) -> at.Params:
     """Merges the loaded parameters with the reference parameters.

@@ -13,6 +13,7 @@ from openpi_client import websocket_client_policy as _websocket_client_policy
 import tqdm
 import tyro
 import json
+from collections import Counter
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
@@ -98,11 +99,15 @@ def eval_libero(args: Args) -> None:
     # assigned_task_list = LIBERO_TEST_TASK_DICT[args.task_suite_name]
 
     # Start evaluation
+    # Track per-task episode & success counts
+    per_task_episodes  = Counter()
+    per_task_successes = Counter()
     total_episodes, total_successes = 0, 0
+
+    unseen_ids = set(LIBERO_TEST_TASK_DICT[args.task_suite_name])
+
     for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
     # for task_id in assigned_task_list:
-
-        # TODO: select tasks for testing here
         # Get task
         
         task = task_suite.get_task(task_id)
@@ -207,10 +212,29 @@ def eval_libero(args: Args) -> None:
             logging.info(f"Success: {done}")
             logging.info(f"# episodes completed so far: {total_episodes}")
             logging.info(f"# successes: {total_successes} ({total_successes / total_episodes * 100:.1f}%)")
-
+        
+        per_task_episodes[task_id] = task_episodes
+        per_task_successes[task_id] = task_successes
         # Log final results
         logging.info(f"Current task success rate: {float(task_successes) / float(task_episodes)}")
         logging.info(f"Current total success rate: {float(total_successes) / float(total_episodes)}")
+
+    seen_rates, unseen_rates = [], []
+    for tid in range(num_tasks_in_suite):
+        rate = per_task_successes[tid] / per_task_episodes[tid]
+        if tid in unseen_ids:
+            unseen_rates.append(rate)
+        else:
+            seen_rates.append(rate)
+
+    avg_unseen = sum(unseen_rates) / len(unseen_rates) if unseen_rates else 0.0
+    avg_seen   = sum(seen_rates)   / len(seen_rates)   if seen_rates   else 0.0
+    
+    logging.info(f"Average success on UNSEEN tasks {sorted(unseen_ids)}: {avg_unseen:.3f}")
+    logging.info(
+        f"Average success on SEEN tasks   {sorted(set(range(num_tasks_in_suite)) - unseen_ids)}: "
+        f"{avg_seen:.3f}"
+    )
 
     logging.info(f"Total success rate: {float(total_successes) / float(total_episodes)}")
     logging.info(f"Total episodes: {total_episodes}")
