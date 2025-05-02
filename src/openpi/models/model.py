@@ -479,6 +479,8 @@ class BaseModelConfig(abc.ABC):
 
     use_image_prompts: bool = True
 
+    use_text_prompts: bool = True
+
     sample_episodes: int = 1
 
     @property

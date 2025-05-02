@@ -15,7 +15,9 @@ from openpi.shared import array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 
 logger = logging.getLogger("openpi")
-
+# description: modified from v11
+# extended the dimension of prompt expert from 1024 to 2048
+# removed the projection of image tokens to 1024
 
 def make_attn_mask(input_mask, mask_ar):
     """Adapted from big_vision.
@@ -65,7 +67,7 @@ def posemb_sincos(
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0IncontextConfigv7(_model.BaseModelConfig):
+class Pi0IncontextConfigv11(_model.BaseModelConfig):
     dtype: str = "bfloat16"
     paligemma_variant: _gemma.Variant = "gemma_2b"
     prompt_expert_variant: _gemma.Variant = "gemma_300m"
@@ -89,8 +91,8 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv7":
-        return Pi0Incontextv7(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv11":
+        return Pi0Incontextv11(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(
@@ -183,15 +185,14 @@ class Pi0IncontextConfigv7(_model.BaseModelConfig):
         return nnx.All(*filters)
 
 
-class Pi0Incontextv7(_model.BaseModel):
-    def __init__(self, config: Pi0IncontextConfigv7, rngs: nnx.Rngs):
+class Pi0Incontextv11(_model.BaseModel):
+    def __init__(self, config: Pi0IncontextConfigv11, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         paligemma_config = _gemma.get_config(config.paligemma_variant, "paligemma")
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
         self.use_image_prompts = config.use_image_prompts
         self.use_action_state_prompts = config.use_action_state_prompts
-        self.use_text_prompts = config.use_text_prompts
         self.block_attention = config.block_attention
         # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
@@ -220,11 +221,11 @@ class Pi0Incontextv7(_model.BaseModel):
         self.action_out_proj = nnx.Linear(action_expert_config.width, config.action_dim, rngs=rngs)
 
         if self.use_action_state_prompts:
-            self.demo_action_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
-            self.demo_state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
+            self.demo_action_proj = nnx.Linear(config.action_dim, prompt_expert_config.width, rngs=rngs)
+            self.demo_state_proj = nnx.Linear(config.action_dim, prompt_expert_config.width, rngs=rngs)
 
-        if self.use_image_prompts:
-            self.img_proj = nnx.Linear(paligemma_config.width, action_expert_config.width, rngs=rngs)
+        # if self.use_image_prompts:
+        #     self.img_proj = nnx.Linear(paligemma_config.width, action_expert_config.width, rngs=rngs)
             # TODO: add some layers to process in-context prompts
 
     @at.typecheck
@@ -254,13 +255,12 @@ class Pi0Incontextv7(_model.BaseModel):
             ar_mask += [False] * image_tokens.shape[1]
 
         # add language (aka tokenized inputs)
-        if self.use_text_prompts:
-            if obs.tokenized_prompt is not None:
-                tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
-                tokens.append(tokenized_inputs)
-                input_mask.append(obs.tokenized_prompt_mask)
-                # full attention between image and language inputs
-                ar_mask += [False] * tokenized_inputs.shape[1]
+        if obs.tokenized_prompt is not None:
+            tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
+            tokens.append(tokenized_inputs)
+            input_mask.append(obs.tokenized_prompt_mask)
+            # full attention between image and language inputs
+            ar_mask += [False] * tokenized_inputs.shape[1]
 
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
@@ -306,7 +306,7 @@ class Pi0Incontextv7(_model.BaseModel):
                     )
 
                 image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
-                image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
+                # image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
                 tokens.append(image_sqeuence_tokens)
                 input_mask.append(obs.incontext_image_masks[name])
                 ar_mask += [False] * image_sqeuence_tokens.shape[1]

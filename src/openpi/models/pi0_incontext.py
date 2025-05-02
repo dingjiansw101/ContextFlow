@@ -286,7 +286,6 @@ class Pi0Incontext(_model.BaseModel):
         tokens.append(dem_action_tokens)
         input_mask.append(obs.incontext_action_masks)
         ar_mask += [False] * dem_action_tokens.shape[1]
-        # import ipdb; ipdb.set_trace()
         # end of in-context prompts
         # ---------------------------------------------------------
         # add a single state token

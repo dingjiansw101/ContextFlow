@@ -142,7 +142,7 @@ def create_trained_policy_incontext(
     if train_config.model.use_action_state_prompts:
         print("Inference: Adding action state prompts")
         input_transforms.append(
-                        transforms.AddStatesActionsPromptTransform(max_len=train_config.model.sample_actions,
+                        transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=train_config.model.sample_actions,
                                               states_cache_path=train_config.data.states_cache_path,
                                               actions_cache_path=train_config.data.actions_cache_path)
         )

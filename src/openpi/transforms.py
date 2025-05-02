@@ -273,6 +273,8 @@ class AddImagePromptTransform(DataTransformFn):
 @dataclasses.dataclass(frozen=True)
 class AddStatesActionsPromptTransform(DataTransformFn):
     """Adds state/action sequences for multiple episodes."""
+    dataset: any  # the underlying dataset from which to fetch demo items
+
     max_len: int = 32
 
     episode_to_all_states: Dict[int, np.ndarray] = dataclasses.field(init=False)
