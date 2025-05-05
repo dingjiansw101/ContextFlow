@@ -326,6 +326,7 @@ def test_pi0_lora_model_v9_num_params():
 
         print(f"\n=== {title} ===")
         print(f"Trainable parameter keys: {len(trainable_paths)}")
+        import ipdb; ipdb.set_trace()
         for p in trainable_paths:
             print("  ", p)
 
@@ -509,8 +510,7 @@ if __name__ == "__main__":
     # test_pi0_lora_model_v7_num_params()
     # test_pi0_lora_model_v7_4_params()
     # test_pi0_lora_model_v12_num_params()
-    # test_pi0_lora_model_v9_num_params()
-
+    test_pi0_lora_model_v9_num_params()
     # test_pi0_lora_model_num_params()
 
-    test_compare_v12_v9_trainable_params()
+    # test_compare_v12_v9_trainable_params()

@@ -15,7 +15,7 @@ from openpi.shared import array_typing as at
 import openpi.shared.nnx_utils as nnx_utils
 
 logger = logging.getLogger("openpi")
-# This is a more clean version of v12
+# This is a more clean version of v9
 
 def make_attn_mask(input_mask, mask_ar):
     """Adapted from big_vision.
@@ -234,6 +234,7 @@ class Pi0Incontextv12(_model.BaseModel):
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
         self.use_image_prompts = config.use_image_prompts
+        self.use_text_prompts = config.use_text_prompts
         self.use_action_state_prompts = config.use_action_state_prompts
         # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
@@ -299,13 +300,14 @@ class Pi0Incontextv12(_model.BaseModel):
             ar_mask += [False] * image_tokens.shape[1]
 
         # add language (aka tokenized inputs)
-        if obs.tokenized_prompt is not None:
-            tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
-            # tokenized_inputs = self.text_proj(tokenized_inputs)
-            tokens.append(tokenized_inputs)
-            input_mask.append(obs.tokenized_prompt_mask)
-            # full attention between image and language inputs
-            ar_mask += [False] * tokenized_inputs.shape[1]
+        if self.use_text_prompts:
+            if obs.tokenized_prompt is not None:
+                tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
+                # tokenized_inputs = self.text_proj(tokenized_inputs)
+                tokens.append(tokenized_inputs)
+                input_mask.append(obs.tokenized_prompt_mask)
+                # full attention between image and language inputs
+                ar_mask += [False] * tokenized_inputs.shape[1]
 
         # -------------------------------------------------------------------------
         # embed in-context images
