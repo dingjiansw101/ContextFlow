@@ -13,20 +13,23 @@
         "**/logs": true,
         "**/wandb": true,
         "**/nohup.out": true,
-        "**/checkpoints": true
+        "**/checkpoints": true,
+        "**/assets": true,
     },
 
     "search.exclude": {
     "**/logs": true,
     "**/wandb": true,
     "**/nohup.out": true,
-    "**/checkpoints": true
+    "**/checkpoints": true,
+    "**/assets": true,
     },
     "files.watcherExclude": {
     "**/logs/**": true,
     "**/wandb/**": true,
     "**/nohup.out": true,
-    "**/checkpoints": true
+    "**/checkpoints": true,
+    "**/assets": true,
     }
 
 }

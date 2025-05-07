@@ -81,6 +81,8 @@ class Pi0IncontextConfigv12(_model.BaseModelConfig):
     sample_actions: int = 32
     random_select: bool = True
 
+    avg_current_img: bool = False
+
     @property
     @override
     def model_type(self) -> _model.ModelType:
@@ -236,6 +238,7 @@ class Pi0Incontextv12(_model.BaseModel):
         self.use_image_prompts = config.use_image_prompts
         self.use_text_prompts = config.use_text_prompts
         self.use_action_state_prompts = config.use_action_state_prompts
+        self.avg_current_img = config.avg_current_img
         # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
         llm = nnx_bridge.ToNNX(
@@ -286,9 +289,13 @@ class Pi0Incontextv12(_model.BaseModel):
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
             # image_tokens = self.obs_img_proj(image_tokens)
+            if self.avg_current_img:
+                # import ipdb; ipdb.set_trace()
+                image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
             # import ipdb; ipdb.set_trace()
             # jax.debug.print("obs.image_masks = {}", obs.image_masks[name])
+
             input_mask.append(
                 einops.repeat(
                     obs.image_masks[name],

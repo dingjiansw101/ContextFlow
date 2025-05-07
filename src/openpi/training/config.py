@@ -3513,6 +3513,263 @@ _CONFIGS = [
     ),
 
     TrainConfig(
+        name="pi0_libero_incontextv12_6_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, avg_current_img=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_6_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, avg_current_img=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_4_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_5_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False, use_image_prompts=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False, use_image_prompts=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_5_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False, use_image_prompts=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_action_state_prompts=False, use_image_prompts=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_image_prompts=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_image_prompts=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    TrainConfig(
+        name="pi0_libero_incontextv12_3_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_image_prompts=False,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, use_image_prompts=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+
+    TrainConfig(
         name="pi0_libero_incontextv12_2_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
         model=pi0_incontextv12.Pi0IncontextConfigv12(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
