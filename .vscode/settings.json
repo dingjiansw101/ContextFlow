@@ -14,7 +14,6 @@
         "**/wandb": true,
         "**/nohup.out": true,
         "**/checkpoints": true,
-        "**/assets": true,
     },
 
     "search.exclude": {
