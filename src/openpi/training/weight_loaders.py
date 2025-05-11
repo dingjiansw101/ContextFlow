@@ -129,3 +129,151 @@ def _merge_params(loaded_params: at.Params, params: at.Params, *, missing_regex:
             result[k] = flat_ref[k]
 
     return flax.traverse_util.unflatten_dict(result, sep="/")
+
+
+# XJ: for customized ViT variants
+@dataclasses.dataclass(frozen=True)
+class RemapSigLIPPrefixLoader(WeightLoader):
+    # since openpi has rewrite the SigLIP/Vit source code: stack the encoderblocks to the following struction: (depth, ...)
+    # we manually stack the loaded public ckp from https://github.com/google-research/vision_transformer 
+    # and remap the embedding.kernel, pos_embedding, encoder_norm etc.
+    """
+    Loads vision encoder weights from a .npz file and remaps flat keys to a target prefix.
+    The result is a nested dict like {PaliGemma: {img: ...}} ready for replacement.
+
+    Example:
+        npz keys like "block1/conv1/kernel" will be mapped to
+        "PaliGemma/img/block1/conv1/kernel"
+    """
+    npz_path: str
+    target_prefix: str = "PaliGemma/img"
+    filter_regex: str = ".*"  
+    pool_type: str = "none"
+    # If verbose=True, print all loaded param keys and shapes for debugging
+    verbose: bool = False
+    
+    # please check the the following comment for reasons of replacing key names
+    remap_subkeys = {
+        "MlpBlock_3": "MlpBlock_0",
+        "MultiHeadDotProductAttention_1": "MultiHeadDotProductAttention_0",
+        "LayerNorm_2": "LayerNorm_1"
+    }
+
+    def load(self, params: at.Params) -> at.Params:
+        from openpi.shared import download
+        import collections
+        import jax.numpy as jnp
+
+        path = download.maybe_download(self.npz_path)
+        try:
+            with path.open("rb") as f:
+                raw = dict(np.load(f, allow_pickle=False))
+        except Exception as e:
+            raise ValueError(f"Failed to load .npz from {self.npz_path}: {e}. "
+                 f"Make sure the file exists and is a valid .npz archive.")
+
+        if self.verbose:
+            logger.info(f"[RemapPrefixLoader] Listing raw .npz content from {self.npz_path}:")
+            for k, v in raw.items():
+                logger.info(f"  {k}: shape={v.shape}, dtype={v.dtype}")
+
+        pattern = re.compile(self.filter_regex)
+        sub_params = {}
+        stacked_params = collections.defaultdict(list)
+
+        for k, v in raw.items():
+            if not pattern.fullmatch(k):
+                continue
+
+            # keep record for encoderblock_i 
+            m = re.match(r"Transformer/encoderblock_(\d+)/(.*)", k)
+            if m:
+                block_idx, subkey = m.groups()
+                for old_subkey, new_subkey in self.remap_subkeys.items():
+                    subkey = subkey.replace(old_subkey, new_subkey)
+                final_key = f"{self.target_prefix}/Transformer/encoderblock/{subkey}"
+                stacked_params[final_key].append((int(block_idx), jnp.array(v)))
+            else:
+                if k == "cls":
+                    # ignore cls if pool_type=None
+                    if self.pool_type=="none":
+                        sub_params[k] = jnp.array(v)
+                    else:
+                        logger.warning("[RemapPrefixLoader] Found `cls` token in .npz, but model pool_type = None; skipping.")
+                        continue
+                elif k == "Transformer/posembed_input/pos_embedding":
+                    # rename pos_embedding: since we need to skip cls token, we need to truncate the pos embedding of cls
+                    v = v[:, 1:, :]
+                    full_key = f"{self.target_prefix}/pos_embedding"
+                    sub_params[full_key] = jnp.array(v)    
+                elif k.startswith("head/"):
+                    logger.warning(f"[RemapPrefixLoader] Skipping head param `{k}` due to shape mismatch or task-specific logic.")
+                    continue
+                else:
+                    # normal remap
+                    full_key = f"{self.target_prefix}/{k}"
+                    sub_params[full_key] = jnp.array(v)
+
+        # stack all encoderblock 
+        for final_key, items in stacked_params.items():
+            items.sort(key=lambda x: x[0])
+            tensors = [v for _, v in items]
+            stacked_tensor = jnp.stack(tensors, axis=0)
+            sub_params[final_key] = stacked_tensor
+            
+            if self.verbose:
+                logger.info(f"[RemapPrefixLoader] stacked {final_key}: shape={stacked_tensor.shape}, dtype={stacked_tensor.dtype}")
+
+        if self.verbose:
+            for full_key, value in sub_params.items():
+                logger.info(f"[RemapPrefixLoader] {full_key}: shape={value.shape}, dtype={value.dtype}")
+        
+            logger.info(f"[RemapPrefixLoader] {len(sub_params)} parameters remapped under '{self.target_prefix}/'.")
+
+        return flax.traverse_util.unflatten_dict(sub_params, sep="/")
+
+
+# XJ: only load embedder
+@dataclasses.dataclass(frozen=True)
+class InputEmbedderLoader(WeightLoader):
+    """
+    Loads parameters containing 'llm/embedder' from a .npz checkpoint.
+    Supports nested structures and recursively inspects all keys.
+    """
+
+    params_path: str
+    substring: str = "llm/embedder"
+    verbose: bool = False
+
+    def load(self, params: at.Params) -> at.Params:
+        import jax.numpy as jnp
+
+        # Load checkpoint
+        try:
+            raw = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
+        except Exception as e:
+            raise ValueError(f"Failed to load .npz from {self.params_path}: {e}")
+
+        flat_params = flax.traverse_util.flatten_dict(raw, sep="/")
+        flat_expected = flax.traverse_util.flatten_dict(params, sep="/")
+
+        matched = {}
+        for k, v in flat_params.items():
+            if self.verbose:
+                logger.info(f"[InputEmbedderLoader] Key: {k} \t Type: {type(v)}"
+                            + (f" \t Shape: {getattr(v, 'shape', 'N/A')}" if isinstance(v, np.ndarray) else ""))
+            if self.substring in k:
+                expected_dtype = flat_expected.get(k, None)
+                if expected_dtype is not None:
+                    v = v.astype(expected_dtype.dtype)
+                if not isinstance(v, np.ndarray):
+                    raise TypeError(f"Matched key '{k}' has unexpected type: {type(v)}")
+                matched[k] = jnp.asarray(v)
+
+        if not matched:
+            raise ValueError(f"[InputEmbedderLoader] No keys found containing substring '{self.substring}'.")
+
+        if self.verbose:
+            logger.info(f"[InputEmbedderLoader] Total matched keys: {len(matched)}")
+
+        return flax.traverse_util.unflatten_dict(matched, sep="/")

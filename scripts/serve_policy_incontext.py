@@ -30,7 +30,8 @@ class EnvMode(enum.Enum):
     XJ_TEST6_WITHOUT_LORA = "pi0_libero_incontextv2_sample2_actionssample64"
     XJ_TEST6_WITHOUT_LORA_WITH_SPLIT = "pi0_libero_incontextv2_sample2_actionssample64_train_split"
     XJ_TEST6_WITHOUT_LORA_WITH_SPLIT_20K = "pi0_libero_incontextv2_sample2_actionssample64_train_split"
-
+    XJ_PI0LIGHT_V12_20K = "pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference"
+    
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -131,12 +132,17 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.XJ_TEST6_WITHOUT_LORA_WITH_SPLIT: Checkpoint(
         config="pi0_libero_incontextv2_sample2_actionssample64_test_split",
-        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split/39999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split/39999"
     ),
     EnvMode.XJ_TEST6_WITHOUT_LORA_WITH_SPLIT_20K: Checkpoint(
         config="pi0_libero_incontextv2_sample2_actionssample64_test_split",
-        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split_20k/19999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/pi0_libero_incontextv2_sample2_actionssample64_train_split/pi0_libero_incontextv2_sample2_actionssample64_train_split_20k/19999"
     ),
+    EnvMode.XJ_PI0LIGHT_V12_20K: Checkpoint(
+        config="pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/19999"
+    ),
+    
     
 }
 

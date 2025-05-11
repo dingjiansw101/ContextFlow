@@ -126,6 +126,27 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
             lora_configs={"attn": lora.LoRAConfig(rank=32, alpha=32.0), "ffn": lora.LoRAConfig(rank=32, alpha=32.0)},
             expert_name=expert_name,
         )
+    # XJ: customizer gemma mini models
+    if variant == "gemma_132m":
+        # 132M params (without embedder)
+        return Config(
+            width=2048,
+            depth=6,
+            mlp_dim=2048,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=256,
+        )    
+    if variant == "gemma_66m":
+        # 66M params
+        return Config(
+            width=1024,
+            depth=6,
+            mlp_dim=2048,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=256,
+        )   
     raise ValueError(f"Unknown variant: {variant}")
 
 

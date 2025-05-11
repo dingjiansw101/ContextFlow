@@ -27,6 +27,9 @@ import openpi.models.pi0_incontextv9 as pi0_incontextv9
 import openpi.models.pi0_incontextv10 as pi0_incontextv10
 import openpi.models.pi0_incontextv11 as pi0_incontextv11
 import openpi.models.pi0_incontextv12 as pi0_incontextv12
+import openpi.models.pi0_light as pi0Light
+import openpi.models.pi0light_incontextv12 as pi0light_incontextv12
+
 
 
 import openpi.models.tokenizer as _tokenizer
@@ -747,6 +750,8 @@ class TrainConfig:
 
     # A weight loader can optionally load (possibly partial) weights from disk after the model is initialized.
     weight_loader: weight_loaders.WeightLoader = dataclasses.field(default_factory=weight_loaders.NoOpWeightLoader)
+    # XJ: for cunstomizer image encoder
+    vision_weight_loader: weight_loaders.WeightLoader = dataclasses.field(default_factory=weight_loaders.NoOpWeightLoader)
 
     lr_schedule: _optimizer.LRScheduleConfig = dataclasses.field(default_factory=_optimizer.CosineDecaySchedule)
     optimizer: _optimizer.OptimizerConfig = dataclasses.field(default_factory=_optimizer.AdamW)
@@ -3797,6 +3802,81 @@ _CONFIGS = [
         # wandb_enabled=False,
     ), 
     #
+    # Pi0 Light
+    #
+    # Xianjie
+    TrainConfig(
+        # no delta with split
+        name="pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
+        ),  
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
+        ),
+        num_train_steps=20_000,
+        freeze_filter=pi0light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+    TrainConfig(
+        # no delta with split
+        name="pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
+        ),  
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
+        ),
+        num_train_steps=20_000,
+        freeze_filter=pi0light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+    
+    #
     # Fine-tuning Libero configs.
     #
     TrainConfig(
@@ -3901,7 +3981,7 @@ _CONFIGS = [
     ),
 
     #
-    # Fine-tuning RLBench configs
+    # XJ: Fine-tuning RLBench configs
     #
     TrainConfig(
         # no delta with split
@@ -3957,7 +4037,7 @@ _CONFIGS = [
         batch_size=36,
     ),
     #
-    # Fine-tuning robocasa configs.
+    # XJ: Fine-tuning robocasa configs.
     #
     # This is a test config that is used to illustate how train on a custom LeRobot dataset.
     # For instuctions on how to convert and train on your own Aloha dataset see examples/aloha_real/README.md
@@ -4066,7 +4146,41 @@ _CONFIGS = [
         num_workers=16,
         batch_size=32,
     ),  
-    
+    TrainConfig(
+        # no delta with split
+        name="pi0light_robocasa_human_three_image_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", siglip_variant="Ti/16"),  # So400m/14, Ti/16, S/32
+        data=LeRobotRobocasaHumanThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_human_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            # npz_path="gs://vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_none-wd_0.1-do_0.0-sd_0.0.npz", # S/32
+            npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
+        ),
+        num_train_steps=100_000,
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-4,
+            decay_steps= 100_000,
+            decay_lr= 2.5e-6),
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0Light.Pi0LightConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ),    
     
     #
     # Fine-tuning Aloha configs.
@@ -4142,30 +4256,127 @@ _CONFIGS = [
         num_train_steps=10,
         wandb_enabled=False,
     ),
-    
-    #
-    # XJ libero_with_depth: just to pull newly generated libero dataset with depth image but with more episodes
-    #
     TrainConfig(
-        name="pi0_depth_libero_low_mem_finetune",
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotLiberoDataConfig(
-            repo_id="daixianjie/libero_with_depth",
+        # no delta with split
+        name="debug_robocasa_human_three_image_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        # model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),  
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", siglip_variant="Ti/16"),  # So400m/14, Ti/16, S/32
+        data=LeRobotRobocasaHumanThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_human_lerobot",
             base_config=DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        # num_train_steps=30_000,
-        num_train_steps=40_000,
-        freeze_filter=pi0.Pi0Config(
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            # npz_path="gs://vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_none-wd_0.1-do_0.0-sd_0.0.npz", # S/32
+            npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
+        ),
+        num_train_steps=5_000,
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0Light.Pi0LightConfig(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
         ema_decay=None,
         num_workers=4,
+        batch_size=4,
+    ),
+    TrainConfig(
+        # no delta with split
+        name="debug_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
+        ),  
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
+        ),
+        num_train_steps=5_000,
+        freeze_filter=pi0light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+    
+
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py debug_pi0mini_libero_low_mem_finetune_split_train --exp-name=debug_pi0mini_libero_low_mem_finetune_split_train_ibex --overwrite
+        # this exp use customized paligemma and different pre-trained img encoder 
+        # which has train_test_split; without delta; language prompt; lora; 20k
+        name="debug_pi0mini_libero_low_mem_finetune_split_train",
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0Light.Pi0LightConfig(
+            paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
         batch_size=36,
     ),
+    
+
+    #
+    # XJ libero_with_depth: just to pull newly generated libero dataset with depth image but with more episodes
+    #
+    # TrainConfig(
+    #     name="pi0_depth_libero_low_mem_finetune",
+    #     model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+    #     data=LeRobotLiberoDataConfig(
+    #         repo_id="daixianjie/libero_with_depth",
+    #         base_config=DataConfig(
+    #             local_files_only=False,  # Set to True for local-only datasets.
+    #             prompt_from_task=True,
+    #         ),
+    #     ),
+    #     weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+    #     # num_train_steps=30_000,
+    #     num_train_steps=40_000,
+    #     freeze_filter=pi0.Pi0Config(
+    #         paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+    #     ).get_freeze_filter(),
+    #     ema_decay=None,
+    #     num_workers=4,
+    #     batch_size=36,
+    # ),
 ]
 
 if len({config.name for config in _CONFIGS}) != len(_CONFIGS):

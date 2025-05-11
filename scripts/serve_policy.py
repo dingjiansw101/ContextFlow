@@ -35,6 +35,7 @@ class EnvMode(enum.Enum):
     ALOHA_PEN_UNCAP_B5_LOW_MEM_TROSSWN_NORM = "pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm"
     FAST_ALOHA_PEN_UNCAP_B5_TROSSEN_NORM = "pi0_fast_aloha_pen_uncap_b5_trossen_norm"
     XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA = "pi0_libero_low_mem_finetune_split_train"
+    XJ_DEBUG_FROZEN_IMG_ENCODER_PI0 = "debug_libero_low_mem_finetune_split_train_inference"
 
 
 
@@ -163,7 +164,11 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA: Checkpoint(
         config="pi0_libero_low_mem_finetune_split_train",
-        dir="/ibex/tmp/c2090/openpi_explore_storage//checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/19999"
+        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/19999"
+    ),
+    EnvMode.XJ_DEBUG_FROZEN_IMG_ENCODER_PI0: Checkpoint(
+        config="debug_libero_low_mem_finetune_split_train_inference",
+        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/debug_libero_low_mem_finetune_split_train/debug_libero_low_mem_finetune_split_train/19999"
     ),
 }
 

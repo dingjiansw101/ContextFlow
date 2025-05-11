@@ -20,6 +20,9 @@ dcgm/
 train_inference_transform_check.py
 get_train_video.py
 dummy.py
+.vscode
+*summary.json
+
 
 # C extensions
 *.so
