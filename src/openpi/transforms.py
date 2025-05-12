@@ -184,11 +184,14 @@ class InjectDemoIndexes(DataTransformFn):
 
         # 2) choose frames per episode
         dem_prompt_indexes: List[List[int]] = []
+        # pos_list: List[List[int]] = []
+
         for ep in selected_episodes:
             frame_idxs = self.episode_to_indexes.get(ep, [])
             n = len(frame_idxs)
             if n > self.sample_frames:
                 pos = np.linspace(0, n - 1, num=self.sample_frames, dtype=int)
+                # pos_list.append(pos)
                 chosen = [frame_idxs[p] for p in pos]
             else:
                 chosen = frame_idxs
@@ -197,6 +200,8 @@ class InjectDemoIndexes(DataTransformFn):
         # 3) attach to data
         data["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
         data["dem_prompt_indexes"] = dem_prompt_indexes
+
+
         return data
 
 def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):

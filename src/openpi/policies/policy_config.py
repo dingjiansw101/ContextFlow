@@ -23,7 +23,7 @@ class PolicyConfig:
     input_layers: Sequence[transforms.DataTransformFn]
     output_layers: Sequence[transforms.DataTransformFn]
 
-    model_type: _model.ModelType = _model.ModelType.PI0
+    model_type: _model.ModelType = _model.ModelType.PI0 # TODO: check where used the model_type
     default_prompt: str | None = None
     sample_kwargs: dict[str, Any] | None = None
 

@@ -161,6 +161,7 @@ class ObservationIncontext(Generic[ArrayT]):
     # selected episode for incontext prompt
     incontext_selected_episode: at.Int[ArrayT, "*b e"] | None = None
 
+    
     # Tokenized prompt.
     tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
     # Tokenized prompt mask.

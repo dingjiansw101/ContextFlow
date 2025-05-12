@@ -282,26 +282,22 @@ class Pi0Incontextv12(_model.BaseModel):
     def embed_midfix_causal(
         self, obs: _model.ObservationIncontext
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
-
+        # TODO: this is hard-coded for 2 prompt images, need to be changed
         input_mask = []
         ar_mask = []
         tokens = []
 
-
-        # add language (aka tokenized inputs)
-        if self.use_text_prompts:
-            if obs.tokenized_prompt is not None:
-                tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
-                # tokenized_inputs = self.text_proj(tokenized_inputs)
-                tokens.append(tokenized_inputs)
-                input_mask.append(obs.tokenized_prompt_mask)
-                # full attention between image and language inputs
-                ar_mask += [False] * tokenized_inputs.shape[1]
-
         # -------------------------------------------------------------------------
         # embed in-context images
         # TODO: set a ratio to randomly mask input or prompt
+        # import ipdb; ipdb.set_trace()
+        assert self.use_image_prompts == True
+        assert self.use_action_state_prompts == True
+
         if self.use_image_prompts:
+            img_tokens_per_cam: dict[str, jnp.ndarray] = {}
+            img_input_mask_per_cam: dict[str, jnp.ndarray] = {}
+
             for name in obs.incontext_images:
                 image_sequence = obs.incontext_images[name]
                 if len(image_sequence.shape) == 6:
@@ -328,9 +324,12 @@ class Pi0Incontextv12(_model.BaseModel):
 
                 image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
                 # image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
-                tokens.append(image_sqeuence_tokens)
-                input_mask.append(obs.incontext_image_masks[name])
-                ar_mask += [False] * image_sqeuence_tokens.shape[1]
+                img_tokens_per_cam[name] = image_sqeuence_tokens
+                img_input_mask_per_cam[name] = obs.incontext_image_masks[name] 
+                # tokens.append(image_sqeuence_tokens)
+                # input_mask.append(obs.incontext_image_masks[name])
+                # jax.debug.print("name = {}, obs.incontext_image_masks = {}", name, obs.incontext_image_masks[name])
+                # ar_mask += [False] * image_sqeuence_tokens.shape[1]
 
         #------------------------------------------------------------------------
         # embed in-context states
@@ -343,9 +342,9 @@ class Pi0Incontextv12(_model.BaseModel):
             else:
                 dem_state_tokens = self.demo_state_proj(obs.incontext_states)
                 incontext_state_masks_input = obs.incontext_state_masks
-            tokens.append(dem_state_tokens)
-            input_mask.append(incontext_state_masks_input)
-            ar_mask += [False] * dem_state_tokens.shape[1]
+            # tokens.append(dem_state_tokens)
+            # input_mask.append(incontext_state_masks_input)
+            # ar_mask += [False] * dem_state_tokens.shape[1]
 
             #------------------------------------------------------------------------
             # embed in-context actions
@@ -356,10 +355,35 @@ class Pi0Incontextv12(_model.BaseModel):
             else:
                 dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
                 incontext_action_masks_input = obs.incontext_action_masks
-            tokens.append(dem_action_tokens)
-            input_mask.append(incontext_action_masks_input)
-            ar_mask += [False] * dem_action_tokens.shape[1]
+            # tokens.append(dem_action_tokens)
+            # input_mask.append(incontext_action_masks_input)
+            # ar_mask += [False] * dem_action_tokens.shape[1]
+        
+        batch_size_s, seq_len_s, dimension_s = dem_state_tokens.shape
+        inter_tokens = jnp.stack([dem_state_tokens, dem_action_tokens], axis=2).reshape(batch_size_s, 2*seq_len_s, dimension_s)  # (32, 2, 2048)
+        # jax.debug.print("inter_tokens shape = {}, dem_state_tokens shape = {}", inter_tokens.shape, dem_state_tokens.shape)
+        # jax.debug.print("Are states aligned? {}", jnp.allclose(inter_tokens[:, ::2, :], dem_state_tokens))
+        # import ipdb; ipdb.set_trace()
 
+        inter_mask = jnp.stack([incontext_state_masks_input, incontext_action_masks_input], axis=2).reshape(batch_size_s, 2*seq_len_s)  
+
+        # This part is hard coded
+        for name in obs.incontext_images:    
+            assert img_tokens_per_cam[name].shape[1] == 2
+            tokens.append(img_tokens_per_cam[name][:, 0, :].reshape(batch_size_s, 1, dimension_s))
+            input_mask.append(img_input_mask_per_cam[name][:, 0].reshape(batch_size_s, 1))
+
+        tokens.append(inter_tokens[:, :-2, :])
+        input_mask.append(inter_mask[:, :-2])
+        for name in obs.incontext_images:    
+            assert img_tokens_per_cam[name].shape[1] == 2
+            tokens.append(img_tokens_per_cam[name][:, 1, :].reshape(batch_size_s, 1, dimension_s))
+            input_mask.append(img_input_mask_per_cam[name][:, 1].reshape(batch_size_s, 1))
+
+        tokens.append(inter_tokens[:, -2:, :])
+        input_mask.append(inter_mask[:, -2:])
+
+        # import ipdb; ipdb.set_trace()
 
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
@@ -379,15 +403,26 @@ class Pi0Incontextv12(_model.BaseModel):
                 )
             )
             # image tokens attend to each other
-            ar_mask += [False] * image_tokens.shape[1]
+            # ar_mask += [False] * image_tokens.shape[1]
+
+        # add language (aka tokenized inputs)
+        if self.use_text_prompts:
+            if obs.tokenized_prompt is not None:
+                tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
+                # tokenized_inputs = self.text_proj(tokenized_inputs)
+                tokens.append(tokenized_inputs)
+                input_mask.append(obs.tokenized_prompt_mask)
+                # full attention between image and language inputs
+                # ar_mask += [False] * tokenized_inputs.shape[1]
 
         # ---------------------------------------------------------
-        assert len(ar_mask) > 0
-        # import ipdb; ipdb.set_trace()
-        tokens = jnp.concatenate(tokens, axis=1)
+        tokens = jnp.concatenate(tokens, axis=1) # (32, num_tokens, 2048)
         input_mask = jnp.concatenate(input_mask, axis=1)
 
+        # import ipdb; ipdb.set_trace()
+
         # ar_mask[0] = True
+        ar_mask = [True] * tokens.shape[1]
         ar_mask = jnp.array(ar_mask)
 
         return tokens, input_mask, ar_mask
@@ -409,7 +444,8 @@ class Pi0Incontextv12(_model.BaseModel):
                 image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
             # import ipdb; ipdb.set_trace()
-            # jax.debug.print("obs.image_masks = {}", obs.image_masks[name])
+            # jax.debug.print("name = {}, obs.image_masks = {}", name, obs.image_masks[name])
+
 
             input_mask.append(
                 einops.repeat(
@@ -559,7 +595,10 @@ class Pi0Incontextv12(_model.BaseModel):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
+        if self.causal_attention:
+            midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix_causal(observation)    
+        else:
+            midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
         suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(observation, x_t, time)
         input_mask = jnp.concatenate([midfix_mask, suffix_mask], axis=1)
         ar_mask = jnp.concatenate([midfix_ar_mask, suffix_ar_mask], axis=0)
@@ -589,8 +628,10 @@ class Pi0Incontextv12(_model.BaseModel):
         batch_size = observation.state.shape[0]
         noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
 
-
-        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
+        if self.causal_attention:
+            midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix_causal(observation)
+        else:
+            midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
         
         midfix_attn_mask = make_attn_mask(midfix_mask, midfix_ar_mask)
         positions = jnp.cumsum(midfix_mask, axis=1) - 1

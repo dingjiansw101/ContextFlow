@@ -415,6 +415,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
     tracks_path: str = "metadata/libero/episode_tracks_combined.json"
+    libero_input_refactor: bool = False
 
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
@@ -451,14 +452,25 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
         )
 
         # Convert images to uint8 numpy arrays, add masks
-        data_transforms = data_transforms.push(
-            inputs=[
-                libero_incontext_policy.LiberoIncontextInputs(
-                    action_dim=model_config.action_dim, model_type=model_config.model_type
-                )
-            ],
-            outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-        )
+        if self.libero_input_refactor:
+            data_transforms = data_transforms.push(
+                inputs=[
+                    libero_incontext_policy.LiberoIncontextInputs_refactor(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+        else:
+            data_transforms = data_transforms.push(
+                inputs=[
+                    libero_incontext_policy.LiberoIncontextInputs(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+        
         # TODO: fix the bug of libero actions.
         # fix it and re-train on libero
         # Use delta actions (not for gripper)
@@ -3497,7 +3509,6 @@ _CONFIGS = [
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
-
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3512,8 +3523,9 @@ _CONFIGS = [
         # wandb_enabled=False,
     ),
 
+    # TODO: libero_refactor is not tested. train and test it
     TrainConfig(
-        name="pi0_libero_incontextv12_7_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
         model=pi0_incontextv12.Pi0IncontextConfigv12(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
             sample_frames=2, sample_actions=32, random_select=True, 
@@ -3529,7 +3541,7 @@ _CONFIGS = [
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             remove_task_list=DEFAULT_LIBERO_TEST_TASK,
             episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
-
+            libero_input_refactor=True,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3544,9 +3556,8 @@ _CONFIGS = [
         # wandb_enabled=False,
     ),
 
-    # ablation of causal attention
     TrainConfig(
-        name="pi0_libero_incontextv12_7_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
         model=pi0_incontextv12.Pi0IncontextConfigv12(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
             sample_frames=2, sample_actions=32, random_select=True, 
@@ -3562,13 +3573,79 @@ _CONFIGS = [
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
-
+            libero_input_refactor=True,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
         freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
             sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=4,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    # TODO: 12_7 is not finished yet, finish it
+    TrainConfig(
+        name="pi0_libero_incontextv12_7_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, causal_attention=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            # libero_input_refactor=True,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, causal_attention=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        # num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    # ablation of causal attention
+    TrainConfig(
+        name="pi0_libero_incontextv12_7_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, causal_attention=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            # libero_input_refactor=True,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, causal_attention=True,
         ).get_freeze_filter(),
         ema_decay=None,
         # num_workers=16,
