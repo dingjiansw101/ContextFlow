@@ -128,19 +128,21 @@ class InjectDemoIndexes(DataTransformFn):
     ``dem_prompt_indexes`` : List[List[int]]  (parallel to selected_episode)
     """
 
-    task_to_episode_path: Path = Path("metadata/libero/task_to_episode.json")
-    episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json")
+    task_to_episode: str = "metadata/libero/task_to_episode.json"
+    episode_to_indexes: str = "metadata/libero/episode_to_indexes.json"
+
     sample_frames: int = 16
     random_select: bool = True
     sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None
 
     def __post_init__(self):
-
+        task_to_episode_path = Path(self.task_to_episode)
+        episode_to_indexes_path = Path(self.episode_to_indexes)
         # Load JSON files using Path.open()
-        with self.task_to_episode_path.open("r") as f:
+        with task_to_episode_path.open("r") as f:
             task_to_episode_str = json.load(f)
-        with self.episode_to_indexes_path.open("r") as f:
+        with episode_to_indexes_path.open("r") as f:
             episode_to_indexes_str = json.load(f)
 
         # Convert dictionary keys from strings to integers

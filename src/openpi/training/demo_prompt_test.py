@@ -90,8 +90,8 @@ def test_libero_dataset():
         # The dataset sample orders are the exactly the same as shown in huggingface
         # check the details of LeRobotDataset to see if we can use its functions
 
-    # dataset = transform_dataset(dataset, data_config, skip_norm_stats=False)
-    dataset = transform_dataset(dataset, data_config, skip_norm_stats=True)
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=False)
+    # dataset = transform_dataset(dataset, data_config, skip_norm_stats=True)
     for i in range(len(dataset)):
         print(dataset[i].keys())
         # dict_keys(['state', 'image', 'image_mask', 'actions',
@@ -100,5 +100,5 @@ def test_libero_dataset():
         # ipdb.set_trace()
 
 
-# if __name__ == "__main__":
-#     test_libero_dataset()
+if __name__ == "__main__":
+    test_libero_dataset()
