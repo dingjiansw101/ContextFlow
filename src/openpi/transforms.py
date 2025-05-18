@@ -128,19 +128,21 @@ class InjectDemoIndexes(DataTransformFn):
     ``dem_prompt_indexes`` : List[List[int]]  (parallel to selected_episode)
     """
 
-    task_to_episode_path: Path = Path("metadata/libero/task_to_episode.json")
-    episode_to_indexes_path: Path = Path("metadata/libero/episode_to_indexes.json")
+    task_to_episode: str = "metadata/libero/task_to_episode.json"
+    episode_to_indexes: str = "metadata/libero/episode_to_indexes.json"
+
     sample_frames: int = 16
     random_select: bool = True
     sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None
 
     def __post_init__(self):
-
+        task_to_episode_path = Path(self.task_to_episode)
+        episode_to_indexes_path = Path(self.episode_to_indexes)
         # Load JSON files using Path.open()
-        with self.task_to_episode_path.open("r") as f:
+        with task_to_episode_path.open("r") as f:
             task_to_episode_str = json.load(f)
-        with self.episode_to_indexes_path.open("r") as f:
+        with episode_to_indexes_path.open("r") as f:
             episode_to_indexes_str = json.load(f)
 
         # Convert dictionary keys from strings to integers
@@ -184,11 +186,14 @@ class InjectDemoIndexes(DataTransformFn):
 
         # 2) choose frames per episode
         dem_prompt_indexes: List[List[int]] = []
+        # pos_list: List[List[int]] = []
+
         for ep in selected_episodes:
             frame_idxs = self.episode_to_indexes.get(ep, [])
             n = len(frame_idxs)
             if n > self.sample_frames:
                 pos = np.linspace(0, n - 1, num=self.sample_frames, dtype=int)
+                # pos_list.append(pos)
                 chosen = [frame_idxs[p] for p in pos]
             else:
                 chosen = frame_idxs
@@ -197,6 +202,8 @@ class InjectDemoIndexes(DataTransformFn):
         # 3) attach to data
         data["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
         data["dem_prompt_indexes"] = dem_prompt_indexes
+
+
         return data
 
 def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
