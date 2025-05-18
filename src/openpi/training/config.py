@@ -44,6 +44,7 @@ import openpi.policies.robocasa_insertion_policy as robocasa_insertion_policy
 import openpi.policies.robocasa_human_policy as robocasa_human_policy
 import openpi.policies.robocasa_human_three_image_policy as robocasa_human_three_image_policy
 import openpi.policies.robocasa_human_three_image_base_obs_policy as robocasa_human_three_image_base_obs_policy
+import openpi.policies.robocasa_single_task_policy as robocasa_single_task_policy
 
 
 import openpi.shared.download as _download
@@ -702,6 +703,38 @@ class LeRobotRobocasaHumanThreeImageDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
         )
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotRobocasaSingleTaskThreeImageDataConfig(DataConfigFactory):
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/image_left": "image_left",
+                        "observation/image_right": "image_right",
+                        "observation/wrist_image": "wrist_image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+
+        data_transforms = _transforms.Group(
+            inputs=[robocasa_single_task_policy.RobocasaSingleTaskThreeImageInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
+            outputs=[robocasa_single_task_policy.RobocasaSingleTaskThreeImageOutputs()],
+        )
+        model_transforms = ModelTransformFactory()(model_config)
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+        )       
+
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotRobocasaHumanThreeImageBaseObsDataConfig(DataConfigFactory):
@@ -3979,63 +4012,53 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-
-    #
-    # XJ: Fine-tuning RLBench configs
-    #
-    TrainConfig(
-        # no delta with split
-        name="pi0_rlbench_gripper_low_mem_finetune_train",
-        # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotRLBenchGripperDataConfig(
-            repo_id="daixianjie/rlbench_lerobot_train",
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        # The freeze filter defines which parameters should be frozen during training.
-        # We have a convenience function in the model config that returns the default freeze filter
-        # for the given model config for LoRA finetuning. Just make sure it matches the model config
-        # you chose above.
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        # Turn off EMA for LoRA finetuning.
-        ema_decay=None,
-        num_workers=4,
-        batch_size=36,
-    ),
     
-    TrainConfig(
-        # no delta with split
-        name="pi0_rlbench_joint_low_mem_finetune_train",
-        # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotRLBenchJointDataConfig(
-            repo_id="daixianjie/rlbench_joint_vel_action_lerobot_train",
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        # The freeze filter defines which parameters should be frozen during training.
-        # We have a convenience function in the model config that returns the default freeze filter
-        # for the given model config for LoRA finetuning. Just make sure it matches the model config
-        # you chose above.
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        # Turn off EMA for LoRA finetuning.
-        ema_decay=None,
-        num_workers=4,
-        batch_size=36,
-    ),
+    # #
+    # # XJ: Fine-tuning RLBench configs
+    # #
+    # TrainConfig(
+    #     name="pi0_rlbench_gripper_low_mem_finetune_train",
+    #     model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+    #     data=LeRobotRLBenchGripperDataConfig(
+    #         repo_id="daixianjie/rlbench_lerobot_train",
+    #         base_config=DataConfig(
+    #             local_files_only=False,  # Set to True for local-only datasets.
+    #             prompt_from_task=True,
+    #         ),
+    #     ),
+    #     weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+    #     num_train_steps=20_000,
+    #     freeze_filter=pi0.Pi0Config(
+    #         paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+    #     ).get_freeze_filter(),
+    #     # Turn off EMA for LoRA finetuning.
+    #     ema_decay=None,
+    #     num_workers=4,
+    #     batch_size=36,
+    # ),
+    
+    # TrainConfig(
+    #     name="pi0_rlbench_joint_low_mem_finetune_train",
+    #     # Here is an example of loading a pi0 model for LoRA fine-tuning.
+    #     model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+    #     data=LeRobotRLBenchJointDataConfig(
+    #         repo_id="daixianjie/rlbench_joint_vel_action_lerobot_train",
+    #         base_config=DataConfig(
+    #             local_files_only=False,  # Set to True for local-only datasets.
+    #             prompt_from_task=True,
+    #         ),
+    #     ),
+    #     weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+    #     num_train_steps=20_000,
+    #     freeze_filter=pi0.Pi0Config(
+    #         paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+    #     ).get_freeze_filter(),
+    #     # Turn off EMA for LoRA finetuning.
+    #     ema_decay=None,
+    #     num_workers=4,
+    #     batch_size=36,
+    # ),
+    
     #
     # XJ: Fine-tuning robocasa configs.
     #
@@ -4120,32 +4143,34 @@ _CONFIGS = [
         num_workers=16,
         batch_size=32,
     ),
-    TrainConfig(
-        # no delta with split
-        name="pi0_robocasa_human_three_image_base_obs_low_mem_finetune_train",
-        # Here is an example of loading a pi0 model for LoRA fine-tuning.
-        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-        data=LeRobotRobocasaHumanThreeImageBaseObsDataConfig(
-            repo_id="daixianjie/robocasa_human_lerobot",
-            base_config=DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        # The freeze filter defines which parameters should be frozen during training.
-        # We have a convenience function in the model config that returns the default freeze filter
-        # for the given model config for LoRA finetuning. Just make sure it matches the model config
-        # you chose above.
-        freeze_filter=pi0.Pi0Config(
-            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-        ).get_freeze_filter(),
-        # Turn off EMA for LoRA finetuning.
-        ema_decay=None,
-        num_workers=16,
-        batch_size=32,
-    ),  
+    
+    # TrainConfig(
+    #     # no delta with split
+    #     name="pi0_robocasa_human_three_image_base_obs_low_mem_finetune_train",
+    #     # Here is an example of loading a pi0 model for LoRA fine-tuning.
+    #     model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+    #     data=LeRobotRobocasaHumanThreeImageBaseObsDataConfig(
+    #         repo_id="daixianjie/robocasa_human_lerobot",
+    #         base_config=DataConfig(
+    #             local_files_only=False,  # Set to True for local-only datasets.
+    #             prompt_from_task=True,
+    #         ),
+    #     ),
+    #     weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+    #     num_train_steps=20_000,
+    #     # The freeze filter defines which parameters should be frozen during training.
+    #     # We have a convenience function in the model config that returns the default freeze filter
+    #     # for the given model config for LoRA finetuning. Just make sure it matches the model config
+    #     # you chose above.
+    #     freeze_filter=pi0.Pi0Config(
+    #         paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+    #     ).get_freeze_filter(),
+    #     # Turn off EMA for LoRA finetuning.
+    #     ema_decay=None,
+    #     num_workers=16,
+    #     batch_size=32,
+    # ),  
+    
     TrainConfig(
         # no delta with split
         name="pi0light_robocasa_human_three_image_low_mem_finetune_train",
@@ -4180,7 +4205,129 @@ _CONFIGS = [
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+    ), 
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py debug_pi0mini_libero_low_mem_finetune_split_train --exp-name=debug_pi0mini_libero_low_mem_finetune_split_train_ibex --overwrite
+        # this exp use customized paligemma and different pre-trained img encoder 
+        # which has train_test_split; without delta; language prompt; lora; 20k
+        name="pi0mini_robocasa_human_three_image_low_mem_finetune_train",
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaHumanThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_human_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0Light.Pi0LightConfig(
+            paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=36,
     ),    
+    
+    TrainConfig(
+        # no delta with split
+        name="pi0_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRobocasaSingleTaskThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_turnonmicrowave_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+    TrainConfig(
+        # no delta with split
+        name="pi0light_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", siglip_variant="S/16"),  # So400m/14, Ti/16, S/32
+        data=LeRobotRobocasaHumanThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_turnonmicrowave_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            # npz_path="gs://vit_models/augreg/S_32-i21k-300ep-lr_0.001-aug_none-wd_0.1-do_0.0-sd_0.0.npz", # S/32
+            npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
+        ),
+        num_train_steps=20_000,
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-4,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        # The freeze filter defines which parameters should be frozen during training.
+        # We have a convenience function in the model config that returns the default freeze filter
+        # for the given model config for LoRA finetuning. Just make sure it matches the model config
+        # you chose above.
+        freeze_filter=pi0Light.Pi0LightConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ),
+    TrainConfig(
+        # no delta with split
+        name="pi0mini_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaHumanThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_turnonmicrowave_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0Light.Pi0LightConfig(
+            paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=36,
+    ),
+    
+       
     
     #
     # Fine-tuning Aloha configs.
@@ -4352,6 +4499,8 @@ _CONFIGS = [
         num_workers=8,
         batch_size=36,
     ),
+    
+
     
 
     #
