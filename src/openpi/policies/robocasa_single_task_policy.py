@@ -13,10 +13,10 @@ import math
 
 
 
-def make_robocasa_human_three_image_base_obs_example() -> dict:
+def make_robocasa_single_task_three_image_example() -> dict:
     """Creates a random input example for the RLBench policy."""
     return {
-        "observation/state": np.random.rand(14),
+        "observation/state": np.random.rand(9),
         "observation/image_left": np.random.randint(256, size=(128, 128, 3), dtype=np.uint8),
         "observation/image_right": np.random.randint(256, size=(128, 128, 3), dtype=np.uint8),
         "observation/wrist_image": np.random.randint(256, size=(128, 128, 3), dtype=np.uint8),
@@ -56,70 +56,46 @@ def _quat2axisangle(quat):
 
 
 @dataclasses.dataclass(frozen=True)
-class RobocasaHumanThreeImageBaseObsInputs(transforms.DataTransformFn):
+class RobocasaSingleTaskThreeImageInputs(transforms.DataTransformFn):
     """
     This class is used to convert inputs to the model to the expected format. It is used for both training and inference.
 
     For your own dataset, you can copy this class and modify the keys based on the comments below to pipe
     the correct elements of your dataset into the model.
     """
-
-    # The action dimension of the model. Will be used to pad state and actions for pi0 model (not pi0-FAST).
-    # Do not change this for your own dataset.
     action_dim: int
 
-    # Determines which model will be used.
-    # Do not change this for your own dataset.
     model_type: _model.ModelType = _model.ModelType.PI0
 
     def __call__(self, data: dict) -> dict:
         # We only mask padding for pi0 model, not pi0-FAST. Do not change this for your own dataset.
         mask_padding = self.model_type == _model.ModelType.PI0
-
-        # We pad the proprioceptive input to the action dimension of the model.
-        # For pi0-FAST, we don't pad the state. For RLBench, we do need to differentiate
-        # since the pi0-FAST action_dim = 7, which is < state_dim = 8, so pad is skipped.
-        # Keep this for your own dataset, but if your dataset stores the proprioceptive input
-        # in a different key than "observation/state", you should change it below.
         
         get_ob = data["observation/state"]
         if len(get_ob.shape) == 2:
             # get components of action
-            pos = get_ob[:, :3]                        # eef_pos
-            quat = get_ob[:, 3:7]                      # eef_quat
-            gripper = get_ob[:, 7:9]                   # gripper_qpos
-            base_pos = get_ob[:, 18:21]                # base_pos
-            base_quat = get_ob[:, 21:]               # base_quat
+            pos = get_ob[:, 11:14] 
+            quat = get_ob[:, 14:18]
+            gripper = get_ob[:, 7:9]
 
-            axis_angle = np.stack([_quat2axisangle(q) for q in quat])         # (N, 3)
-            base_axis_angle = np.stack([_quat2axisangle(q) for q in base_quat])  # (N, 3)
+                # convert to axis-angle (in batch)
+            axis_angle = np.stack([_quat2axisangle(q) for q in quat])
 
-            convert_ob = np.concatenate([pos, axis_angle, gripper, base_pos, base_axis_angle], axis=1).astype(np.float32)
-
+                # concat：pos + axis_angle + gripper
+            convert_ob = np.concatenate([pos, axis_angle, gripper], axis=1, dtype=np.float32)
         else:
-            pos = get_ob[:3]
-            quat = get_ob[3:7]
+            pos = get_ob[11:14] 
+            quat = get_ob[14:18]
             gripper = get_ob[7:9]
-            base_pos = get_ob[18:21]
-            base_quat = get_ob[21:]
 
+                # convert to axis-angle (in batch)
             axis_angle = _quat2axisangle(quat)
-            base_axis_angle = _quat2axisangle(base_quat)
+                # concat：pos + axis_angle + gripper
+            convert_ob = np.concatenate([pos, axis_angle, gripper], axis=0, dtype=np.float32)
 
-            convert_ob = np.concatenate([pos, axis_angle, gripper, base_pos, base_axis_angle], axis=0).astype(np.float32)
+        new_obs = transforms.pad_to_dim(convert_ob, self.action_dim)
+        state = transforms.pad_to_dim(new_obs, self.action_dim)
 
-        
-        state = transforms.pad_to_dim(convert_ob, self.action_dim)
-
-        # Possibly need to parse images to uint8 (H,W,C) since LeRobot automatically
-        # stores as float32 (C,H,W), gets skipped for policy inference.
-        # Keep this for your own dataset, but if your dataset stores the images
-        # in a different key than "observation/image" or "observation/wrist_image",
-        # you should change it below.
-        # Pi0 models support three image inputs at the moment: one third-person view,
-        # and two wrist views (left and right). If your dataset does not have a particular type
-        # of image, e.g. wrist images, you can comment it out here and replace it with zeros like we do for the
-        # right wrist image below.
         base_image_left = _parse_image(data["observation/image_left"])
         base_image_right = _parse_image(data["observation/image_right"])
 
@@ -140,18 +116,10 @@ class RobocasaHumanThreeImageBaseObsInputs(transforms.DataTransformFn):
             },
         }
 
-        # Pad actions to the model action dimension. Keep this for your own dataset.
-        # Actions are only available during training.
         if "actions" in data:
-            # We are padding to the model action dim.
-            # For pi0-FAST, this is a no-op (since action_dim = 7).
-
             actions = transforms.pad_to_dim(data["actions"], self.action_dim)
             inputs["actions"] = actions
 
-        # Pass the prompt (aka language instruction) to the model.
-        # Keep this for your own dataset (but modify the key if the instruction is not
-        # stored in "prompt"; the output dict always needs to have the key "prompt").
         if "prompt" in data:
             inputs["prompt"] = data["prompt"]
 
@@ -159,7 +127,7 @@ class RobocasaHumanThreeImageBaseObsInputs(transforms.DataTransformFn):
 
 
 @dataclasses.dataclass(frozen=True)
-class RobocasaHumanThreeImageBaseObsOutputs(transforms.DataTransformFn):
+class RobocasaSingleTaskThreeImageOutputs(transforms.DataTransformFn):
     """
     This class is used to convert outputs from the model back the the dataset specific format. It is
     used for inference only.
