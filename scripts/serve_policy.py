@@ -37,7 +37,13 @@ class EnvMode(enum.Enum):
     XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA = "pi0_libero_low_mem_finetune_split_train"
     XJ_DEBUG_FROZEN_IMG_ENCODER_PI0 = "debug_libero_low_mem_finetune_split_train_inference"
 
+    ## XJ: supplementary
+    ROBOCASA_HUMAN_THREE_IMAGE = 'pi0_robocasa_human_three_image_low_mem_finetune_train'
+    XJ_PI0MINI_ROBOCASA_HUMAN_THREE_IMAGE = "pi0mini_robocasa_human_three_image_low_mem_finetune_train"
 
+    XJ_PI0_ROBOCASA_TURNONMICROWAVE_THREE_IMAGE = "pi0_robocasa_turnonmicrowave_three_image_low_mem_finetune_train"
+    XJ_PI0MINI_ROBOCASA_TURNONMICROWAVE_THREE_IMAGE="pi0mini_robocasa_turnonmicrowave_three_image_low_mem_finetune_train"
+    
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -164,11 +170,29 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ),
     EnvMode.XJ_BASE_WITH_DELTA_WITH_SPLIT_LORA: Checkpoint(
         config="pi0_libero_low_mem_finetune_split_train",
-        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/19999"
+        dir="./checkpoints/pi0_libero_low_mem_finetune_split_train/pi0_libero_low_mem_finetune_split_train/19999"
     ),
     EnvMode.XJ_DEBUG_FROZEN_IMG_ENCODER_PI0: Checkpoint(
         config="debug_libero_low_mem_finetune_split_train_inference",
-        dir="/ibex/tmp/c2090/openpi_explore_storage/checkpoints/debug_libero_low_mem_finetune_split_train/debug_libero_low_mem_finetune_split_train/19999"
+        dir="./checkpoints/debug_libero_low_mem_finetune_split_train/debug_libero_low_mem_finetune_split_train/19999"
+    ),
+    
+    # robocasa related
+    EnvMode.ROBOCASA_HUMAN_THREE_IMAGE: Checkpoint(
+        config="pi0_robocasa_human_three_image_low_mem_finetune_train",
+        dir="./checkpoints/pi0_robocasa_human_three_image_low_mem_finetune_train/pi0_robocasa_human_three_image_low_mem_finetune_train/100000",
+    ),
+    EnvMode.XJ_PI0MINI_ROBOCASA_HUMAN_THREE_IMAGE: Checkpoint(
+        config="pi0mini_robocasa_human_three_image_low_mem_finetune_train",
+        dir="./checkpoints/pi0mini_robocasa_human_three_image_low_mem_finetune_train/pi0mini_robocasa_human_three_image_low_mem_finetune_train/499999"
+    ),
+    EnvMode.XJ_PI0_ROBOCASA_TURNONMICROWAVE_THREE_IMAGE: Checkpoint(
+        config="pi0_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
+        dir="/home/xianjid/project/pi0/openpi/checkpoints/pi0_robocasa_turnonmicrowave_three_image_low_mem_finetune_train/pi0_robocasa_turnonmicrowave_three_image_low_mem_finetune_train/19999"
+    ),
+    EnvMode.XJ_PI0MINI_ROBOCASA_TURNONMICROWAVE_THREE_IMAGE: Checkpoint(
+        config="pi0mini_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
+        dir="./checkpoints/pi0mini_robocasa_human_three_image_low_mem_finetune_train/pi0mini_robocasa_human_three_image_low_mem_finetune_train/499999"
     ),
 }
 

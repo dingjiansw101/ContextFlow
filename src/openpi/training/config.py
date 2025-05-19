@@ -5420,7 +5420,7 @@ _CONFIGS = [
         name="pi0light_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
         # Here is an example of loading a pi0 model for LoRA fine-tuning.
         model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", siglip_variant="S/16"),  # So400m/14, Ti/16, S/32
-        data=LeRobotRobocasaHumanThreeImageDataConfig(
+        data=LeRobotRobocasaSingleTaskThreeImageDataConfig(
             repo_id="daixianjie/robocasa_turnonmicrowave_lerobot",
             base_config=DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
@@ -5454,7 +5454,7 @@ _CONFIGS = [
         # no delta with split
         name="pi0mini_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
         model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
-        data=LeRobotRobocasaHumanThreeImageDataConfig(
+        data=LeRobotRobocasaSingleTaskThreeImageDataConfig(
             repo_id="daixianjie/robocasa_turnonmicrowave_lerobot",
             base_config=DataConfig(
                 local_files_only=False,  
@@ -5471,6 +5471,7 @@ _CONFIGS = [
             decay_steps= 500_000,
             decay_lr= 2.5e-6),
         num_train_steps=500_000,
+        save_interval = 50_000,
         freeze_filter=pi0Light.Pi0LightConfig(
             paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
         ).get_freeze_filter(),

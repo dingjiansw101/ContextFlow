@@ -147,6 +147,7 @@ def eval_robocasa(args: Args) -> None:
             args.dataset_path)
     env_meta['env_kwargs']['use_object_obs'] = False
     env_meta['env_kwargs'].update(DEFAULT_EVAL_UPDATE_KWARGS)
+    env_meta['env_kwargs']["camera_names"] = ["robot0_agentview_left", "robot0_agentview_right", "robot0_eye_in_hand"]
     env = _get_robocasa_env(env_meta, SHAPE_META, enable_render=True)
     # Start episodes
     task_episodes, task_successes = 0, 0

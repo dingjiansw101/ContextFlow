@@ -22,7 +22,8 @@ get_train_video.py
 dummy.py
 .vscode
 *summary.json
-
+inference_all_task.sh
+.vscode/settings.json
 
 # C extensions
 *.so
