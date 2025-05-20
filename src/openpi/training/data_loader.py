@@ -274,7 +274,14 @@ def create_incontext_data_loader(
 
     if config.model.use_action_state_prompts:
         print("Using action-state prompt")
-        add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
+        if config.data.episode_to_indexes_file is not None:
+            add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
+                                                                states_cache_path=config.data.states_cache_path,
+                                                                actions_cache_path=config.data.actions_cache_path,
+                                                                episode_to_indexes_file=config.data.episode_to_indexes_file,
+                                                                )                                        
+        else:
+            add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path)
         dataset = TransformedDataset(dataset, [add_demo_transform])
