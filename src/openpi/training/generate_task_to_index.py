@@ -5,7 +5,7 @@ OpenPI dataset configuration and optionally prints a few example samples before
 and after transformation.
 
 Usage (CLI):
-    python test_dataset_refactor.py --config pi0_libero --output_dir metadata/libero
+    uv run src/openpi/training/generate_task_to_index.py --config pi0mini_robocasa_human_three_image_low_mem_finetune_train --output_dir metadata/robocasa
 
 You can also import and call `test_dataset` programmatically:
 

@@ -259,6 +259,8 @@ class DataConfigFactory(abc.ABC):
     remove_task_list: tyro.conf.Suppress[Optional[List[str]]] = None
     # episode_json_path: a json that contains the episode index and task name
     episode_json_path: tyro.conf.Suppress[Optional[str]] = None
+    task_to_episode: tyro.conf.Suppress[Optional[str]] = None
+    episode_to_indexes_file: tyro.conf.Suppress[Optional[str]] = None
 
 
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
@@ -811,7 +813,9 @@ class LeRobotRobocasaHumanThreeImageDataConfig(DataConfigFactory):
 @dataclasses.dataclass(frozen=True)
 class LeRobotRobocasaHumanThreeImageIncontextDataConfig(DataConfigFactory):
     states_cache_path: str = "metadata/robocasa/episode_states_cache.json"
-    actions_cache_path: str = "metadata/robocasa/episode_actions_first_cache.json"
+    actions_cache_path: str = "metadata/robocasa/episode_actions_cache.json"
+    task_to_episode: str='metadata/robocasa/task_to_episode.json'
+    episode_to_indexes_file: str='metadata/robocasa/episode_to_indexes.json'
     tracks_path: str = "metadata/robocasa/episode_tracks_combined.json"
     # # XJ: deprecated flags
     # use_delta_joint_actions: bool = False
@@ -846,6 +850,8 @@ class LeRobotRobocasaHumanThreeImageIncontextDataConfig(DataConfigFactory):
             inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, 
                                                   random_select=model_config.random_select,
                                                   sample_episodes=model_config.sample_episodes,
+                                                  task_to_episode=self.task_to_episode,
+                                                  episode_to_indexes=self.episode_to_indexes_file,
                                                   train_episode_index_list=train_epi)],
             outputs=[],
         )
@@ -5461,10 +5467,12 @@ _CONFIGS = [
                 local_files_only=False,  
                 prompt_from_task=True,
             ),
-            states_cache_path="metadata/robocasa/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/robocasa/episode_actions_without_delta_cache.json",
-            remove_task_list=DEFAULT_ROBOCASA_TEST_TASK,
-            episode_json_path=DEFAULT_ROBOCASA_EPISODE_JSON,
+            task_to_episode='metadata/robocasa/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa/episode_actions_cache.json",
+            # remove_task_list=DEFAULT_ROBOCASA_TEST_TASK,
+            # episode_json_path=DEFAULT_ROBOCASA_EPISODE_JSON,
         ),
         vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16

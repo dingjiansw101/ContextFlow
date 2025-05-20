@@ -141,18 +141,35 @@ def create_trained_policy_incontext(
 
     if train_config.model.use_action_state_prompts:
         print("Inference: Adding action state prompts")
-        input_transforms.append(
+        if train_config.data.episode_to_indexes_file is not None:
+            input_transforms.append(
                         transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=train_config.model.sample_actions,
                                               states_cache_path=train_config.data.states_cache_path,
-                                              actions_cache_path=train_config.data.actions_cache_path)
+                                              actions_cache_path=train_config.data.actions_cache_path,
+                                              episode_to_indexes_file=train_config.data.episode_to_indexes_file,
+                                              )
         )
+        else:
+            input_transforms.append(
+                            transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=train_config.model.sample_actions,
+                                                states_cache_path=train_config.data.states_cache_path,
+                                                actions_cache_path=train_config.data.actions_cache_path
+                                                )
+            )
 
     if train_config.model.use_point_track_prompts:
         print("Inference: Adding point track prompts")
-        input_transforms.append(
-            transforms.AddPointTrackPromptTransform(max_len=train_config.model.sample_actions,
-                                                    tracks_path=train_config.data.tracks_path)
-        )
+        if train_config.data.episode_to_indexes_file is not None:
+            input_transforms.append(
+                transforms.AddPointTrackPromptTransform(max_len=train_config.model.sample_actions,
+                                                        tracks_path=train_config.data.tracks_path),
+                                                        episode_to_indexes_file=train_config.data.episode_to_indexes_file,
+            )
+        else:
+            input_transforms.append(
+                transforms.AddPointTrackPromptTransform(max_len=train_config.model.sample_actions,
+                                                        tracks_path=train_config.data.tracks_path)
+            )
 
 
     return _policy_incontext.PolicyIncontext(
