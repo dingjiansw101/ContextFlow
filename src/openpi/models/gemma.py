@@ -137,6 +137,7 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
             num_heads=8,
             num_kv_heads=1,
             head_dim=256,
+            expert_name=expert_name,
         )    
     if variant == "gemma_66m":
         # 66M params
@@ -147,6 +148,7 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
             num_heads=8,
             num_kv_heads=1,
             head_dim=256,
+            expert_name=expert_name,
         )   
     raise ValueError(f"Unknown variant: {variant}")
 

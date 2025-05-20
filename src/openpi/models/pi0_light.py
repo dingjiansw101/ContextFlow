@@ -220,6 +220,7 @@ class Pi0Light(_model.BaseModel):
         )
         llm.lazy_init(rngs=rngs, method="init")
         
+        # XJ
         siglip_variant = config.siglip_variant # "So400m/14", "Ti/16", "S/32",
         pool_type = config.pool_type
         img = nnx_bridge.ToNNX(
@@ -238,6 +239,7 @@ class Pi0Light(_model.BaseModel):
                 dtype_mm=config.dtype,
             )
         )
+        
         img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
         self.PaliGemma = nnx.Dict(llm=llm, img=img)
         self.state_proj = nnx.Linear(config.action_dim, action_expert_config.width, rngs=rngs)
