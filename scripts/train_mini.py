@@ -275,7 +275,7 @@ def init_train_state(
         return train_state_shape, state_sharding
 
     # XJ:debug
-    if isinstance(config.weight_loader, _weight_loaders.NoOpWeightLoader):
+    if isinstance(config.vision_weight_loader, _weight_loaders.NoOpWeightLoader):
         partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict())
     else:
         partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict(), vision_encoder_loader = config.vision_weight_loader)
