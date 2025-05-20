@@ -5490,7 +5490,7 @@ _CONFIGS = [
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=16,
+        num_workers=8,
         batch_size=36,
     ), 
     
