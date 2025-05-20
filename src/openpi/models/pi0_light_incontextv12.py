@@ -337,7 +337,7 @@ class Pi0LightIncontextv12(_model.BaseModel):
             siglip_output_dim = SIGLIP_OUTPUT_DIM[siglip_key]
         except KeyError:
             raise ValueError(f"Unknown SigLIP variant '{siglip_variant}' — unable to determine output dim.")
-        self.image_proj = nnx.Linear(siglip_output_dim, paligemma_config.width, rngs=rngs)
+        self.image_proj = nnx.Linear(siglip_output_dim, prompt_expert_config.width, rngs=rngs)
 
 
     @at.typecheck
