@@ -126,7 +126,7 @@ DEFAULT_LIBERO_TEST_TASK_V4 = [
 
 import json
 
-DEFAULT_ROBOCASA_EPISODE_JSON = '/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
+DEFAULT_ROBOCASA_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
 DEFAULT_ROBOCASA_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_human_tasks.json']
 
 def get_kept_episode_indices(
@@ -5112,7 +5112,7 @@ _CONFIGS = [
         num_workers=8,
         batch_size=36,
     ),
-        TrainConfig(
+    TrainConfig(
         name="pi0_libero_low_mem_finetune_split_train_v3",
         model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotLiberoDataConfig(
@@ -5145,6 +5145,26 @@ _CONFIGS = [
             ),
             remove_task_list=DEFAULT_LIBERO_TEST_TASK_V4,
             episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            use_delta_joint_actions=False,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=36,
+    ),
+    TrainConfig(
+        name="pi0_libero_low_mem_finetune_split_inference",
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotLiberoDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
             use_delta_joint_actions=False,
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
