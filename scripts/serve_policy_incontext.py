@@ -35,7 +35,7 @@ class EnvMode(enum.Enum):
     # supplementary
     XJ_V12_V3 = "pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_v3"
     XJ_V12_V4 = "pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_v4"
-
+    XJ_ROBOCASA_INFERENCE = "pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_train"
 
 
 @dataclasses.dataclass
@@ -157,6 +157,10 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_v4/pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_v4/19999"
     ),   
+    EnvMode.XJ_ROBOCASA_INFERENCE: Checkpoint(
+        config="pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_train/pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_train/499999"
+    ),  
 }
 
 
