@@ -48,6 +48,7 @@ import openpi.policies.robocasa_human_three_image_policy as robocasa_human_three
 # import openpi.policies.robocasa_human_three_image_base_obs_policy as robocasa_human_three_image_base_obs_policy
 import openpi.policies.robocasa_single_task_policy as robocasa_single_task_policy
 import openpi.policies.robocasa_human_three_image_incontext_policy as robocasa_human_three_image_incontext_policy
+import openpi.policies.robocasa_mg_three_image_policy as robocasa_mg_three_image_policy
 
 
 import openpi.shared.download as _download
@@ -854,6 +855,37 @@ class LeRobotRobocasaHumanThreeImageDataConfig(DataConfigFactory):
         data_transforms = _transforms.Group(
             inputs=[robocasa_human_three_image_policy.RobocasaHumanThreeImageInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
             outputs=[robocasa_human_three_image_policy.RobocasaHumanThreeImageOutputs()],
+        )
+        model_transforms = ModelTransformFactory()(model_config)
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+        )
+        
+@dataclasses.dataclass(frozen=True)
+class LeRobotRobocasaMgThreeImageDataConfig(DataConfigFactory):
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/image_left": "image_left",
+                        "observation/image_right": "image_right",
+                        "observation/wrist_image": "wrist_image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+
+        data_transforms = _transforms.Group(
+            inputs=[robocasa_mg_three_image_policy.RobocasaMgThreeImageInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
+            outputs=[robocasa_mg_three_image_policy.RobocasaMgThreeImageOutputs()],
         )
         model_transforms = ModelTransformFactory()(model_config)
         return dataclasses.replace(
@@ -5721,6 +5753,7 @@ _CONFIGS = [
         batch_size=36,
     ), 
     
+    
     # TrainConfig(
     #     # no delta with split
     #     name="pi0_robocasa_turnonmicrowave_three_image_low_mem_finetune_train",
@@ -5777,14 +5810,42 @@ _CONFIGS = [
     #     batch_size=36,
     # ),
     
+    # TrainConfig(
+    #     # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train --exp-name=pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train --project-name=pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train --overwrite
+    #     # this exp use customized paligemma and different pre-trained img encoder 
+    #     # which has train_test_split; without delta; language prompt; lora; 20k
+    #     name="pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train",
+    #     model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+    #     data=LeRobotRobocasaSingleTaskThreeImageDataConfig(
+    #         repo_id="daixianjie/robocasa_human_lerobot",
+    #         base_config=DataConfig(
+    #             local_files_only=False,  
+    #             prompt_from_task=True,
+    #         ),
+    #     ),
+    #     vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+    #         npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+    #     ),
+    #     weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+    #     lr_schedule = _optimizer.CosineDecaySchedule(
+    #         warmup_steps = 1_000,
+    #         peak_lr= 2.5e-5,
+    #         decay_steps= 500_000,
+    #         decay_lr= 2.5e-6),
+    #     num_train_steps=500_000,
+    #     freeze_filter=pi0Light.Pi0LightConfig(
+    #         paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+    #     ).get_freeze_filter(),
+    #     ema_decay=None,
+    #     num_workers=8,
+    #     batch_size=36,
+    # ),  
     TrainConfig(
-        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train --exp-name=pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train --project-name=pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train --overwrite
-        # this exp use customized paligemma and different pre-trained img encoder 
-        # which has train_test_split; without delta; language prompt; lora; 20k
-        name="pi0mini_robocasa_human_three_image_base_eef_low_mem_finetune_train",
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py pi0mini_robocasa_mg_three_image_low_mem_finetune_train --exp-name=pi0mini_robocasa_mg_three_image_low_mem_finetune_train --overwrite
+        name="pi0mini_robocasa_mg_three_image_low_mem_finetune_train",
         model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
-        data=LeRobotRobocasaSingleTaskThreeImageDataConfig(
-            repo_id="daixianjie/robocasa_human_lerobot",
+        data=LeRobotRobocasaMgThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
             base_config=DataConfig(
                 local_files_only=False,  
                 prompt_from_task=True,
@@ -5805,8 +5866,8 @@ _CONFIGS = [
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=36,
-    ),   
+        batch_size=32,
+    ),  
     
     #
     # Fine-tuning Aloha configs.
