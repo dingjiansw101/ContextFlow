@@ -219,7 +219,7 @@ class Pi0Light(_model.BaseModel):
             "embed_dtype": config.dtype,
         }
         if config.vocab_size is not None:
-            gemma_kwargs["vocab_size"] = config.vocab_size
+            gemma_kwargs["voc_size"] = config.vocab_size
 
         llm = nnx_bridge.ToNNX(_gemma.Module(**gemma_kwargs))
         llm.lazy_init(rngs=rngs, method="init")
