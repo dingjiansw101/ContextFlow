@@ -47,6 +47,10 @@ class EnvMode(enum.Enum):
     # supplementary
     XJ_PI0_V3 = "pi0_libero_low_mem_finetune_split_train_v3"
     XJ_PI0_V4 = "pi0_libero_low_mem_finetune_split_train_v4"
+    
+    # rebuttal
+    XJ_PI0_ROBOCASA_MG_ALL = "pi0_robocasa_mg_three_image_low_mem_finetune_train"
+    XJ_PI0_ROBOCASA_MG_TRAIN = "pi0_robocasa_mg_three_image_low_mem_finetune_train_split"
 
 
 @dataclasses.dataclass
@@ -208,6 +212,17 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_low_mem_finetune_split_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_low_mem_finetune_split_train_v4/pi0_libero_low_mem_finetune_split_train_v4/19999"
     ),  
+    
+    # rebuttal
+    EnvMode.XJ_PI0_ROBOCASA_MG_ALL: Checkpoint(
+        config="pi0_robocasa_mg_three_image_low_mem_finetune_train",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_robocasa_mg_three_image_low_mem_finetune_train/pi0_robocasa_mg_three_image_low_mem_finetune_train/499999"
+    ),  
+    EnvMode.XJ_PI0_ROBOCASA_MG_TRAIN: Checkpoint(
+        config="pi0_robocasa_mg_three_image_low_mem_finetune_train",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_robocasa_mg_three_image_low_mem_finetune_train_split/pi0_robocasa_mg_three_image_low_mem_finetune_train_split/499999"
+    ), 
+
 }
 
 

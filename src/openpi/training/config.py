@@ -49,6 +49,7 @@ import openpi.policies.robocasa_human_three_image_policy as robocasa_human_three
 import openpi.policies.robocasa_single_task_policy as robocasa_single_task_policy
 import openpi.policies.robocasa_human_three_image_incontext_policy as robocasa_human_three_image_incontext_policy
 import openpi.policies.robocasa_mg_three_image_policy as robocasa_mg_three_image_policy
+import openpi.policies.robocasa_mg_three_image_incontext_policy as robocasa_mg_three_image_incontext_policy
 
 
 import openpi.shared.download as _download
@@ -129,6 +130,9 @@ import json
 
 DEFAULT_ROBOCASA_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
 DEFAULT_ROBOCASA_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_human_tasks.json']
+
+DEFAULT_ROBOCASA_MG_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/episodes.jsonl"
+DEFAULT_ROBOCASA_MG_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_mg_tasks.json']
 
 def get_kept_episode_indices(
     episodes_jsonl_path: Union[str, Path],
@@ -712,6 +716,7 @@ class LeRobotAlohaMobileIncontextDataConfig(DataConfigFactory):
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotRLBenchJointDataConfig(DataConfigFactory):
+    # deprecated
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         repack_transform = _transforms.Group(
@@ -744,6 +749,7 @@ class LeRobotRLBenchJointDataConfig(DataConfigFactory):
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotRLBenchGripperDataConfig(DataConfigFactory):
+    # deprecated
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         repack_transform = _transforms.Group(
@@ -775,6 +781,7 @@ class LeRobotRLBenchGripperDataConfig(DataConfigFactory):
         
 @dataclasses.dataclass(frozen=True)
 class LeRobotRobocasaInsertionDataConfig(DataConfigFactory):
+    # deprecated
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         repack_transform = _transforms.Group(
@@ -805,6 +812,7 @@ class LeRobotRobocasaInsertionDataConfig(DataConfigFactory):
         
 @dataclasses.dataclass(frozen=True)
 class LeRobotRobocasaHumanDataConfig(DataConfigFactory):
+    # deprecated
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         repack_transform = _transforms.Group(
@@ -851,6 +859,16 @@ class LeRobotRobocasaHumanThreeImageDataConfig(DataConfigFactory):
                 )
             ]
         )
+        
+        # XJ: debug (libero use same json for train-test split instead of a list of strings)
+        if self.remove_task_list:
+            with open(self.remove_task_list[0], "r") as f:
+                remove_test_tasks = json.load(f)["test_tasks"]
+
+            # XJ: calculate training episode indexi first
+            train_epi = get_kept_episode_indices(self.episode_json_path, remove_test_tasks)
+        else:
+            train_epi = get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
 
         data_transforms = _transforms.Group(
             inputs=[robocasa_human_three_image_policy.RobocasaHumanThreeImageInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
@@ -862,6 +880,7 @@ class LeRobotRobocasaHumanThreeImageDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+            train_episode=train_epi,
         )
         
 @dataclasses.dataclass(frozen=True)
@@ -882,6 +901,16 @@ class LeRobotRobocasaMgThreeImageDataConfig(DataConfigFactory):
                 )
             ]
         )
+        
+        # XJ: debug (libero use same json for train-test split instead of a list of strings)
+        if self.remove_task_list:
+            with open(self.remove_task_list[0], "r") as f:
+                remove_test_tasks = json.load(f)["test_tasks"]
+
+            # XJ: calculate training episode indexi first
+            train_epi = get_kept_episode_indices(self.episode_json_path, remove_test_tasks)
+        else:
+            train_epi = get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
 
         data_transforms = _transforms.Group(
             inputs=[robocasa_mg_three_image_policy.RobocasaMgThreeImageInputs(action_dim=model_config.action_dim, model_type=model_config.model_type)],
@@ -893,6 +922,7 @@ class LeRobotRobocasaMgThreeImageDataConfig(DataConfigFactory):
             repack_transforms=repack_transform,
             data_transforms=data_transforms,
             model_transforms=model_transforms,
+            train_episode=train_epi,
         )
  
 @dataclasses.dataclass(frozen=True)
@@ -902,6 +932,78 @@ class LeRobotRobocasaHumanThreeImageIncontextDataConfig(DataConfigFactory):
     task_to_episode: str='metadata/robocasa/task_to_episode.json'
     episode_to_indexes_file: str='metadata/robocasa/episode_to_indexes.json'
     tracks_path: str = "metadata/robocasa/episode_tracks_combined.json"
+    # # XJ: deprecated flags
+    # use_delta_joint_actions: bool = False
+    # robocasa_input_refactor: bool = False
+    
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/image_left": "image_left",
+                        "observation/image_right": "image_right",
+                        "observation/wrist_image": "wrist_image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                        "episode_index": "episode_index",
+                        "index": "index",
+                        "task_index": "task_index",
+                    }
+                )
+            ]
+        )
+        
+        # XJ: debug (libero use same json for train-test split instead of a list of strings)
+        if self.remove_task_list:
+            with open(self.remove_task_list[0], "r") as f:
+                remove_test_tasks = json.load(f)["test_tasks"]
+
+            # XJ: calculate training episode indexi first
+            train_epi = get_kept_episode_indices(self.episode_json_path, remove_test_tasks)
+        else:
+            train_epi = get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+        
+        # Prepare data for policy training
+        # inject the indexes of demo prompt, TODO: provide json file_paths here
+        data_transforms = _transforms.Group(
+            inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, 
+                                                  random_select=model_config.random_select,
+                                                  sample_episodes=model_config.sample_episodes,
+                                                  task_to_episode=self.task_to_episode,
+                                                  episode_to_indexes=self.episode_to_indexes_file,
+                                                  train_episode_index_list=train_epi)],
+            outputs=[],
+        )
+        
+        data_transforms = data_transforms.push(
+                inputs=[
+                    robocasa_human_three_image_incontext_policy.RobocasaHumanThreeImageIncontextInputs(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[robocasa_human_three_image_incontext_policy.RobocasaHumanThreeImageIncontextOutputs()],
+        )
+        
+        model_transforms = ModelTransformFactory()(model_config)
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            train_episode=train_epi,
+        )    
+          
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotRobocasaMgThreeImageIncontextDataConfig(DataConfigFactory):
+    states_cache_path: str = "metadata/robocasa_mg/episode_states_cache.json"
+    actions_cache_path: str = "metadata/robocasa_mg/episode_actions_cache.json"
+    task_to_episode: str='metadata/robocasa_mg/task_to_episode.json'
+    episode_to_indexes_file: str='metadata/robocasa_mg/episode_to_indexes.json'
+    tracks_path: str = "metadata/robocasa_mg/episode_tracks_combined.json"
     # # XJ: deprecated flags
     # use_delta_joint_actions: bool = False
     # robocasa_input_refactor: bool = False
@@ -950,11 +1052,11 @@ class LeRobotRobocasaHumanThreeImageIncontextDataConfig(DataConfigFactory):
         
         data_transforms = data_transforms.push(
                 inputs=[
-                    robocasa_human_three_image_incontext_policy.RobocasaHumanThreeImageIncontextInputs(
+                    robocasa_mg_three_image_incontext_policy.RobocasaMgThreeImageIncontextInputs(
                         action_dim=model_config.action_dim, model_type=model_config.model_type
                     )
                 ],
-                outputs=[robocasa_human_three_image_incontext_policy.RobocasaHumanThreeImageIncontextOutputs()],
+                outputs=[robocasa_mg_three_image_incontext_policy.RobocasaMgThreeImageIncontextOutputs()],
         )
         
         model_transforms = ModelTransformFactory()(model_config)
@@ -964,8 +1066,7 @@ class LeRobotRobocasaHumanThreeImageIncontextDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
             train_episode=train_epi,
-        )       
-
+        ) 
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotRobocasaSingleTaskThreeImageDataConfig(DataConfigFactory):
@@ -5209,8 +5310,8 @@ _CONFIGS = [
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=8,
-        batch_size=36,
+        num_workers=4,
+        batch_size=32,
     ),
     # Xianjie:
     TrainConfig(
@@ -5858,17 +5959,250 @@ _CONFIGS = [
         lr_schedule = _optimizer.CosineDecaySchedule(
             warmup_steps = 1_000,
             peak_lr= 2.5e-5,
-            decay_steps= 500_000,
+            decay_steps= 2_000_000,
             decay_lr= 2.5e-6),
-        num_train_steps=500_000,
+        num_train_steps=2_000_000,
         freeze_filter=pi0Light.Pi0LightConfig(
             paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=8,
+        num_workers=16,
         batch_size=32,
     ),  
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py pi0mini_robocasa_mg_three_image_low_mem_finetune_train_split --exp-name=pi0mini_robocasa_mg_three_image_low_mem_finetune_train_split --overwrite
+        name="pi0mini_robocasa_mg_three_image_low_mem_finetune_train_split",
+        model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 2_000_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=2_000_000,
+        freeze_filter=pi0Light.Pi0LightConfig(
+            paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
+        
+    TrainConfig(
+        # no delta with split
+        name="pi0_robocasa_mg_three_image_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRobocasaMgThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
     
+    TrainConfig(
+        # no delta with split
+        name="pi0_robocasa_mg_three_image_low_mem_finetune_train_split",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRobocasaMgThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+    
+    TrainConfig(
+        # no delta with split
+        name="pi0_incontext_robocasa_mg_three_image_low_mem_finetune_train",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+    
+    TrainConfig(
+        # no delta with split
+        name="pi0_incontext_robocasa_mg_three_image_low_mem_finetune_inference",
+        # Here is an example of loading a pi0 model for LoRA fine-tuning.
+        model=pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        # Turn off EMA for LoRA finetuning.
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --exp-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --project-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --overwrite
+        name="pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
+
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --exp-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --project-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --overwrite
+        name="pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune_inference",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            # remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            # episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 1_000_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=1_000_000,
+        freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
     #
     # Fine-tuning Aloha configs.
     #
@@ -6040,8 +6374,165 @@ _CONFIGS = [
         batch_size=36,
     ),
     
-
+    # XJ_REBUTAL
+    ## XJ: debug pi0mini incontext code on libero
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --exp-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --project-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --overwrite
+        name="pi0mini_incontext_libero_low_mem_finetune_inference",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
     
+    TrainConfig(
+        name="pi0mini_incontext_libero_low_mem_finetune_train",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
+    
+    ## XJ: try incontext_v12_1 with more prompt images 
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --exp-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --project-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --overwrite
+        name="pi0mini_incontextv12_1_robocasa_mg_three_image_low_mem_finetune_train",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=8, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=8, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
+
+    TrainConfig(
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --exp-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --project-name=pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune --overwrite
+        name="pi0mini_incontextv12_1_robocasa_mg_three_image_low_mem_finetune_inference",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=8, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            # remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            # episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 1_000_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=1_000_000,
+        freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=8, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
 
     #
     # XJ libero_with_depth: just to pull newly generated libero dataset with depth image but with more episodes

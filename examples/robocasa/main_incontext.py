@@ -274,6 +274,8 @@ def eval_robocasa(args: Args) -> None:
 
                 # Query model to get action
                 action_chunk = client.infer(element)["actions"]
+                append_values = np.array([0.0, 0.0, 0.0, 0.0, -1.0]) 
+                action_chunk = np.concatenate([action_chunk, append_values[None, :].repeat(action_chunk.shape[0], axis=0)], axis=1)
                 assert (
                     len(action_chunk) >= args.replan_steps
                 ), f"We want to replan every {args.replan_steps} steps, but policy only predicts {len(action_chunk)} steps."

@@ -21,6 +21,7 @@ def make_robocasa_mg_three_image_example() -> dict:
         "observation/image_right": np.random.randint(256, size=(128, 128, 3), dtype=np.uint8),
         "observation/wrist_image": np.random.randint(256, size=(128, 128, 3), dtype=np.uint8),
         "prompt": "do something",
+        "task_index": 0,
     }
 
 
@@ -32,31 +33,9 @@ def _parse_image(image) -> np.ndarray:
         image = einops.rearrange(image, "c h w -> h w c")
     return image
 
-def _quat2axisangle(quat):
-    """
-    Copied from robosuite: https://github.com/ARISE-Initiative/robosuite/blob/eafb81f54ffc104f905ee48a16bb15f059176ad3/robosuite/utils/transform_utils.py#L490C1-L512C55
-    """
-    # quat = np.asarray(quat)
-        # Defensive checks
-    # if quat.shape != (4,):
-    #     raise ValueError(f"Expected single quaternion of shape (4,), got {quat.shape}")
-
-    # clip quaternion
-    if quat[3] > 1.0:
-        quat[3] = 1.0
-    elif quat[3] < -1.0:
-        quat[3] = -1.0
-
-    den = np.sqrt(1.0 - quat[3] * quat[3])
-    if math.isclose(den, 0.0):
-        # This is (close to) a zero degree rotation, immediately return
-        return np.zeros(3)
-
-    return (quat[:3] * 2.0 * math.acos(quat[3])) / den
-
 
 @dataclasses.dataclass(frozen=True)
-class RobocasaMgThreeImageInputs(transforms.DataTransformFn):
+class RobocasaMgThreeImageIncontextInputs(transforms.DataTransformFn):
     """
     This class is used to convert inputs to the model to the expected format. It is used for both training and inference.
 
@@ -133,12 +112,25 @@ class RobocasaMgThreeImageInputs(transforms.DataTransformFn):
         # stored in "prompt"; the output dict always needs to have the key "prompt").
         if "prompt" in data:
             inputs["prompt"] = data["prompt"]
+            
+        if "dem_prompt_indexes" in data:
+            inputs["dem_prompt_indexes"] = data["dem_prompt_indexes"]
+        # if "dem_all_indexes" in data:
+        #     inputs["dem_all_indexes"] = data["dem_all_indexes"]
+        # if "dem_all_indexes_mask" in data:
+        #     inputs["dem_all_indexes_mask"] = data["dem_all_indexes_mask"]
+        # if "pos_list" in data:
+        #     inputs["pos_list"] = data["pos_list"]
+        if "selected_episode" in data:
+            inputs["selected_episode"] = data["selected_episode"]
+        if "index" in data:
+            inputs["index"] = data["index"]
 
         return inputs
 
 
 @dataclasses.dataclass(frozen=True)
-class RobocasaMgThreeImageOutputs(transforms.DataTransformFn):
+class RobocasaMgThreeImageIncontextOutputs(transforms.DataTransformFn):
     """
     This class is used to convert outputs from the model back the the dataset specific format. It is
     used for inference only.

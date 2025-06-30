@@ -36,8 +36,13 @@ class EnvMode(enum.Enum):
     XJ_V12_V3 = "pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_v3"
     XJ_V12_V4 = "pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_v4"
     XJ_ROBOCASA_INFERENCE = "pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_train"
+    XJ_PI0_MINI_ROBOCASA_MG_INCONTEXT = 'pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune'
 
-
+    # rebutal
+    XJ_PI0_MINI_LIBERO_INCONTEXT = "pi0mini_incontext_libero_low_mem_finetune_inference"
+    XJ_PI0_MINI_LIBERO_INCONTEXT_ALL = "pi0mini_incontext_libero_low_mem_finetune_inference"
+    XJ_PI0_INCONTEXT_ROBOCASA_MG = "pi0_incontext_robocasa_mg_three_image_low_mem_finetune_train"
+    
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -161,6 +166,23 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_train/pi0mini_incontext_robocasa_human_three_image_low_mem_finetune_train/499999"
     ),  
+    EnvMode.XJ_PI0_MINI_ROBOCASA_MG_INCONTEXT: Checkpoint(
+        config="pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune/pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune/200000"
+    ),  
+    EnvMode.XJ_PI0_MINI_LIBERO_INCONTEXT: Checkpoint(
+        config="pi0mini_incontext_libero_low_mem_finetune_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_libero_low_mem_finetune_train/pi0mini_incontext_libero_low_mem_finetune_train/19999"
+    ), 
+    EnvMode.XJ_PI0_MINI_LIBERO_INCONTEXT_ALL: Checkpoint(
+        config="pi0mini_incontext_libero_low_mem_finetune_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_libero_low_mem_finetune_inference/pi0mini_incontext_libero_low_mem_finetune_inference/19999"
+    ), 
+    EnvMode.XJ_PI0_INCONTEXT_ROBOCASA_MG: Checkpoint(
+        config="pi0_incontext_robocasa_mg_three_image_low_mem_finetune_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_incontext_robocasa_mg_three_image_low_mem_finetune_train/pi0_incontext_robocasa_mg_three_image_low_mem_finetune_train/499999"
+    ), 
+    
 }
 
 

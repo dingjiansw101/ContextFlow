@@ -228,6 +228,8 @@ def create_data_loader(
         def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
             self._data_config = data_config
             self._data_loader = data_loader
+            self._dataset = dataset
+
 
         def data_config(self) -> _config.DataConfig:
             return self._data_config
