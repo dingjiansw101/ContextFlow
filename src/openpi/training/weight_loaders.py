@@ -277,3 +277,19 @@ class InputEmbedderLoader(WeightLoader):
             logger.info(f"[InputEmbedderLoader] Total matched keys: {len(matched)}")
 
         return flax.traverse_util.unflatten_dict(matched, sep="/")
+
+# XJ: skip all 
+@dataclasses.dataclass(frozen=True)
+class EmptyLoader(WeightLoader):
+    """
+    Skip all parameter. Only preferred when image encoder, prompt & action experts, and embedder are customized
+    """
+    verbose: bool = False
+
+    def load(self, params: at.Params) -> at.Params:
+
+        matched = {}
+        if self.verbose:
+            logger.info(f"[InputEmbedderLoader] Total matched keys: {len(matched)}")
+
+        return flax.traverse_util.unflatten_dict(matched, sep="/")

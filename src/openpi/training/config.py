@@ -5942,6 +5942,147 @@ _CONFIGS = [
     #     batch_size=36,
     # ),  
     TrainConfig(
+        name="pi0tiny_robocasa_mg_three_image_train_split",
+        model=pi0Light.Pi0LightConfig(
+            vocab_size=50_000, 
+            paligemma_variant="gemma_A", action_expert_variant="gemma_B", 
+            freeze_llm_embedder=False, freeze_img_encoder=False, 
+            siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.EmptyLoader(),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        # freeze_filter=pi0Light.Pi0LightConfig(
+        #     vocab_size=50_000, paligemma_variant="gemma_A", action_expert_variant="gemma_B", freeze_llm_embedder=False, freeze_img_encoder = False, siglip_variant="S/16",
+        # ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+    TrainConfig(
+        name="pi0tiny_robocasa_mg_three_image_inference",
+        model=pi0Light.Pi0LightConfig(
+            vocab_size=50_000, 
+            paligemma_variant="gemma_A", action_expert_variant="gemma_B", 
+            freeze_llm_embedder=False, freeze_img_encoder=False, 
+            siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.EmptyLoader(),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        # freeze_filter=pi0Light.Pi0LightConfig(
+        #     vocab_size=50_000, paligemma_variant="gemma_A", action_expert_variant="gemma_B", freeze_llm_embedder=False, freeze_img_encoder = False, siglip_variant="S/16",
+        # ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+    TrainConfig(
+        name="pi0tiny_incontext_robocasa_mg_three_image_train_split",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            vocab_size=50_000, 
+            prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.EmptyLoader(),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        # freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+        #     vocab_size=50_000, 
+        #     prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+        #     sample_frames=2, sample_actions=32, random_select=True,  
+        #     freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16").get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
+    TrainConfig(
+        name="pi0tiny_incontext_robocasa_mg_three_image_inference",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            vocab_size=50_000, 
+            prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.EmptyLoader(),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 500_000,
+            decay_lr= 2.5e-6),
+        num_train_steps=500_000,
+        # freeze_filter=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+        #     vocab_size=50_000, 
+        #     prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+        #     sample_frames=2, sample_actions=32, random_select=True,  
+        #     freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16").get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ), 
+    
+    TrainConfig(
         # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py pi0mini_robocasa_mg_three_image_low_mem_finetune_train --exp-name=pi0mini_robocasa_mg_three_image_low_mem_finetune_train --overwrite
         name="pi0mini_robocasa_mg_three_image_low_mem_finetune_train",
         model=pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
