@@ -92,6 +92,8 @@ class Pi0LightConfig(_model.BaseModelConfig):
     freeze_img_encoder: bool = False
     # XJ: freeze llm embedder or not (suggested when using customized gemma)
     freeze_llm_embedder: bool = False
+    # XJ: customize embedder
+    vocab_size: int | None = None
 
     # Set the model specific defaults.
     action_dim: int = 32
@@ -212,12 +214,14 @@ class Pi0Light(_model.BaseModel):
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         action_expert_config = _gemma.get_config(config.action_expert_variant)
         # TODO: rewrite gemma in NNX. For now, use bridge.
-        llm = nnx_bridge.ToNNX(
-            _gemma.Module(
-                configs=[paligemma_config, action_expert_config],
-                embed_dtype=config.dtype,
-            )
-        )
+        gemma_kwargs = {
+            "configs": [paligemma_config, action_expert_config],
+            "embed_dtype": config.dtype,
+        }
+        if config.vocab_size is not None:
+            gemma_kwargs["vocab_size"] = config.vocab_size
+
+        llm = nnx_bridge.ToNNX(_gemma.Module(**gemma_kwargs))
         llm.lazy_init(rngs=rngs, method="init")
         
         # XJ

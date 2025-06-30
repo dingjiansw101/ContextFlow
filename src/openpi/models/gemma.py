@@ -150,6 +150,30 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
             head_dim=256,
             expert_name=expert_name,
         )   
+    # XJ: customizer gemma mini models with smaller embedder
+    if variant == "gemma_A":
+        # 132M params (without embedder)
+        return Config(
+            width=512,
+            depth=6,
+            mlp_dim=768,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=256,
+            expert_name=expert_name,
+        )    
+    if variant == "gemma_B":
+        # 66M params
+        return Config(
+            width=512,
+            depth=6,
+            mlp_dim=1024,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=256,
+            expert_name=expert_name,
+        )       
+    
     raise ValueError(f"Unknown variant: {variant}")
 
 
@@ -177,7 +201,8 @@ class Embedder(nn.Module):
     def setup(self):
         self.input_embedding_table = self.param(
             "input_embedding",
-            nn.initializers.normal(),
+            # nn.initializers.normal(),
+            nn.initializers.variance_scaling(1.0, "fan_in", "truncated_normal"),
             (self.vocab_size, self.embed_dim),
         )
 
@@ -384,6 +409,7 @@ class Module(nn.Module):
 
     configs: Sequence[Config]  # list of configs, one for each expert
     embed_dtype: str
+    voc_size: int = PALIGEMMA_VOCAB_SIZE
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()  # Every float is dropped independently.
@@ -393,7 +419,7 @@ class Module(nn.Module):
         assert all(config.depth == self.configs[0].depth for config in self.configs)
 
         self.embedder = Embedder(
-            vocab_size=PALIGEMMA_VOCAB_SIZE,
+            vocab_size=self.voc_size,
             embed_dim=self.configs[0].width,  # embedder for first expert only
             name="embedder",
         )
