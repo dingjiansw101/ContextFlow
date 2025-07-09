@@ -48,10 +48,15 @@ class EnvMode(enum.Enum):
     XJ_PI0_V3 = "pi0_libero_low_mem_finetune_split_train_v3"
     XJ_PI0_V4 = "pi0_libero_low_mem_finetune_split_train_v4"
     
-    # rebuttal
+    # rebutal
     XJ_PI0_ROBOCASA_MG_ALL = "pi0_robocasa_mg_three_image_low_mem_finetune_train"
     XJ_PI0_ROBOCASA_MG_TRAIN = "pi0_robocasa_mg_three_image_low_mem_finetune_train_split"
-
+    XJ_PI0TINY_ROBOCASA_MG_TRAIN = "pi0tiny_robocasa_mg_three_image_train_split"
+    
+    XJ_PI0TINY_ROBOCASA_MG_TRAIN_1M = "pi0tiny_robocasa_mg_three_image_train_split"
+    
+    # rebuttal
+    XJ_PI0TINY_ROBOCASA_MG_TRAIN_LR = "pi0tiny_robocasa_mg_three_image_train_split_large_lr"
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -213,7 +218,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_low_mem_finetune_split_train_v4/pi0_libero_low_mem_finetune_split_train_v4/19999"
     ),  
     
-    # rebuttal
+    # rebutal
     EnvMode.XJ_PI0_ROBOCASA_MG_ALL: Checkpoint(
         config="pi0_robocasa_mg_three_image_low_mem_finetune_train",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_robocasa_mg_three_image_low_mem_finetune_train/pi0_robocasa_mg_three_image_low_mem_finetune_train/499999"
@@ -222,7 +227,21 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_robocasa_mg_three_image_low_mem_finetune_train",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_robocasa_mg_three_image_low_mem_finetune_train_split/pi0_robocasa_mg_three_image_low_mem_finetune_train_split/499999"
     ), 
-
+    EnvMode.XJ_PI0TINY_ROBOCASA_MG_TRAIN: Checkpoint(
+        config="pi0tiny_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0tiny_robocasa_mg_three_image_train_split/pi0tiny_robocasa_mg_three_image_train_split/499999"
+    ), 
+    ##### large lr
+    EnvMode.XJ_PI0TINY_ROBOCASA_MG_TRAIN_1M: Checkpoint(
+        config="pi0tiny_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0tiny_robocasa_mg_three_image_train_split/pi0tiny_robocasa_mg_three_image_train_split_1M/500000"
+    ), 
+    
+    # rebuttal
+    EnvMode.XJ_PI0TINY_ROBOCASA_MG_TRAIN_LR: Checkpoint(
+        config="pi0tiny_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0tiny_robocasa_mg_three_image_train_split_large_lr/pi0tiny_robocasa_mg_three_image_train_split_large_lr/499999"
+    ), 
 }
 
 
