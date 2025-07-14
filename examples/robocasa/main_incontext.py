@@ -160,7 +160,7 @@ def eval_robocasa(args: Args) -> None:
     # Set random seed
     np.random.seed(args.seed)
 
-    filename = pathlib.Path("/home/xianjie.dai/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/tasks.jsonl")
+    filename = pathlib.Path("/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/tasks.jsonl")
     task_description2index = get_task_to_index_mapping(filename)
     
     video_out_path = f"data/robocasa/{args.env_name}/videos"
@@ -244,8 +244,8 @@ def eval_robocasa(args: Args) -> None:
 
                 state = np.concatenate(
                         (
-                            obs["robot0_eef_pos"],
-                            obs["robot0_eef_quat"],
+                            obs["robot0_base_to_eef_pos"],
+                            obs["robot0_base_to_eef_quat"],
                             obs["robot0_gripper_qpos"],
                         ), axis=0
                     )
@@ -270,6 +270,7 @@ def eval_robocasa(args: Args) -> None:
                     "observation/state": state,
                     "prompt": str(task_lang),
                     "task_index": task_description2index[task_lang],
+                    "split": "test",
                 }
 
                 # Query model to get action

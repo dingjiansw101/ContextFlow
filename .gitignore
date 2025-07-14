@@ -24,6 +24,9 @@ dummy.py
 *summary.json
 inference_all_task.sh
 .vscode/settings.json
+dummy.sh
+dump_full_transformed_samples.py
+transformed_debug_output/
 
 # C extensions
 *.so

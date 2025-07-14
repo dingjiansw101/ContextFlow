@@ -3,9 +3,7 @@ import dataclasses
 import logging
 import math
 import pathlib
-
 import imageio
-
 import numpy as np
 from openpi_client import image_tools
 from openpi_client import websocket_client_policy as _websocket_client_policy
@@ -15,6 +13,7 @@ from robomimic.utils.file_utils import get_env_metadata_from_dataset
 from robomimic.utils.env_utils  import create_env_from_metadata
 import robomimic.utils.obs_utils as ObsUtils
 import robocasa
+
 
 ROBOCASA_DUMMY_ACTION = [0.0] * 6 + [-1.0] + [0.0] * 4 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
@@ -92,8 +91,6 @@ SHAPE_META = {
     }
 }
 
-    
-
 
 @dataclasses.dataclass
 class Args:
@@ -112,7 +109,7 @@ class Args:
     num_trials: int = 50  # Number of rollouts per task
     
     env_name: str = "TurnOffMicrowave"
-    dataset_path: str = "/home/xianjid/project/robocasa_xj/robocasa/datasets/v0.1/single_stage/kitchen_microwave/TurnOffMicrowave/2024-04-25/demo_gentex_im128_randcams.hdf5"  # Path to the dataset
+    dataset_path: str = "/home/xianjid/project/robocasa_xj/robocasa/datasets/v0.1/single_stage/kitchen_microwave/TurnOffMicrowave/mg/2024-05-04-22-39-23/demo_gentex_im128_randcams.hdf5"  # Path to the dataset
     
     horizon: int = 500  # Number of steps to run in each episode
 
@@ -128,10 +125,7 @@ def eval_robocasa(args: Args) -> None:
     # Set random seed
     np.random.seed(args.seed)
 
-    
-
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
-
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
 
@@ -189,14 +183,14 @@ def eval_robocasa(args: Args) -> None:
                         image_tools.resize_with_pad(wrist_img, args.resize_size, args.resize_size)
                     )
             # Save preprocessed image for replay video
-            replay_images.append(img_right)
+            # replay_images.append(img_right)
 
             if not action_plan:
                 # for non-single task robocasa policy
                 state = np.concatenate(
                         (
-                            obs["robot0_eef_pos"],
-                            obs["robot0_eef_quat"],
+                            obs["robot0_base_to_eef_pos"],
+                            obs["robot0_base_to_eef_quat"],
                             obs["robot0_gripper_qpos"],
                         ), axis=0
                     )
@@ -224,6 +218,7 @@ def eval_robocasa(args: Args) -> None:
                 action_chunk = client.infer(element)["actions"]
                 append_values = np.array([0.0, 0.0, 0.0, 0.0, -1.0]) 
                 action_chunk = np.concatenate([action_chunk, append_values[None, :].repeat(action_chunk.shape[0], axis=0)], axis=1)
+
                 assert (
                     len(action_chunk) >= args.replan_steps
                 ), f"We want to replan every {args.replan_steps} steps, but policy only predicts {len(action_chunk)} steps."
@@ -256,11 +251,11 @@ def eval_robocasa(args: Args) -> None:
 
         # Save a replay video of the episode
         suffix = "success" if (done or success) else "failure"
-        imageio.mimwrite(
-            pathlib.Path(args.video_out_path) / f"rollout_{episode_idx}_{suffix}.mp4",
-            [np.asarray(x) for x in replay_images],
-            fps=10,
-        )
+        # imageio.mimwrite(
+        #     pathlib.Path(args.video_out_path) / f"rollout_{episode_idx}_{suffix}.mp4",
+        #     [np.asarray(x) for x in replay_images],
+        #     fps=10,
+        # )
 
         # Log current results
         logging.info(f"Success: {done or success}")
