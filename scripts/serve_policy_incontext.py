@@ -55,6 +55,15 @@ class EnvMode(enum.Enum):
     XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_LR = "pi0tiny_incontext_robocasa_mg_three_image_train_split_large_lr"
     XJ_PI0MINI_INCONTEXTV12_1_ROBOCASA_MG_TRAIN_LR = "pi0mini_incontextv12_1_robocasa_mg_three_image_low_mem_finetune_train_large_lr"
     
+    # debug piotiny incontext
+    DEBUG_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_SPLIT = "debug_pi0tiny_incontext_robocasa_mg_three_image_train_split"
+    DEBUG_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE = "debug_pi0tiny_incontext_robocasa_mg_three_image_inference"
+    DEBUG_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE = "debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference"
+    DEBUG_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_SPLIT = "debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_train_split"
+    DEBUG_PROMPT_NO_RANDOM_SELECT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE = "debug_prompt_no_random_select_pi0tiny_incontext_robocasa_mg_three_image_inference"
+    DEBUG_PROPRIO_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_SPLIT = "debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_train_split"
+    DEBUG_PROPRIO_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE = "debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference"
+    
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -185,7 +194,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     # rebutal
     EnvMode.XJ_PI0_MINI_ROBOCASA_MG_INCONTEXT: Checkpoint(
         config="pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune/pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune/200000"
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune/pi0mini_incontext_robocasa_mg_three_image_low_mem_finetune/499999"
     ),  
     EnvMode.XJ_PI0_MINI_LIBERO_INCONTEXT: Checkpoint(
         config="pi0mini_incontext_libero_low_mem_finetune_inference",
@@ -229,6 +238,40 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0mini_incontextv12_1_robocasa_mg_three_image_low_mem_finetune_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0mini_incontextv12_1_robocasa_mg_three_image_low_mem_finetune_train_large_lr/pi0mini_incontextv12_1_robocasa_mg_three_image_low_mem_finetune_train_large_lr/499999"
     ), 
+    
+    ## debug pi0mini incontext robocasa mg
+    # no prompt at all = non-incontext 
+    EnvMode.DEBUG_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_SPLIT: Checkpoint(
+        config="debug_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_pi0tiny_incontext_robocasa_mg_three_image_train_split/debug_pi0tiny_incontext_robocasa_mg_three_image_train_split/499999"
+    ), 
+    EnvMode.DEBUG_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE: Checkpoint(
+        config="debug_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_pi0tiny_incontext_robocasa_mg_three_image_inference/debug_pi0tiny_incontext_robocasa_mg_three_image_inference/499999"
+    ), 
+    # image + action/state prompts
+    EnvMode.DEBUG_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE: Checkpoint(
+        config="debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference/debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference/499999"
+    ), 
+    EnvMode.DEBUG_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_SPLIT: Checkpoint(
+        config="debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_train_split/debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_train_split/499999"
+    ),
+    # image + action/state prompts without random select (train on all tasks)
+    EnvMode.DEBUG_PROMPT_NO_RANDOM_SELECT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE: Checkpoint(
+        config="debug_prompt_no_random_select_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_prompt_no_random_select_pi0tiny_incontext_robocasa_mg_three_image_inference/debug_prompt_no_random_select_pi0tiny_incontext_robocasa_mg_three_image_inference/499999"
+    ),
+    # proprio: only action/state prompt
+    EnvMode.DEBUG_PROPRIO_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_TRAIN_SPLIT: Checkpoint(
+        config="debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_train_split/debug_prompt_pi0tiny_incontext_robocasa_mg_three_image_train_split/499999"
+    ),
+    EnvMode.DEBUG_PROPRIO_PROMPT_XJ_PI0TINY_INCONTEXTV_ROBOCASA_MG_INFERENCE: Checkpoint(
+        config="debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference/debug_proprio_prompt_pi0tiny_incontext_robocasa_mg_three_image_inference/499999"
+    ),
 }
 
 

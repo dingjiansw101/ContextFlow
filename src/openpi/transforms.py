@@ -164,6 +164,13 @@ class InjectDemoIndexes(DataTransformFn):
         # Store these dictionaries on the frozen dataclass
         object.__setattr__(self, "task_to_episode", task_to_episode)
         object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
+        
+        # XJ: Initialize inference cache
+        # object.__setattr__(self, "_cache", {
+        #     "task_index": None,  # type: Optional[int]
+        #     "selected_episode": None,  # type: Optional[np.ndarray]
+        #     "dem_prompt_indexes": None,  # type: Optional[List[List[int]]]
+        # })
 
     def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -176,6 +183,13 @@ class InjectDemoIndexes(DataTransformFn):
 
         split = data.get("split", "train")
         
+        # === XJ: Inference cache hit ===
+        # if self._cache["task_index"] == task_index and split == "test":
+        #     data["selected_episode"] = self._cache["selected_episode"]
+        #     data["dem_prompt_indexes"] = self._cache["dem_prompt_indexes"]
+        #     return data
+        
+        # === Otherwise: generate prompt ===
         # 1) choose episodes
         if split == "train" and self.random_select:
             k = min(self.sample_episodes, len(episodes_for_task))
@@ -202,7 +216,12 @@ class InjectDemoIndexes(DataTransformFn):
         # 3) attach to data
         data["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
         data["dem_prompt_indexes"] = dem_prompt_indexes
-
+        
+        # XJ: === Update inference cache ===
+        # if split == "test":
+        #     self._cache["task_index"] = task_index
+        #     self._cache["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
+        #     self._cache["dem_prompt_indexes"] = dem_prompt_indexes
 
         return data
 
@@ -251,9 +270,29 @@ def tree_stack_np(list_of_trees, axis=0):
 class AddImagePromptTransform(DataTransformFn):
     """Stacks image prompts per episode into dicts of arrays by key."""
     dataset: any
+    
+    # def __post_init__(self):
+    #     # XJ: inference cache
+    #     object.__setattr__(self, "_cache", {
+    #         "dem_prompt_indexes": None,
+    #         "dem_prompt_images": None,
+    #         "dem_prompt_images_mask": None,
+    #     })
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
         idx_lists: List[List[int]] = data.get("dem_prompt_indexes", [])
+        split = data.get("split", "train")
+
+        # XJ: inference cache hit
+        # if (
+        #     split == "test"
+        #     and self._cache["dem_prompt_indexes"] == idx_lists
+        # ):
+        #     data["dem_prompt_images"] = self._cache["dem_prompt_images"]
+        #     data["dem_prompt_images_mask"] = self._cache["dem_prompt_images_mask"]
+        #     return data
+    
+        # otherwise, normal routine
         images_dict: Dict[str, List[np.ndarray]] = {}
         masks_dict: Dict[str, List[np.ndarray]] = {}
         for idx_list in idx_lists:
@@ -264,17 +303,24 @@ class AddImagePromptTransform(DataTransformFn):
             for name, mask_arr in stacked["image_mask"].items():
                 masks_dict.setdefault(name, []).append(mask_arr)
 
-        # assemble outputs
+        # Stack: assemble outputs
         imgs = {name: np.stack(arrs, axis=0) for name, arrs in images_dict.items()}
         msks = {name: np.stack(arrs, axis=0) for name, arrs in masks_dict.items()}
 
-        # if only one episode, squeeze the episode dimension
+        # Single-episode squeeze
         if len(idx_lists) == 1:
-            data["dem_prompt_images"] = {name: arr[0] for name, arr in imgs.items()}
-            data["dem_prompt_images_mask"] = {name: arr[0] for name, arr in msks.items()}
-        else:
-            data["dem_prompt_images"] = imgs
-            data["dem_prompt_images_mask"] = msks
+            imgs = {name: arr[0] for name, arr in imgs.items()}
+            msks = {name: arr[0] for name, arr in msks.items()}
+            
+        # Attach to data
+        data["dem_prompt_images"] = imgs
+        data["dem_prompt_images_mask"] = msks
+        
+        # if split == "test":
+        #     self._cache["dem_prompt_indexes"] = idx_lists
+        #     self._cache["dem_prompt_images"] = imgs
+        #     self._cache["dem_prompt_images_mask"] = msks
+
         return data
 
 @dataclasses.dataclass(frozen=True)
@@ -312,9 +358,35 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             save_episode_states_to_json(actions, self.actions_cache_path)
         object.__setattr__(self, "episode_to_all_states", states)
         object.__setattr__(self, "episode_to_all_first_actions", actions)
+        
+        # XJ: inference cache
+        # object.__setattr__(self, "_cache", {
+        #     "selected_episode": None,
+        #     "states": None,
+        #     "states_mask": None,
+        #     "actions": None,
+        #     "actions_mask": None,
+        # })
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
         eps: List[int] = data.get("selected_episode", [])
+        split = data.get("split", "train")
+
+        # XJ: cache hit
+        # if split == "test" and self._cache["selected_episode"] == list(eps):
+        #     if len(eps) == 1:
+        #         data["dem_prompt_all_states"] = self._cache["states"][0]
+        #         data["dem_prompt_all_states_mask"] = self._cache["states_mask"][0]
+        #         data["dem_prompt_all_actions"] = self._cache["actions"][0]
+        #         data["dem_prompt_all_actions_mask"] = self._cache["actions_mask"][0]
+        #     else:
+        #         data["dem_prompt_all_states"] = self._cache["states"]
+        #         data["dem_prompt_all_states_mask"] = self._cache["states_mask"]
+        #         data["dem_prompt_all_actions"] = self._cache["actions"]
+        #         data["dem_prompt_all_actions_mask"] = self._cache["actions_mask"]
+        #     return data
+        
+        
         states_b, states_mask_b, actions_b, actions_mask_b = [], [], [], []
         for ep in eps:
             all_states = self.episode_to_all_states[ep]
@@ -366,6 +438,15 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             data["dem_prompt_all_states_mask"] = stacked_states_mask
             data["dem_prompt_all_actions"] = stacked_actions
             data["dem_prompt_all_actions_mask"] = stacked_actions_mask
+            
+        # XJ: update cache
+        # if split == "test":
+        #     self._cache["selected_episode"] = list(eps)
+        #     self._cache["states"] = stacked_states
+        #     self._cache["states_mask"] = stacked_states_mask
+        #     self._cache["actions"] = stacked_actions
+        #     self._cache["actions_mask"] = stacked_actions_mask
+        
         return data
 
 
