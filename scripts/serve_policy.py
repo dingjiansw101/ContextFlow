@@ -57,6 +57,10 @@ class EnvMode(enum.Enum):
     
     # rebuttal
     XJ_PI0TINY_ROBOCASA_MG_TRAIN_LR = "pi0tiny_robocasa_mg_three_image_train_split_large_lr"
+    
+    ## final 3
+    PI0_LIBERO_90_NONE_INCONTEXT = "pi0_libero90_finetune"
+    TEST_V100 = "pi0_libero_low_mem_finetune_without_delta_train_split_v2"
 
 @dataclasses.dataclass
 class Checkpoint:
@@ -242,6 +246,16 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0tiny_robocasa_mg_three_image_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0tiny_robocasa_mg_three_image_train_split_large_lr/pi0tiny_robocasa_mg_three_image_train_split_large_lr/499999"
     ), 
+    
+    # final 3 
+    EnvMode.PI0_LIBERO_90_NONE_INCONTEXT: Checkpoint(
+        config="pi0_libero90_low_mem_finetune_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero90_low_mem_finetune/pi0_libero90_low_mem_finetune/29999"
+    ),
+    EnvMode.TEST_V100: Checkpoint(
+        config="pi0_libero_low_mem_finetune_split_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/google-cloud-exp/pi0_libero_low_mem_finetune_without_delta_train_split_v2/pi0_libero_low_mem_finetune_without_delta_train_split_v2/19999"
+    ),
 }
 
 

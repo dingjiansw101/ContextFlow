@@ -21,8 +21,9 @@ LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 LIBERO_TEST_TASK_DICT = {
     "libero_spatial": [3,8],
     "libero_object":[5,7],
-    "libero_goal": [1,8],
-    "libero_10": [0,6],
+    "libero_goal": [0,7],
+    "libero_10": [5,4],
+    "libero_90":[0],
 }
 
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
@@ -76,7 +77,10 @@ def eval_libero(args: Args) -> None:
     num_tasks_in_suite = task_suite.n_tasks
     logging.info(f"Task suite: {args.task_suite_name}")
 
-    filename = pathlib.Path("metadata/libero/tasks.jsonl")
+    if args.task_suite_name == "libero_90":
+        filename = pathlib.Path("metadata/libero_90/tasks.jsonl")
+    else:
+        filename = pathlib.Path("metadata/libero/tasks.jsonl")
     task_description2index = get_task_to_index_mapping(filename)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
