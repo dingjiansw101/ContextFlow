@@ -175,7 +175,7 @@ class ObservationIncontext(Generic[ArrayT]):
     token_loss_mask: at.Bool[ArrayT, "*b l"] | None = None
 
     @classmethod
-    def from_dict(cls, data: at.PyTree[ArrayT]) -> "Observation[ArrayT]":
+    def from_dict(cls, data: at.PyTree[ArrayT]) -> "ObservationIncontext[ArrayT]":
         """This method defines the mapping between unstructured data (i.e., nested dict) to the structured Observation format."""
         # Ensure that tokenized_prompt and tokenized_prompt_mask are provided together.
         # import ipdb; ipdb.set_trace()

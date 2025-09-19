@@ -81,6 +81,20 @@ class LiberoIncontextInputs(transforms.DataTransformFn):
             inputs["selected_episode"] = data["selected_episode"]
         if "index" in data:
             inputs["index"] = data["index"]
+        # XJ: add additional inputs to enable stage-wise prompt
+        '''
+        Example:
+            "frame_index": 234,
+            "episode_index": 47426,
+            "index": 15138419,
+            "task_index": 320,
+        '''
+        if "task_index" in data:
+            inputs["task_index"] = data["task_index"]
+        if "frame_index" in data:
+            inputs["frame_index"] = data["frame_index"]
+        if "episode_index" in data:
+            inputs["episode_index"] = data["episode_index"]
         return inputs
 
 
@@ -136,6 +150,20 @@ class LiberoIncontextInputs_refactor(transforms.DataTransformFn):
             inputs["selected_episode"] = data["selected_episode"]
         if "index" in data:
             inputs["index"] = data["index"]
+        # XJ: add additional inputs to enable stage-wise prompt
+        '''
+        Example:
+            "frame_index": 234,
+            "episode_index": 47426,
+            "index": 15138419,
+            "task_index": 320,
+        '''
+        if "task_index" in data:
+            inputs["task_index"] = data["task_index"]
+        if "frame_index" in data:
+            inputs["frame_index"] = data["frame_index"]
+        if "episode_index" in data:
+            inputs["episode_index"] = data["episode_index"]
         return inputs
 
 @dataclasses.dataclass(frozen=True)

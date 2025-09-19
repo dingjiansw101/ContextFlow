@@ -19,6 +19,41 @@ import openpi.transforms as _transforms
 
 T_co = TypeVar("T_co", covariant=True)
 
+import dataclasses
+from typing import Any, Dict, Sequence as _Seq  # 不覆盖上面的 Sequence
+
+@dataclasses.dataclass
+class DebugProbe:
+    tag: str = "probe"
+    keys: _Seq[str] = ("episode_index", "frame_index", "index", "task_index")
+    max_print: int = 5       # 仅打印前 N 次
+    every_n: int = 0         # 或每 N 次打印一次；0 表示不开
+
+    def __post_init__(self):
+        self._count = 0
+
+    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        self._count += 1
+        do_print = (self._count <= self.max_print) or (self.every_n and self._count % self.every_n == 0)
+        if do_print:
+            fields = " ".join(f"{k}={data.get(k, None)}" for k in self.keys)
+            print(f"[{self.tag}] {fields}")
+        return data
+
+def _instrument_transforms(transforms: Sequence[_transforms.DataTransformFn],
+                           *,
+                           prefix: str = "T",
+                           keys: tuple[str, ...] = ("episode_index", "frame_index", "index", "task_index"),
+                           max_print: int = 5) -> list[_transforms.DataTransformFn]:
+    """在每个 transform 前插入 DebugProbe(tag='prefix#idx:ClassName')。"""
+    out: list[_transforms.DataTransformFn] = []
+    for i, t in enumerate(transforms):
+        tag = f"{prefix}#{i}:{t.__class__.__name__}"
+        out.append(DebugProbe(tag=tag, keys=keys, max_print=max_print))
+        out.append(t)
+    return out
+
+
 # TODO: refactor: checking passed train_episode is None or not
 def is_effective_none(x):
     if x is None:
@@ -166,6 +201,26 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
     return dataset
 
 
+# def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
+#     """Transform the dataset by applying the data transforms."""
+#     norm_stats = {}
+#     if data_config.repo_id != "fake" and not skip_norm_stats:
+#         if data_config.norm_stats is None:
+#             raise ValueError(
+#                 "Normalization stats not found. "
+#                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
+#             )
+#         norm_stats = data_config.norm_stats
+        
+#     return TransformedDataset(
+#         dataset,
+#         [
+#             *data_config.repack_transforms.inputs,
+#             *data_config.data_transforms.inputs,
+#             _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
+#             *data_config.model_transforms.inputs,
+#         ],
+#     )
 def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
@@ -176,15 +231,21 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
             )
         norm_stats = data_config.norm_stats
-    return TransformedDataset(
-        dataset,
-        [
-            *data_config.repack_transforms.inputs,
-            *data_config.data_transforms.inputs,
-            _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
-            *data_config.model_transforms.inputs,
-        ],
-    )
+
+    # 先把原先的 transforms 串起来（不改变语义）
+    seq: list[_transforms.DataTransformFn] = [
+        *data_config.repack_transforms.inputs,
+        *data_config.data_transforms.inputs,
+        _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
+        *data_config.model_transforms.inputs,
+    ]
+
+    # 开关：DL_TRACE=1 时才注入探针（默认不打印）
+    if os.environ.get("DL_TRACE", "0") == "1":
+        seq = _instrument_transforms(seq, prefix="TF", keys=("episode_index", "frame_index", "index", "task_index"),
+                                     max_print=int(os.environ.get("DL_TRACE_MAX", "20")))
+
+    return TransformedDataset(dataset, seq)
 
 
 def create_data_loader(
@@ -281,11 +342,13 @@ def create_incontext_data_loader(
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
                                                                 episode_to_indexes_file=config.data.episode_to_indexes_file,
+                                                                all_episode_stage = config.data.all_episode_stage,
                                                                 )                                        
         else:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
-                                                                actions_cache_path=config.data.actions_cache_path)
+                                                                actions_cache_path=config.data.actions_cache_path,
+                                                                all_episode_stage = config.data.all_episode_stage)
         dataset = TransformedDataset(dataset, [add_demo_transform])
 
     if config.model.use_point_track_prompts:

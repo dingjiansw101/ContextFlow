@@ -6,7 +6,9 @@ import dataclasses
 import difflib
 import logging
 import pathlib
-from typing import Any, Protocol, TypeAlias, Optional, List, Union
+from typing import Any, Protocol, TypeAlias, Optional, List, Union, Iterable
+import os, re, json, jsonlines
+
 
 import etils.epath as epath
 import flax.nnx as nnx
@@ -60,12 +62,13 @@ import openpi.training.weight_loaders as weight_loaders
 import openpi.transforms as _transforms
 
 from pathlib import Path
-import jsonlines
-
 
 ModelType: TypeAlias = _model.ModelType
 # Work around a tyro issue with using nnx.filterlib.Filter directly.
 Filter: TypeAlias = nnx.filterlib.Filter
+# XJ:抓取文件名中的数字，例如 episode_000012.parquet -> 000012
+_NAME_RE = re.compile(r"(\d+)") 
+
 
 DEFAULT_LIBERO_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
 
@@ -127,7 +130,6 @@ DEFAULT_LIBERO_TEST_TASK_V4 = [
         "pick up the black bowl from table center and place it on the plate",
 ]
 
-import json
 
 DEFAULT_ROBOCASA_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
 DEFAULT_ROBOCASA_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_human_tasks.json']
@@ -137,8 +139,136 @@ DEFAULT_ROBOCASA_MG_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/
 DEFAULT_ROBOCASA_MG_TEST_TASK_WITHOUT_OPENDOUBLEDOOR = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_mg_tasks_without_open_double_door.json']
 
 
+# --- helper, keep tiny & local ---
+def _basename(x: str) -> str:
+    return os.path.basename(str(x)).strip()
+
+def _stem(x: str) -> str:
+    return os.path.splitext(_basename(x))[0]
+
+def _normalize_episode_name(x: str) -> str:
+    """
+    Normalize to basename like 'episode_000937.parquet'.
+    Accepts full path or name. Lowercases and strips spaces.
+    """
+    base = os.path.basename(x).strip()
+    return base
+
+def _name_to_index(name: str) -> Optional[int]:
+    """
+    从文件名中提取整数索引：
+      'episode_000012.parquet' -> 12
+      'episode_12' -> 12
+    提取失败返回 None
+    """
+    m = _NAME_RE.search(_stem(name))
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except Exception:
+        return None
+
+def _load_name_whitelist(src: Union[str, Path, List[str]]) -> List[str]:
+    if isinstance(src, list):
+        names = src
+    else:
+        p = Path(src)
+        if not p.exists():
+            raise FileNotFoundError(f"keep list not found: {p}")
+        if p.suffix.lower() in [".txt", ".list"]:
+            with p.open("r") as f:
+                names = [line.strip() for line in f if line.strip()]
+        elif p.suffix.lower() == ".json":
+            with p.open("r") as f:
+                obj = json.load(f)
+            if isinstance(obj, list):
+                names = obj
+            elif isinstance(obj, dict):
+                names = obj.get("episodes", [])
+            else:
+                raise ValueError(f"Unsupported JSON content in {p}")
+        else:
+            raise ValueError(f"Unsupported keep list suffix: {p.suffix}")
+    return [str(n).strip() for n in names if str(n).strip()]
 
 def get_kept_episode_indices(
+    episodes_jsonl_path: Union[str, Path],
+    exclude_task_language: Optional[List[str]],
+    include_episode_filenames: Optional[Union[str, Path, List[str]]] = None,
+    *,
+    verbose: bool = True,
+) -> Optional[List[int]]:
+    if episodes_jsonl_path is None:
+        return None
+
+    ep_path = Path(episodes_jsonl_path)
+    if not ep_path.exists():
+        raise FileNotFoundError(f"episodes.jsonl file not found at: {ep_path}")
+
+    kept: List[int] = []
+
+    # --- A) 按“文件名白名单”模式 ---
+    if include_episode_filenames is not None:
+        # 1) 先把文件名白名单解析成“索引白名单”
+        raw_names = _load_name_whitelist(include_episode_filenames)
+        idx_whitelist = set()
+        bad_names = []
+        for n in raw_names:
+            idx = _name_to_index(n)
+            if idx is None:
+                bad_names.append(n)
+            else:
+                idx_whitelist.add(idx)
+        if verbose:
+            print(f"[whitelist] loaded {len(raw_names)} names -> {len(idx_whitelist)} indices.")
+            if bad_names:
+                print(f"[whitelist][warn] failed to parse indices from {len(bad_names)} names (show up to 5): {bad_names[:5]}")
+
+        # 2) 扫 episodes.jsonl，按 episode_index 匹配
+        found_indices = set()
+        with jsonlines.open(ep_path, mode="r") as reader:
+            for entry in reader:
+                ep_idx = entry.get("episode_index")
+                if ep_idx is None:
+                    continue
+                try:
+                    ep_idx = int(ep_idx)
+                except Exception:
+                    continue
+                if ep_idx in idx_whitelist:
+                    kept.append(ep_idx)
+                    found_indices.add(ep_idx)
+
+        if verbose:
+            print(f"[whitelist] matched {len(kept)} episodes by index.")
+            if len(found_indices) < len(idx_whitelist):
+                missing = sorted(idx_whitelist - found_indices)
+                print(f"[whitelist][diagnose] {len(idx_whitelist)-len(found_indices)} indices from keep list not found in jsonl (up to 10): {missing[:10]}")
+
+        return kept
+
+    # --- B) 保持你原来的“按任务描述排除”逻辑 ---
+    if exclude_task_language is None:
+        return None
+    if not isinstance(exclude_task_language, list) or not all(isinstance(t, str) for t in exclude_task_language):
+        raise TypeError("exclude_task_language must be a list of strings.")
+
+    with jsonlines.open(ep_path, mode='r') as reader:
+        for entry in reader:
+            if "episode_index" not in entry or "tasks" not in entry:
+                raise ValueError(f"Invalid entry (missing 'episode_index' or 'tasks'): {entry}")
+            tasks = entry["tasks"]
+            if not isinstance(tasks, list):
+                raise ValueError(f"'tasks' must be a list of strings, but got: {type(tasks)}")
+            if not any(task in exclude_task_language for task in tasks):
+                kept.append(int(entry["episode_index"]))
+
+    if verbose:
+        print(f"[exclude-by-task] kept {len(kept)} episodes.")
+    return kept
+
+def deprecated_get_kept_episode_indices(
     episodes_jsonl_path: Union[str, Path],
     exclude_task_language: List[str]
 ) -> Optional[List[int]]:
@@ -323,6 +453,8 @@ class DataConfigFactory(abc.ABC):
     episode_json_path: tyro.conf.Suppress[Optional[str]] = None
     task_to_episode: tyro.conf.Suppress[Optional[str]] = None
     episode_to_indexes_file: tyro.conf.Suppress[Optional[str]] = None
+    # white list: a josn path that contains all training episodes
+    keep_episode_filename_list: tyro.conf.Suppress[Optional[Union[str, Path, List[str]]]] = None
 
 
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
@@ -508,6 +640,7 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
                         "actions": "actions",
                         "prompt": "prompt",
                         "episode_index": "episode_index",
+                        "frame_index": "frame_index", 
                         "index": "index",
                         "task_index": "task_index",
                     }
@@ -573,6 +706,105 @@ class LeRobotLiberoIncontextDataConfig(DataConfigFactory):
             train_episode=train_epi,
         )
 
+@dataclasses.dataclass(frozen=True)
+class LeRobotLiberoStageIncontextDataConfig(DataConfigFactory):
+    use_delta_joint_actions: bool = True
+    states_cache_path: str = "metadata/libero/episode_states_cache.json"
+    actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
+    task_to_episode: str='metadata/libero/task_to_episode.json'
+    episode_to_indexes_file: str='metadata/libero/episode_to_indexes.json'
+    tracks_path: str = "metadata/libero/episode_tracks_combined.json"
+    libero_input_refactor: bool = False
+    # white list: a list of training episodes
+    all_episode_stage: Optional[Union[str, Path, List[str]]] = None
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        # Make inputs look like they come from the Libero environment
+        repack_transform = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "observation/image": "image",
+                        "observation/wrist_image": "wrist_image",
+                        "observation/state": "state",
+                        "actions": "actions",
+                        "prompt": "prompt",
+                        "episode_index": "episode_index",
+                        "frame_index": "frame_index", 
+                        "index": "index",
+                        "task_index": "task_index",
+                    }
+                )
+            ]
+        )
+
+        # Xianjie: calculate training episode indexi first
+        # --- choose train episodes ---
+        if self.keep_episode_filename_list is not None:
+            # white list
+            train_epi = get_kept_episode_indices(
+                self.episode_json_path,
+                exclude_task_language=None,
+                include_episode_filenames=self.keep_episode_filename_list,  
+            )
+        else:
+            train_epi = get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+
+        # Prepare data for policy training
+        # inject the indexes of demo prompt, TODO: provide json file_paths here
+        data_transforms = _transforms.Group(
+            inputs=[_transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, 
+                                                  random_select=model_config.random_select,
+                                                  sample_episodes=model_config.sample_episodes,
+                                                  task_to_episode=self.task_to_episode,
+                                                  episode_to_indexes=self.episode_to_indexes_file,
+                                                  train_episode_index_list=train_epi,
+                                                  all_episode_stage = self.all_episode_stage)],
+            outputs=[],
+        )
+
+        # Convert images to uint8 numpy arrays, add masks
+        if self.libero_input_refactor:
+            data_transforms = data_transforms.push(
+                inputs=[
+                    libero_incontext_policy.LiberoIncontextInputs_refactor(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+        else:
+            data_transforms = data_transforms.push(
+                inputs=[
+                    libero_incontext_policy.LiberoIncontextInputs(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+        
+        # TODO: fix the bug of libero actions.
+        # fix it and re-train on libero
+        # Use delta actions (not for gripper)
+        if self.use_delta_joint_actions:
+            delta_action_mask = _transforms.make_bool_mask(6, -1)
+            data_transforms = data_transforms.push(
+                inputs=[_transforms.DeltaActions(delta_action_mask)],
+                outputs=[_transforms.AbsoluteActions(delta_action_mask)],
+            )
+        # else:
+            # import ipdb; ipdb.set_trace()
+        # Model transforms include things like tokenizing the prompt and action targets
+        model_transforms = ModelTransformFactory()(model_config)
+
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs),
+            repack_transforms=repack_transform,
+            data_transforms=data_transforms,
+            model_transforms=model_transforms,
+            train_episode=train_epi,
+        )
 
 @dataclasses.dataclass(frozen=True)
 class LeRobotAlohaMobileDataConfig(DataConfigFactory):
@@ -957,6 +1189,7 @@ class LeRobotRobocasaHumanThreeImageIncontextDataConfig(DataConfigFactory):
                         "actions": "actions",
                         "prompt": "prompt",
                         "episode_index": "episode_index",
+                        "frame_index": "frame_index", 
                         "index": "index",
                         "task_index": "task_index",
                     }
@@ -1029,6 +1262,7 @@ class LeRobotRobocasaMgThreeImageIncontextDataConfig(DataConfigFactory):
                         "actions": "actions",
                         "prompt": "prompt",
                         "episode_index": "episode_index",
+                        "frame_index": "frame_index", 
                         "index": "index",
                         "task_index": "task_index",
                     }
@@ -7944,6 +8178,70 @@ _CONFIGS = [
         ema_decay=None,
         num_workers=16,
         batch_size=32,
+    ),
+    
+    # stage-wise incontext 
+    TrainConfig(
+        name="pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ),
+        data=LeRobotLiberoStageIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            keep_episode_filename_list="/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/libero/all_stage_clean.json",
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            all_episode_stage = "/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/libero/all_segments_summary.json",
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+    TrainConfig(
+        name="pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all",
+        model=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ),
+        data=LeRobotLiberoStageIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            keep_episode_filename_list="/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/libero/all_stage_noisy.json",
+            episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            all_episode_stage = "/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/libero/all_segments_summary.json",
+
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+        # wandb_enabled=False,
     ),
 ]
 
