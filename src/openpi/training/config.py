@@ -66,11 +66,19 @@ from pathlib import Path
 ModelType: TypeAlias = _model.ModelType
 # Work around a tyro issue with using nnx.filterlib.Filter directly.
 Filter: TypeAlias = nnx.filterlib.Filter
-# XJ:抓取文件名中的数字，例如 episode_000012.parquet -> 000012
 _NAME_RE = re.compile(r"(\d+)") 
 
+from pathlib import Path
 
-DEFAULT_LIBERO_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
+def get_project_root() -> Path:
+    if "OPENPI_PROJECT_ROOT" in os.environ:
+        return Path(os.environ["OPENPI_PROJECT_ROOT"]).expanduser().resolve()
+    return Path(__file__).resolve().parents[3]
+
+PROJECT_ROOT = get_project_root()
+
+DEFAULT_LIBERO_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl").expanduser())
+#"/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
 
 DEFAULT_LIBERO_TEST_TASK = [
         # 10
@@ -130,13 +138,24 @@ DEFAULT_LIBERO_TEST_TASK_V4 = [
         "pick up the black bowl from table center and place it on the plate",
 ]
 
+DEFAULT_ROBOCASA_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl").expanduser())
+#"/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
 
-DEFAULT_ROBOCASA_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
-DEFAULT_ROBOCASA_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_human_tasks.json']
 
-DEFAULT_ROBOCASA_MG_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/episodes.jsonl"
-DEFAULT_ROBOCASA_MG_TEST_TASK = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_mg_tasks.json']
-DEFAULT_ROBOCASA_MG_TEST_TASK_WITHOUT_OPENDOUBLEDOOR = ['/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/robocasa/robocasa_mg_tasks_without_open_double_door.json']
+DEFAULT_ROBOCASA_TEST_TASK = [
+    str(PROJECT_ROOT / "examples" / "robocasa" / "robocasa_human_tasks.json")
+]
+
+DEFAULT_ROBOCASA_MG_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/episodes.jsonl").expanduser())
+#"/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/episodes.jsonl"
+
+DEFAULT_ROBOCASA_MG_TEST_TASK = [
+    str(PROJECT_ROOT / "examples" / "robocasa" / "robocasa_mg_tasks.json")
+]
+
+DEFAULT_ROBOCASA_MG_TEST_TASK_WITHOUT_OPENDOUBLEDOOR = [
+    str(PROJECT_ROOT / "examples" / "robocasa" / "robocasa_mg_tasks_without_open_double_door.json")
+]
 
 
 # --- helper, keep tiny & local ---
@@ -156,10 +175,10 @@ def _normalize_episode_name(x: str) -> str:
 
 def _name_to_index(name: str) -> Optional[int]:
     """
-    从文件名中提取整数索引：
+    get int from file name:
       'episode_000012.parquet' -> 12
       'episode_12' -> 12
-    提取失败返回 None
+    fail get None
     """
     m = _NAME_RE.search(_stem(name))
     if not m:
@@ -208,9 +227,7 @@ def get_kept_episode_indices(
 
     kept: List[int] = []
 
-    # --- A) 按“文件名白名单”模式 ---
     if include_episode_filenames is not None:
-        # 1) 先把文件名白名单解析成“索引白名单”
         raw_names = _load_name_whitelist(include_episode_filenames)
         idx_whitelist = set()
         bad_names = []
@@ -225,7 +242,6 @@ def get_kept_episode_indices(
             if bad_names:
                 print(f"[whitelist][warn] failed to parse indices from {len(bad_names)} names (show up to 5): {bad_names[:5]}")
 
-        # 2) 扫 episodes.jsonl，按 episode_index 匹配
         found_indices = set()
         with jsonlines.open(ep_path, mode="r") as reader:
             for entry in reader:
@@ -248,7 +264,6 @@ def get_kept_episode_indices(
 
         return kept
 
-    # --- B) 保持你原来的“按任务描述排除”逻辑 ---
     if exclude_task_language is None:
         return None
     if not isinstance(exclude_task_language, list) or not all(isinstance(t, str) for t in exclude_task_language):
@@ -8242,6 +8257,80 @@ _CONFIGS = [
         num_workers=8,
         batch_size=32,
         # wandb_enabled=False,
+    ),
+    
+    # scale-up: large lr + 
+    TrainConfig(
+        name="pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            vocab_size=50_000, 
+            prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16",
+            use_image_prompts=True, use_action_state_prompts=True),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+            remove_task_list=DEFAULT_ROBOCASA_MG_TEST_TASK,
+            episode_json_path=DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.EmptyLoader(),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 10_000,
+            peak_lr= 5e-4,
+            decay_steps= 1_500_000,
+            decay_lr= 5e-5),
+        num_train_steps=1_500_000,
+        ema_decay=0.999,
+        # num_worker per GPU
+        num_workers=8,
+        # batch size in total (bs_per_gpu = batch_size / #_GPUs)
+        batch_size=128,
+    ),
+    TrainConfig(
+        name="pi0tiny_incontext_robocasa_mg_three_image_scaleup_inference",
+        model=pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            vocab_size=50_000, 
+            prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16",
+            use_image_prompts=True, use_action_state_prompts=True),
+        data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+            repo_id="daixianjie/robocasa_mg_lerobot",
+            base_config=DataConfig(
+                local_files_only=False,  
+                prompt_from_task=True,
+            ),
+            task_to_episode='metadata/robocasa_mg/task_to_episode.json',
+            episode_to_indexes_file='metadata/robocasa_mg/episode_to_indexes.json',
+            states_cache_path="metadata/robocasa_mg/episode_states_cache.json",
+            actions_cache_path="metadata/robocasa_mg/episode_actions_cache.json",
+        ),
+        vision_weight_loader=weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=weight_loaders.EmptyLoader(),
+        lr_schedule = _optimizer.CosineDecaySchedule(
+            warmup_steps = 10_000,
+            peak_lr= 5e-4,
+            decay_steps= 1_500_000,
+            decay_lr= 5e-5),
+        num_train_steps=1_500_000,
+        ema_decay=0.999,
+        # num_worker per GPU
+        num_workers=8,
+        # batch size in total (bs_per_gpu = batch_size / #_GPUs)
+        batch_size=128,
     ),
 ]
 

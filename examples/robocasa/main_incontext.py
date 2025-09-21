@@ -160,7 +160,7 @@ def eval_robocasa(args: Args) -> None:
     # Set random seed
     np.random.seed(args.seed)
 
-    filename = pathlib.Path("/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/tasks.jsonl")
+    filename = pathlib.Path("~/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/tasks.jsonl").expanduser()
     task_description2index = get_task_to_index_mapping(filename)
     
     video_out_path = f"data/robocasa/{args.env_name}/videos"
