@@ -435,7 +435,7 @@ def main(config: _config.TrainConfig):
 
     if config.batch_size % jax.device_count() != 0:
         raise ValueError(
-            f"Batch size {config.batch_size} must be divisible by the number of devices {jax.device_count()}."
+            f"Batch size {config.batch_size} must be divisible by the GLOBAL device count {jax.device_count()}"
         )
 
     jax.config.update("jax_threefry_partitionable", True)  # noqa: FBT003
@@ -476,11 +476,20 @@ def main(config: _config.TrainConfig):
     logging.info(f"Initialized data loader:\n{training_utils.array_tree_to_info(batch)}")
 
     train_state, train_state_sharding = init_train_state(config, init_rng, mesh, resume=resuming)
-    jax.block_until_ready(train_state)
-    logging.info(f"Initialized train state:\n{training_utils.array_tree_to_info(train_state.params)}")
+    
+    ### XJ: multi-node helper
+    # jax.block_until_ready(train_state)
+    # logging.info(f"Initialized train state:\n{training_utils.array_tree_to_info(train_state.params)}")
 
+    # if resuming:
+    #     train_state = _checkpoints.restore_state(checkpoint_manager, train_state, data_loader)
+    
     if resuming:
         train_state = _checkpoints.restore_state(checkpoint_manager, train_state, data_loader)
+    else:
+        jax.block_until_ready(train_state)
+    logging.info(f"Initialized train state:\n{training_utils.array_tree_to_info(train_state.params)}")
+
 
     ptrain_step = jax.jit(
         functools.partial(train_step, config),
@@ -495,6 +504,8 @@ def main(config: _config.TrainConfig):
         initial=start_step,
         total=config.num_train_steps,
         dynamic_ncols=True,
+        ### XJ: multi node helper
+        disable=not is_coordinator(),
     )
 
     infos = []
@@ -502,7 +513,9 @@ def main(config: _config.TrainConfig):
         with sharding.set_mesh(mesh):
             train_state, info = ptrain_step(train_rng, train_state, batch)
         infos.append(info)
-        if step % config.log_interval == 0:
+        ### XJ; multi node helper
+        # if step % config.log_interval == 0:
+        if is_coordinator() and step % config.log_interval == 0:
             stacked_infos = common_utils.stack_forest(infos)
             reduced_info = jax.device_get(jax.tree.map(jnp.mean, stacked_infos))
             info_str = ", ".join(f"{k}={v:.4f}" for k, v in reduced_info.items())
@@ -511,11 +524,14 @@ def main(config: _config.TrainConfig):
             infos = []
         batch = next(data_iter)
 
-        if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
+        ### XJ: multi node helper
+        # if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
+        if is_coordinator() and (((step % config.save_interval) == 0 and step > start_step) or step == config.num_train_steps - 1):
             _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
 
-    logging.info("Waiting for checkpoint manager to finish")
-    checkpoint_manager.wait_until_finished()
+    if is_coordinator():
+        logging.info("Waiting for checkpoint manager to finish")
+        checkpoint_manager.wait_until_finished()
 
 
 if __name__ == "__main__":

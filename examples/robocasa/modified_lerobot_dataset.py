@@ -73,26 +73,26 @@ LEROBOT_HOME = Path(os.getenv("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).e
 
 from collections import OrderedDict
 
-class LimitedCache:
-    def __init__(self, maxsize=20000):
-        self.cache = OrderedDict()
-        self.maxsize = maxsize
+# class LimitedCache:
+#     def __init__(self, maxsize=20000):
+#         self.cache = OrderedDict()
+#         self.maxsize = maxsize
 
-    def get(self, key):
-        if key in self.cache:
-            self.cache.move_to_end(key)  # 最近使用的放到末尾
-            return self.cache[key]
-        return None
+#     def get(self, key):
+#         if key in self.cache:
+#             self.cache.move_to_end(key)  # 最近使用的放到末尾
+#             return self.cache[key]
+#         return None
 
-    def set(self, key, value):
-        if key in self.cache:
-            self.cache.move_to_end(key)
-        self.cache[key] = value
-        if len(self.cache) > self.maxsize:
-            self.cache.popitem(last=False)  # 弹出最久未使用的项
+#     def set(self, key, value):
+#         if key in self.cache:
+#             self.cache.move_to_end(key)
+#         self.cache[key] = value
+#         if len(self.cache) > self.maxsize:
+#             self.cache.popitem(last=False)  # 弹出最久未使用的项
 
-    def __contains__(self, key):
-        return key in self.cache
+#     def __contains__(self, key):
+#         return key in self.cache
 
 
 class LeRobotDatasetMetadata:
