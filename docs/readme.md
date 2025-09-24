@@ -66,9 +66,16 @@ mkdir -p assets/pi0tiny_incontext_robocasa_mg_three_image_scaleup_inference/daix
 2. metadata
 # please copy the shared metadata (robocasa) to the "metadata" folder under the project directory
 
+
+
+3. Lerobot Source code
+# in order to be compatible with our robocasa dataset and increase the dataloader throughput, please modift the source code of lerobot:
+
+# 1. replace openpi/.venv/lib/python3.11/site-packages/lerobot/common/datasets/lerobot_dataset.py with openpi/examples/robocasa/modified_lerobot_dataset.py
+# 2. replace openpi/.venv/lib/python3.11/site-packages/lerobot/common/datasets/utils.py with openpi/examples/robocasa/modified_utils.py
 ```
 
-## Training Script (please avoid any V100 GPU!)
+## Training Script (please avoid using any V100 GPU!)
 
 Here is an example using SLURM to submit a training job (assuming the script is under the project directory, i.e. xxx/openpi/scripts.sh):
 
