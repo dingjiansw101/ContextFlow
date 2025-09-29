@@ -135,7 +135,7 @@ class InjectDemoIndexes(DataTransformFn):
     sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None
     
-    # XJ: for stage-wise prompt
+    # XJ(stage-wise prompt)
     all_episode_stage: Optional[str] = None # json path or None
     override_index: Optional[bool] = False # only used when sample_frames == 2
     provided_stage_key: str = "stage_rank"   # <- 新增：从 data 里读取的键名
@@ -166,6 +166,7 @@ class InjectDemoIndexes(DataTransformFn):
             # so we can simple reindex the frame index in the following way:
             episode_to_indexes = reindex_filtered_dict(episode_to_indexes)
 
+        # XJ(stage-wise prompt)
         # ---- XJ: filter task_to_episode only when all_episode_stage is not None ----
         if self.all_episode_stage is not None and self.train_episode_index_list is not None:
             # 1) 允许集合：白名单 ∩ episode_to_indexes 中“存在且帧数>0”的 episode
@@ -192,6 +193,7 @@ class InjectDemoIndexes(DataTransformFn):
         object.__setattr__(self, "task_to_episode", task_to_episode)
         object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
         
+        # XJ(stage-wise prompt)
         # ---- XJ: preprocess all_episode_stage（list -> dict index）----
         stage_map: Optional[Dict[str, List[Dict[str, Any]]]] = None
         if self.all_episode_stage is not None:
@@ -221,7 +223,6 @@ class InjectDemoIndexes(DataTransformFn):
                     if norm:
                         tmp[name] = norm
             stage_map = tmp if tmp else None
-
         object.__setattr__(self, "_episode_stage_map", stage_map)
 
         # XJ: Initialize inference cache
@@ -232,12 +233,12 @@ class InjectDemoIndexes(DataTransformFn):
             "provided_stage_rank": None,
         })
         
-    # casr episode_index（e.g: 47426）to standard file name
+    # XJ(stage-wise prompt): casr episode_index（e.g: 47426）to standard file name
     @staticmethod
     def _index_to_episode_name(ep_idx: int) -> str:
         return f"episode_{ep_idx:06d}.parquet"
 
-    # based on frame_idx_in_episode, find the stage in segments
+    # XJ(stage-wise prompt): based on frame_idx_in_episode, find the stage in segments
     @staticmethod
     def _find_stage(segments: List[Dict[str, Any]], frame_idx_in_episode: int) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
         for rank, seg in enumerate(segments):
@@ -257,7 +258,8 @@ class InjectDemoIndexes(DataTransformFn):
 
         split = data.get("split", "train")
         
-        provided_rank = data.get(self.provided_stage_key, None)  # <- 新增
+        # XJ(stage-wise prompt)
+        # provided_rank = data.get(self.provided_stage_key, None) 
 
         
         # === XJ: Inference cache hit ===
@@ -315,7 +317,7 @@ class InjectDemoIndexes(DataTransformFn):
                 chosen = frame_idxs
                 raise ValueError(f"InjectDemoIndexes (XJ): too few frames! len(frame_idxs)={n} in episode {selected_episodes} of task {task_index}, n<=self.sample_frames")
 
-            # XJ: override dem_prompt_indexes only when sample 2 frames
+            # XJ(stage-wise prompt): override dem_prompt_indexes only when sample 2 frames
             if self.all_episode_stage is not None and self.override_index and self.sample_frames == 2 and self._episode_stage_map is not None:
                 if cur_stage is not None:
                     # override "chosen" by the first and last frames of the current stage (map to the frame doamin of selected demo-episode) 
@@ -389,6 +391,89 @@ def tree_stack_np(list_of_trees, axis=0):
 
     return jax.tree_map(stack_fn, *list_of_trees)
 
+@dataclasses.dataclass(frozen=True)
+class AddCurrentFramesSequenceTransform(DataTransformFn):
+    """
+    给“当前样本”补上同 episode 的 N 帧序列（图像/状态/动作），
+    并把 actions 从 [H,A] 改成 [N,H,A]，供 fused loss 使用。
+    """
+    dataset: any
+    episode_to_indexes_file: Optional[str] = "metadata/libero/episode_to_indexes.json"
+    n_frames: int = 4                       # 你想要的 N
+    sampling: str = "uniform"               # "uniform" or "around"
+    train_episode_index_list: Optional[List[int]] = None
+
+
+    def __post_init__(self):
+        epi2idx = None
+        if self.episode_to_indexes_file is not None:
+            p = Path(self.episode_to_indexes_file)
+            if p.exists():
+                with p.open("r") as f:
+                    raw = json.load(f)  # { "123": [global_idx, ...], ... }
+                if self.train_episode_index_list is None:
+                    epi2idx = {int(k): v for k, v in raw.items()}
+                else:
+                    # 先按训练子集过滤，再把全局帧索引做连续重映射（与你现有逻辑一致）
+                    filt = {int(k): v for k, v in raw.items()
+                            if int(k) in set(self.train_episode_index_list)}
+                    epi2idx = reindex_filtered_dict(filt)
+        object.__setattr__(self, "_epi2idx", epi2idx)
+
+    def _pick_indices(self, frame_list: List[int], anchor_local_idx: Optional[int]) -> List[int]:
+        n = len(frame_list)
+        if n == 0 or self.n_frames <= 1:
+            raise ValueError("[AddCurrentFramesSequenceTransform] Episode has no frames or self.n_frames <= 1.")
+
+        if self.sampling == "around" and anchor_local_idx is not None:
+            half = max(1, self.n_frames // 2)
+            s = max(0, min(anchor_local_idx - half + 1, n - self.n_frames))
+            e = min(n, s + self.n_frames)
+            loc = list(range(s, e))
+        else:
+            # 均匀采样
+            loc = np.linspace(0, n - 1, num=self.n_frames, dtype=int).tolist()
+
+        return [int(frame_list[i]) for i in loc]
+
+    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        # 仅训练启用；推理/验证保持单帧，避免额外显存和不必要逻辑
+        split = data.get("split", "train")
+        if split != "train" or self.n_frames <= 1:
+            return data
+
+        # 这些键来自 lerobot item（与你现有 transform 一致）
+        ep_idx = int(data["episode_index"])
+        # "around" 模式下用相对帧号做锚点；没有就退回 uniform
+        anchor_local = data.get("frame_index", None)
+        anchor_local = int(anchor_local) if anchor_local is not None else None
+
+        # 优先用 episode_to_indexes.json 提供的（episode -> 全局帧索引序列）
+        chosen_global: List[int]
+        if self._epi2idx is not None and ep_idx in self._epi2idx:
+            frame_list = self._epi2idx[ep_idx]  # List[int]（全局帧索引）
+            chosen_global = self._pick_indices(frame_list, anchor_local)
+        else:
+            raise ValueError("[AddCurrentFramesSequenceTransform] self._epi2idx is not None and ep_idx in self._epi2idx is false.")
+
+        # 取 N 帧并按“帧维”堆叠（完全复用你在 AddImagePromptTransform 的堆法）
+        items = [self.dataset[int(i)] for i in chosen_global]
+        if len(items) == 0:
+            raise ValueError(f"[AddCurrentFramesSequenceTransform] empty chosen_global: {chosen_global}")
+        stacked = tree_stack_np(items)  # 每个叶子都会多出一维 N
+
+        # 组织输出（直接从 stacked 拆；避免自己再拼 dict，降低出错率）
+        images_seq = {name: arr for name, arr in stacked["image"].items()}
+        masks_seq  = {name: arr for name, arr in stacked["image_mask"].items()}
+        state_seq = stacked["state"]     # [N, A]
+        act_seq   = stacked["actions"]   # [N, H, A]
+
+        data["current_images_seq"]       = images_seq
+        data["current_image_masks_seq"]  = masks_seq
+        data["current_state_seq"]        = state_seq.astype(np.float32)
+        data["actions_seq"]              = act_seq.astype(np.float32)  # 覆盖为 [N,H,A]
+
+        return data
 
 @dataclasses.dataclass(frozen=True)
 class AddImagePromptTransform(DataTransformFn):
@@ -625,16 +710,6 @@ class AddImagePromptTransform(DataTransformFn):
 #             self._cache["actions_mask"] = stacked_actions_mask
         
 #         return data
-
-# -*- coding: utf-8 -*-
-import dataclasses
-import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np
-from tqdm import tqdm
-
 
 @dataclasses.dataclass(frozen=True)
 class AddStatesActionsPromptTransform(DataTransformFn):

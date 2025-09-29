@@ -342,14 +342,26 @@ def create_incontext_data_loader(
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
                                                                 episode_to_indexes_file=config.data.episode_to_indexes_file,
-                                                                all_episode_stage = config.data.all_episode_stage,
+                                                                all_episode_stage=getattr(config.data, "all_episode_stage", None),
                                                                 )                                        
         else:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
-                                                                all_episode_stage = config.data.all_episode_stage)
+                                                                all_episode_stage=getattr(config.data, "all_episode_stage", None),
+                                                                )
         dataset = TransformedDataset(dataset, [add_demo_transform])
+    
+    if config.model.use_frame_sequence_transform: 
+        print("Using frame-sequence transform (training frame sequences)")
+        dataset = TransformedDataset(dataset, [
+            _transforms.AddCurrentFramesSequenceTransform(
+                dataset=dataset,
+                episode_to_indexes_file=config.data.episode_to_indexes_file,  # 你已有的 json
+                n_frames=config.model.frame_sequence_length,                  
+                sampling="uniform",                                            # 或 "around"
+            )
+        ])
 
     if config.model.use_point_track_prompts:
         print("Using point track prompt")
