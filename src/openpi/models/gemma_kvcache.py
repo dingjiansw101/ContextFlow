@@ -298,31 +298,30 @@ class Attention(nn.Module):
         用 lax.broadcast_in_dim 把 cache 在“隐含的 N 维”上广播，
         再视图式 reshape成 [B*N, ...] 与当前 k,v 对齐。
         '''
-        if kv_cache is not None:
-            cache_k, cache_v = kv_cache  # [Bc, Tpm, K, H]
-            Bq = q.shape[0]
-            Bc = cache_k.shape[0]
-            if Bq != Bc:
-                if (Bq % Bc) != 0:
-                    raise ValueError(f"kv_cache batch {Bc} not dividing current batch {Bq}.")
-                if not self.allow_bn_broadcast:
-                    raise ValueError("Batch mismatch but broadcasting disabled.")
-                N = Bq // Bc
-                cache_k = jax.lax.broadcast_in_dim(
-                    cache_k,  # [B, Tpm, K, H]
-                    shape=(Bc, N, cache_k.shape[1], cache_k.shape[2], cache_k.shape[3]),
-                    broadcast_dimensions=(0, 2, 3, 4),
-                ).reshape(Bq, cache_k.shape[1], cache_k.shape[2], cache_k.shape[3])
-                cache_v = jax.lax.broadcast_in_dim(
-                    cache_v,
-                    shape=(Bc, N, cache_v.shape[1], cache_v.shape[2], cache_v.shape[3]),
-                    broadcast_dimensions=(0, 2, 3, 4),
-                ).reshape(Bq, cache_v.shape[1], cache_v.shape[2], cache_v.shape[3])
-            # 把 midfix 的 KV 接到前面
-            k = jnp.concatenate([cache_k, k], axis=1)
-            v = jnp.concatenate([cache_v, v], axis=1)
+        cache_k, cache_v = kv_cache  # [Bc, Tpm, K, H]，可能 Tpm=0
+        assert cache_k.ndim == 4 and cache_v.ndim == 4
 
-            
+        Bq = q.shape[0]
+        Bc = cache_k.shape[0]
+        if Bq != Bc:
+            if (Bq % Bc) != 0:
+                raise ValueError(f"kv_cache batch {Bc} not dividing current batch {Bq}.")
+            if not self.allow_bn_broadcast:
+                raise ValueError("Batch mismatch but broadcasting disabled.")
+            N = Bq // Bc
+            cache_k = jax.lax.broadcast_in_dim(
+                cache_k,  # [Bc, Tpm, K, H]
+                shape=(Bc, N, cache_k.shape[1], cache_k.shape[2], cache_k.shape[3]),
+                broadcast_dimensions=(0, 2, 3, 4),
+            ).reshape(Bq, cache_k.shape[1], cache_k.shape[2], cache_k.shape[3])
+            cache_v = jax.lax.broadcast_in_dim(
+                cache_v,
+                shape=(Bc, N, cache_v.shape[1], cache_v.shape[2], cache_v.shape[3]),
+                broadcast_dimensions=(0, 2, 3, 4),
+            ).reshape(Bq, cache_v.shape[1], cache_v.shape[2], cache_v.shape[3])
+
+        k = jnp.concatenate([cache_k, k], axis=1)  # 若 Tpm=0 就等价于原 k
+        v = jnp.concatenate([cache_v, v], axis=1)
 
         q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
         logits = jnp.einsum("BTKGH,BSKH->BKGTS", q, k, preferred_element_type=jnp.float32)
@@ -458,6 +457,14 @@ class Module(nn.Module):
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()  # Every float is dropped independently.
+    
+    def _zero_kv(self, B: int, dtype) -> KVCache:
+        L = self.configs[0].depth
+        K = self.configs[0].num_kv_heads
+        H = self.configs[0].head_dim
+        k0 = jnp.zeros((L, B, 0, K, H), dtype)
+        v0 = jnp.zeros((L, B, 0, K, H), dtype)
+        return (k0, v0)
 
     def setup(self):
         # all experts must have the same depth
@@ -479,10 +486,9 @@ class Module(nn.Module):
             block_cls,
             variable_axes={"params": 0},
             split_rngs={"params": True, "dropout": True},
-            ### XJ: self.layers 的前 4 个位置参数依次是：embedded, kv_cache, positions, mask
-            # embedded 设成了 0（意味着它自带一个“层维”要扫描），但 embedded 实际并没有层维，这里应该 broadcast
-            in_axes=(nn.broadcast, 0, nn.broadcast, nn.broadcast),
-            # in_axes=(0, nn.broadcast, nn.broadcast, nn.broadcast),  # 0=kv_cache, 1=positions, 2=mask, 3=decode
+            # Arguments after the carry (`xs`) are: kv_cache, positions, mask, deterministic.
+            # `kv_cache` carries the per-layer axis, so slice axis 0 for both K and V while broadcasting the rest.
+            in_axes=(0, nn.broadcast, nn.broadcast, nn.broadcast),
             length=self.configs[0].depth,
         )(
             configs=self.configs,
@@ -511,18 +517,20 @@ class Module(nn.Module):
         kv_cache: KVCache | None = None,
         deterministic: bool = True,
     ) -> tuple[Sequence[at.Float[at.Array, "b _t _d"] | None], KVCache]:
-        embedded = jax.tree_map(lambda e: e.astype(self.embed_dtype) if e is not None else None, embedded)
+        embedded = jax.tree.map(lambda e: e.astype(self.embed_dtype) if e is not None else None, embedded)
         mask = jnp.asarray(mask)[:, None, :, :]
 
-        # ★ NEW：scan 的第二个参数我们设了 in_axes=0，因此需要有“层维”。
-        L = self.configs[0].depth
-        kv_arg = kv_cache if kv_cache is not None else [None] * L
+        # 取 batch 大小 & dtype
+        e0 = next(e for e in embedded if e is not None)                # [B, T, D]
+        B  = int(e0.shape[0])
+        dt = jnp.dtype(self.embed_dtype)
+
+        # ★ 关键：没有 cache 时，传“零长 cache”，且带层维 L
+        kv_arg = kv_cache if kv_cache is not None else self._zero_kv(B, dt)
 
         embedded, kv_cache = self.layers(embedded, kv_arg, positions, mask, deterministic)
-
-        assert all(e.dtype == jnp.dtype(self.embed_dtype) for e in embedded if e is not None)
         return [f(e) if e is not None else e for f, e in zip(self.final_norms, embedded, strict=True)], kv_cache
-
+        
     def init(self):
         """Convenience method for initializing all parameters, necessary due to the quirks of linen."""
         self.embed(jnp.zeros((1, 1), dtype=jnp.int32))
@@ -556,10 +564,11 @@ class Module(nn.Module):
         """
         embedded_pm = jax.tree.map(lambda e: e.astype(self.embed_dtype) if e is not None else None, embedded_pm)
         mask_pm_b = jnp.asarray(mask_pm)[:, None, :, :]  # [B,1,T,S] as expected by Attention
-        # Pass kv_cache=None; scan will return stacked per-layer (k,v)
-        L = self.configs[0].depth
-        _, kv_cache = self.layers(embedded_pm, [None] * L, positions_pm, mask_pm_b, deterministic)
-        ### XJ: for clarification: using prefix-midfix KV cahce
+        e0 = next(e for e in embedded_pm if e is not None)
+        B  = int(e0.shape[0])
+        dt = jnp.dtype(self.embed_dtype)
+
+        _, kv_cache = self.layers(embedded_pm, self._zero_kv(B, dt), positions_pm, mask_pm_b, deterministic)
         return PMCache(kv_cache)
     
     # ------------ NEW: helper to decode suffix using a given per-layer KV cache ------------
