@@ -1,0 +1,628 @@
+from __future__ import annotations
+import dataclasses
+import tyro
+import pathlib
+import json
+from collections.abc import Sequence
+from typing_extensions import override
+
+import openpi.policies.aloha_mobile_incontext_policy as aloha_incontext_policy
+import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
+import openpi.policies.aloha_policy as aloha_policy
+
+def build(api) -> list["api.TrainConfig"]:
+    g = globals()
+    g["DataConfig"] = getattr(api, "DataConfig")
+    g["BaseModelConfig"] = getattr(api._model, "BaseModelConfig")
+    g["Group"] = getattr(api, "_transforms").Group
+    g["TrainConfig"] = getattr(api, "TrainConfig")
+    
+    # 1) 在函数内定义 DataConfig 子类，继承父里的 DataConfigFactory（通过 api 取）
+    @dataclasses.dataclass(frozen=True)
+    class LeRobotAlohaDataConfig(api.DataConfigFactory):
+        # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
+        # Gripper dimensions will remain in absolute values.
+        use_delta_joint_actions: bool = True
+        # If provided, will be injected into the input data if the "prompt" key is not present.
+        default_prompt: str | None = None
+        # If true, this will convert the joint and gripper values from the standard Aloha space to
+        # the space used by the pi internal runtime which was used to train the base model. People who
+        # use standard Aloha data should set this to true.
+        adapt_to_pi: bool = True
+
+        # Repack transforms.
+        repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
+            default=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {"cam_high": "observation.images.top"},
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            )
+        )
+        # Action keys that will be used to read the action sequence from the dataset.
+        action_sequence_keys: Sequence[str] = ("action",)
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
+            data_transforms = api._transforms.Group(
+                inputs=[aloha_policy.AlohaInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)],
+                outputs=[aloha_policy.AlohaOutputs(adapt_to_pi=self.adapt_to_pi)],
+            )
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=self.repack_transforms,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                action_sequence_keys=self.action_sequence_keys,
+                train_episode=api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
+            )
+            
+            
+    @dataclasses.dataclass(frozen=True)
+    class LeRobotAlohaMobileDataConfig(api.DataConfigFactory):
+        # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
+        # Gripper dimensions will remain in absolute values.
+        use_delta_joint_actions: bool = True
+        # If provided, will be injected into the input data if the "prompt" key is not present.
+        default_prompt: str | None = None
+        # If true, this will convert the joint and gripper values from the standard Aloha space to
+        # the space used by the pi internal runtime which was used to train the base model. People who
+        # use standard Aloha data should set this to true.
+        # adapt_to_pi: bool = True
+        adapt_to_pi: bool = False
+
+        # Repack transforms.
+        repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
+            default=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {"cam_high": "observation.images.top"},
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            )
+        )
+        # Action keys that will be used to read the action sequence from the dataset.
+        action_sequence_keys: Sequence[str] = ("action",)
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
+            # import ipdb; ipdb.set_trace()
+            # assert model_config.action_dim == 16
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    aloha_mobile_policy.AlohaMobileInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)
+                ],
+                outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
+            )
+            if self.use_delta_joint_actions:
+                # TODO: for base action, is it delta?
+                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=self.repack_transforms,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                action_sequence_keys=self.action_sequence_keys,
+                train_episode=api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
+            )
+        
+    @dataclasses.dataclass(frozen=True)
+    class LeRobotAlohaMobileIncontextDataConfig(api.DataConfigFactory):
+        states_cache_path: str = "metadata/aloha_pen_uncap/episode_states_cache.json"
+        actions_cache_path: str = "metadata/aloha_pen_uncap/episode_actions_first_cache.json"
+        tracks_path: str = "metadata/aloha_pen_uncap/episode_tracks_combined.json"
+        libero_input_refactor: bool = False
+        # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
+        # Gripper dimensions will remain in absolute values.
+        use_delta_joint_actions: bool = True
+        # If provided, will be injected into the input data if the "prompt" key is not present.
+        # TODO: check the issue of default prompt
+        default_prompt: str | None = None
+        # If true, this will convert the joint and gripper values from the standard Aloha space to
+        # the space used by the pi internal runtime which was used to train the base model. People who
+        # use standard Aloha data should set this to true.
+        # adapt_to_pi: bool = True
+        adapt_to_pi: bool = False
+
+        # Repack transforms.
+        repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
+            default=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {"cam_high": "observation.images.top"},
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            )
+        )
+        # Action keys that will be used to read the action sequence from the dataset.
+        action_sequence_keys: Sequence[str] = ("action",)
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
+            # import ipdb; ipdb.set_trace()
+            # assert model_config.action_dim == 16
+
+            # TODO: generate the indexes for aloha mobile data
+            train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+
+            data_transforms = api._transforms.Group(
+                inputs=[api._transforms.InjectDemoIndexes(
+                                                    task_to_episode="metadata/aloha_pen_uncap/task_to_episode.json",
+                                                    episode_to_indexes="metadata/aloha_pen_uncap/episode_to_indexes.json",
+                                                    sample_frames=model_config.sample_frames, 
+                                                    random_select=model_config.random_select,
+                                                    sample_episodes=model_config.sample_episodes,
+                                                    train_episode_index_list=train_epi)],
+                outputs=[],
+            )
+
+            data_transforms = data_transforms.push(
+                inputs=[
+                    aloha_incontext_policy.AlohaMobileIncontextInputs(
+                        action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi
+                    )
+                ],
+                outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
+
+            )
+            # data_transforms = _transforms.Group(
+            #     inputs=[
+            #         aloha_mobile_policy.AlohaMobileInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)
+            #     ],
+            #     outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
+            # )
+            if self.use_delta_joint_actions:
+                # TODO: for base action, is it delta?
+                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+            # TODO: change it to support multi-task?
+            # model_transforms = ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=self.repack_transforms,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                action_sequence_keys=self.action_sequence_keys,
+                train_episode=api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
+            )
+        
+        
+
+    # 2) 直接返回本 child 的 api.TrainConfig 条目（可多个）
+    return [
+        #
+    # In`fe`rence Aloha configs.
+    #
+    api.TrainConfig(
+        name="pi0_aloha",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            assets=api.AssetsConfig(asset_id="trossen"),
+        ),
+    ),
+    api.TrainConfig(
+        name="pi0_aloha_mobile",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="mobile_trossen",
+            ),
+        ),
+    ),
+    api.TrainConfig(
+        name="pi0_aloha_towel",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            assets=api.AssetsConfig(asset_id="trossen"),
+            default_prompt="fold the towel",
+        ),
+    ),
+    api.TrainConfig(
+        name="pi0_aloha_tupperware",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            assets=api.AssetsConfig(asset_id="trossen"),
+            default_prompt="open the tupperware and put the food on the plate",
+        ),
+    ),
+    api.TrainConfig(
+        name="pi0_aloha_pen_uncap_b5_low_mem_finetune",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=10_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+    api.TrainConfig(
+        name="pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_norm",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=10_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+
+    api.TrainConfig(
+        name="pi0_aloha_pen_uncap_b5_low_mem_finetune_trossen_normv2",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+
+    api.TrainConfig(
+        name="pi0_aloha_pen_uncap_b5_trossen_norm",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_workers=16,
+        num_train_steps=20_000,
+    ),
+
+    # TODO: check the prompt
+    api.TrainConfig(
+        name="pi0_aloha_pen_uncap_incontextv12_low_mem_finetune_sample2_actionssample32_random_select",
+        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            # default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        num_workers=1,
+        batch_size=32,
+        # wandb_enabled=False,
+    ),
+
+    api.TrainConfig(
+        name="pi0_fast_aloha_pen_uncap_b5",
+        model=api.pi0_fast.Pi0FASTConfig(action_dim=16, action_horizon=50, max_token_len=576),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=10_000,
+        wandb_enabled=False,
+    ),
+    api.TrainConfig(
+        name="pi0_fast_aloha_pen_uncap_b5_trossen_norm",
+        model=api.pi0_fast.Pi0FASTConfig(action_horizon=50, max_token_len=576),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=10_000,
+        wandb_enabled=False,
+    ),
+    api.TrainConfig(
+        name="pi0_fast_aloha_pen_uncap_low_mem_finetune_trossen_norm",
+        model=api.pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora", action_horizon=50, max_token_len=576),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=10_000,
+        freeze_filter=api.pi0_fast.Pi0FASTConfig(
+            action_dim=16, action_horizon=50, max_token_len=448, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+    api.TrainConfig(
+        name="pi0_fast_aloha_pen_uncap_low_mem_finetune",
+        model=api.pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora", action_horizon=50, max_token_len=576),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=10_000,
+        freeze_filter=api.pi0_fast.Pi0FASTConfig(
+            action_dim=16, action_horizon=50, max_token_len=448, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+    api.TrainConfig(
+        name="pi0_fast_aloha_pen_uncap_low_mem_finetune_bs30",
+        batch_size=30,
+        wandb_enabled=False,
+        model=api.pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora", max_token_len=300),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/pen_uncap_b5",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_fast.Pi0FASTConfig(
+            action_dim=16, action_horizon=40, max_token_len=400, paligemma_variant="gemma_2b_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+    ),
+    ]
