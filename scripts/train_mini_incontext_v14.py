@@ -233,7 +233,7 @@ def train_step(
     # 用 fused 版本：N 帧时返回 [B,N,H]，我们在 loss_fn 里做 mean → 标量
     @at.typecheck
     def loss_fn(model, rng, observation, actions):
-        chunked_loss = model.compute_loss_fused(rng, observation, actions, train=True)
+        chunked_loss = model.compute_loss(rng, observation, actions, train=True)
         return jnp.mean(chunked_loss)  # 对 B/N/H 做均值，保持学习率标度稳定
 
     train_rng = jax.random.fold_in(rng, state.step)

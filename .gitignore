@@ -26,7 +26,8 @@ inference_all_task.sh
 .vscode/settings.json
 dummy.sh
 dump_full_transformed_samples.py
-transformed_debug_output/
+transformed_debug_output*/
+transformed_debug_output_backup_old_reindex/
 
 # C extensions
 *.so

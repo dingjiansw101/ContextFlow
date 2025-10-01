@@ -352,18 +352,19 @@ def create_incontext_data_loader(
                                                                 )
         dataset = TransformedDataset(dataset, [add_demo_transform])
     
-    if config.model.use_frame_sequence_transform: 
+    if getattr(config.model, "use_frame_sequence_transform", False):
         print("Using frame-sequence transform (training frame sequences)")
         dataset = TransformedDataset(dataset, [
             _transforms.AddCurrentFramesSequenceTransform(
                 dataset=dataset,
                 episode_to_indexes_file=config.data.episode_to_indexes_file,  # 你已有的 json
-                n_frames=config.model.frame_sequence_length,                  
+                n_frames=config.model.frame_sequence_length,
                 sampling="uniform",                                            # 或 "around"
+                train_episode_index_list=getattr(data_config, "train_episode", None),
             )
         ])
-
-    if config.model.use_point_track_prompts:
+        
+    if getattr(config.model, "use_point_track_prompts", False):
         print("Using point track prompt")
         add_point_track_transform = _transforms.AddPointTrackPromptTransform(
             max_len=config.model.sample_actions,
