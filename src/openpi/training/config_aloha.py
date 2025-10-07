@@ -625,4 +625,53 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
     ),
+        #
+    # Fine-tuning Aloha configs.
+    #
+    # This is a test config that is used to illustate how train on a custom LeRobot dataset.
+    # For instuctions on how to convert and train on your own Aloha dataset see examples/aloha_real/README.md
+    api.TrainConfig(
+        name="pi0_aloha_pen_uncap",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            repo_id="physical-intelligence/aloha_pen_uncap_diverse",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen",
+            ),
+            default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+    ),
+    # This config is used to demonstrate how to train on a simple simulated environment.
+    api.TrainConfig(
+        name="pi0_aloha_sim",
+        model=api.pi0.Pi0Config(),
+        data=LeRobotAlohaDataConfig(
+            repo_id="lerobot/aloha_sim_transfer_cube_human",
+            default_prompt="Transfer cube",
+            use_delta_joint_actions=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+    ),
     ]
