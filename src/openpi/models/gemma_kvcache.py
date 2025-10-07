@@ -641,8 +641,8 @@ class Module(nn.Module):
         mask_suf_b = jnp.asarray(mask_suf)[:, None, :, :]  # [BN,1,Ts,Tpm+Ts]
 
         L = self.configs[0].depth
-        k0, v0 = pm_cache.kv
         if self.debug_checks:
+            k0, v0 = pm_cache.kv
             _host_assert(jnp.array(k0.shape[0] == L), "pm_cache.K L {} != {}", jnp.array(k0.shape[0]), jnp.array(L))
             _host_assert(jnp.array(v0.shape[0] == L), "pm_cache.V L {} != {}", jnp.array(v0.shape[0]), jnp.array(L))
         if self.debug_checks and ep_index is not None:

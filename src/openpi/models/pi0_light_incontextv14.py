@@ -88,6 +88,60 @@ def posemb_sincos(
     )
     return jnp.concatenate([jnp.sin(sinusoid_input), jnp.cos(sinusoid_input)], axis=-1)
 
+class AttnPoolOne(nnx.Module):
+    """
+    将 [B, P, D] 的 patch tokens 压成 [B, 1, D] 的单图像 token。
+    - 使用可学习 query 向量 q 对每个 patch 打分（点积/√D），softmax 加权求和。
+    - 可选 mask: [B, P] 的 bool，False 的位置会被 -inf 屏蔽。
+    """
+    def __init__(self, d_model: int, use_layernorm: bool = True, rngs: nnx.Rngs | None = None):
+        dtype = jnp.bfloat16
+        self.q = nnx.Param(jax.random.normal(rngs.params(), (d_model,), dtype=dtype))  # [D]
+        self.use_layernorm = use_layernorm
+        if use_layernorm:
+            self.ln = nnx.LayerNorm(d_model, rngs=rngs) 
+
+    def __call__(self, x: jnp.ndarray, mask: jnp.ndarray | None = None) -> jnp.ndarray:
+        # x: [B, P, D]; mask: [B, P] (True=valid)
+        if self.use_layernorm:
+            x = self.ln(x)
+
+        d = x.shape[-1]
+        scores = (x @ (self.q / jnp.sqrt(d)))  # [B, P]
+
+        if mask is not None:
+            scores = jnp.where(mask, scores, -jnp.inf)
+
+            # 防 NaN：若某个样本所有位置都被屏蔽，则令权重全 0，pooled 也置 0
+            all_masked = jnp.logical_not(jnp.any(mask, axis=1))          # [B]
+            # 先正常 softmax（可能有 -inf）
+            w = jax.nn.softmax(scores, axis=1)                           # [B, P]
+            # 将全屏蔽样本的 w 清零
+            w = jnp.where(all_masked[:, None], jnp.zeros_like(w), w)
+        else:
+            w = jax.nn.softmax(scores, axis=1)
+
+        pooled = jnp.sum(x * w[..., None], axis=1, keepdims=True)        # [B, 1, D]
+        return pooled
+
+
+    def pool_bt(self, x: jnp.ndarray, mask: jnp.ndarray | None = None) -> jnp.ndarray:
+        """
+        对 [B, T, P, D] 每一帧做单独池化 → [B, T, 1, D]
+        mask 若给出应为 [B, T] 或 [B, T, P]（若为 [B,T] 会自动广播到每帧的 P）
+        """
+        B, T, P, D = x.shape
+        x_bt = x.reshape(B*T, P, D)
+        if mask is None:
+            m_bt = None
+        else:
+            if mask.ndim == 2:
+                # [B,T] → [B,T,P]
+                mask = einops.repeat(mask, "b t -> b t p", p=P)
+            m_bt = mask.reshape(B*T, P)
+        pooled_bt = self(x_bt, m_bt)                # [B*T, 1, D]
+        return pooled_bt.reshape(B, T, 1, D)        # [B, T, 1, D]
+
 
 @dataclasses.dataclass(frozen=True)
 class Pi0LightIncontextConfigv14(_model.BaseModelConfig):
@@ -115,7 +169,7 @@ class Pi0LightIncontextConfigv14(_model.BaseModelConfig):
     sample_actions: int = 32
     random_select: bool = True
 
-    avg_current_img: bool = False
+    avg_current_img: bool = True
     causal_attention: bool = False
     
     # XJ: for training sequence
@@ -314,6 +368,8 @@ class Pi0LightIncontextv14(_model.BaseModel):
         except KeyError:
             raise ValueError(f"Unknown SigLIP variant '{siglip_variant}' — unable to determine output dim.")
         self.image_proj = nnx.Linear(siglip_output_dim, prompt_expert_config.width, rngs=rngs)
+        self.img_pool = AttnPoolOne(prompt_expert_config.width, use_layernorm=True, rngs=rngs)
+
 
     @at.typecheck
     def embed_midfix(
@@ -366,7 +422,11 @@ class Pi0LightIncontextv14(_model.BaseModel):
                         batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
                     )
 
-                image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+                # image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
+                image_sqeuence_tokens = self.img_pool.pool_bt(
+                    image_sqeuence_tokens,
+                    mask=obs.incontext_image_masks[name]  # [B, T] 帧级 mask，内部会广播到 P
+                ).squeeze(axis=2)  # [B, T, D]
                 # image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
                 tokens.append(image_sqeuence_tokens)
                 input_mask.append(obs.incontext_image_masks[name])
@@ -427,7 +487,8 @@ class Pi0LightIncontextv14(_model.BaseModel):
             # image_tokens = self.obs_img_proj(image_tokens)
             if self.avg_current_img:
                 # import ipdb; ipdb.set_trace()
-                image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
+                # image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
+                image_tokens = self.img_pool(image_tokens)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
             # import ipdb; ipdb.set_trace()
             # jax.debug.print("name = {}, obs.image_masks = {}", name, obs.image_masks[name])
@@ -715,7 +776,8 @@ class Pi0LightIncontextv14(_model.BaseModel):
                 img_tokens, _ = self.PaliGemma.img(img, train=(train and not self.freeze_img_encoder))
                 img_tokens = self.image_proj(img_tokens)
                 if self.avg_current_img:
-                    img_tokens = jnp.mean(img_tokens, axis=1, keepdims=True)
+                    # img_tokens = jnp.mean(img_tokens, axis=1, keepdims=True)
+                    img_tokens = self.img_pool(img_tokens)
                 tokens.append(img_tokens)
                 input_mask.append(einops.repeat(flat_img_masks[name], "bn -> bn s", s=img_tokens.shape[1]))
                 ar_mask += [False] * img_tokens.shape[1]
@@ -752,6 +814,11 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
         suffix_attn = make_attn_mask(suffix_mask, suffix_ar)                          # [BN,Ts,Ts]
         midfix_seen = einops.repeat(midfix_mask, "b p -> (b n) s p", n=N, s=suffix_tokens.shape[1])
+        # we only need the lower half of the full attention mask: [suffix_tokens, midfix_tokens+suffix_tokens]
+        # It equals to: 1. midfix atten mask is broadcasted to [suffix_tokens, midfix_tokens]
+        # 2. AND with a suffix->midfix attention mask (block-wise causal attention mask like), in this case, 1
+        # midfix = jnp.broadcast_to(base_midfix, (BN, Ts, S_mid))            # [BN, Ts, S_mid]
+        # midfix_seen = base_midfix & gate                                   
         full_mask   = jnp.concatenate([midfix_seen, suffix_attn], axis=-1)
 
         pos_offset = einops.repeat(jnp.sum(midfix_mask, axis=-1), "b -> (b n) 1", n=N)
