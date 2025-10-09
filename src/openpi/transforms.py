@@ -159,7 +159,7 @@ class InjectDemoIndexes(DataTransformFn):
     task_to_episode: str = "metadata/libero/task_to_episode.json"
     episode_to_indexes: str = "metadata/libero/episode_to_indexes.json"
 
-    sample_frames: int = 16
+    sample_frames: int = 2
     random_select: bool = True
     sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None

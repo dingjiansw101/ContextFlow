@@ -90,6 +90,15 @@ class EnvMode(enum.Enum):
     CLEAN_INFERENCE = "pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all"
     NOISY_INFERENCE = "pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all"
 
+    # cvpr
+    SEQUENCE_DEBUG = "sequence_debug_pi0_libero_incontextv14_train_split_v3"
+    SEQUENCE_DEBUG_PI0MINI_INCONTEXTV14_LIBEROV1 = "sequence_debug_pi0mini_libero_incontextv14_train_split_v1"
+    NO_SEQ_AVG = "no_sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1"
+    NO_SEQ_NO_AVG = "no_sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1"
+    SEQ_AVG = "sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1"
+    SEQ_NO_AVG = "sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1"
+    NO_SEQ_NO_AVG_V12 = "no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1"
+    NO_SEQ_NO_AVG_V12_PROMPT_TOKEN = "no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_train_split_v1"
     
 @dataclasses.dataclass
 class Checkpoint:
@@ -383,6 +392,41 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     EnvMode.NOISY_INFERENCE: Checkpoint(
         config="pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all/pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all/19999"
+    ),
+    
+    # cvpr
+    EnvMode.SEQUENCE_DEBUG: Checkpoint(
+        config="sequence_debug_pi0_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_debug_pi0_libero_incontextv14_train_split_v3/ddd/19999"
+    ),
+    # SEQ_NO_AVG
+    EnvMode.SEQUENCE_DEBUG_PI0MINI_INCONTEXTV14_LIBEROV1: Checkpoint(
+        config="sequence_debug_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_debug_pi0mini_libero_incontextv14_train_split_v1/sequence_debug_pi0mini_libero_incontextv14_train_split_v1/19999"
+    ),
+    EnvMode.NO_SEQ_AVG: Checkpoint(
+        config="no_sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/no_sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1/no_sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1/19999"
+    ),
+    EnvMode.NO_SEQ_NO_AVG: Checkpoint(
+        config="no_sequence_no_avg_debug_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/no_sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1/no_sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1/19999"
+    ),
+    EnvMode.SEQ_AVG: Checkpoint(
+        config="sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1/sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1/19999"
+    ),
+    EnvMode.SEQ_NO_AVG: Checkpoint(
+        config="sequence_no_avg_debug_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1/sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1/19999"
+    ),
+    EnvMode.NO_SEQ_NO_AVG_V12: Checkpoint(
+        config="no_sequence_no_avg_debug_pi0mini_libero_incontextv12_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1/no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1/19999"
+    ),
+    EnvMode.NO_SEQ_NO_AVG_V12_PROMPT_TOKEN: Checkpoint(
+        config="no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_train_split_v1/no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_train_split_v1/19999"
     ),
 }
 

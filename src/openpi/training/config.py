@@ -34,7 +34,7 @@ import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12
 import openpi.models.pi0_incontextv12_dummy as pi0_incontextv12_dummy
 import openpi.models.pi0_light_incontextv14 as pi0_light_incontextv14
 
-
+import openpi.models.pi0_light_incontextv12_separate_img_proj as pi0_light_incontextv12_separate_img_proj
 
 import openpi.models.tokenizer as _tokenizer
 
@@ -588,12 +588,16 @@ class TrainConfig:
     # eg. if total device is 4 and fsdp devices is 2; then the model will shard to 2 devices and run
     # data parallel between 2 groups of devices.
     fsdp_devices: int = 1
-
+    
+    # XJ: add override assets dir to avoid creating redundant assets folders/files
+    assets_repo_override: str | None = None
+    
     @property
     def assets_dirs(self) -> pathlib.Path:
-        """Get the assets directory for this config."""
+        if self.assets_repo_override is not None:
+            return (pathlib.Path(self.assets_base_dir) / self.assets_repo_override).resolve()
         return (pathlib.Path(self.assets_base_dir) / self.name).resolve()
-
+    
     @property
     def checkpoint_dir(self) -> pathlib.Path:
         """Get the checkpoint directory for this config."""
