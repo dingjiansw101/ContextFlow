@@ -367,8 +367,10 @@ class Pi0LightIncontextv14(_model.BaseModel):
             siglip_output_dim = SIGLIP_OUTPUT_DIM[siglip_key]
         except KeyError:
             raise ValueError(f"Unknown SigLIP variant '{siglip_variant}' — unable to determine output dim.")
-        self.image_proj = nnx.Linear(siglip_output_dim, prompt_expert_config.width, rngs=rngs)
-        self.img_pool = AttnPoolOne(prompt_expert_config.width, use_layernorm=True, rngs=rngs)
+        self.image_proj_promtp_expert = nnx.Linear(siglip_output_dim, prompt_expert_config.width, rngs=rngs)
+        self.image_proj_action_expert = nnx.Linear(siglip_output_dim, action_expert_config.width, rngs=rngs)
+        self.img_pool_prompt_expert = AttnPoolOne(prompt_expert_config.width, use_layernorm=True, rngs=rngs)
+        self.img_pool_action_expert = AttnPoolOne(action_expert_config.width, use_layernorm=True, rngs=rngs)
 
 
     @at.typecheck
@@ -402,7 +404,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
                         image_sequence.shape[0] * image_sequence.shape[1] * image_sequence.shape[2], *image_sequence.shape[3:]
                     )
                     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-                    image_sqeuence_tokens = self.image_proj(image_sqeuence_tokens)
+                    image_sqeuence_tokens = self.image_proj_promtp_expert(image_sqeuence_tokens)
 
                     # import ipdb; ipdb.set_trace()
                     # TODO: to organize multiple episode prompts in order
@@ -416,14 +418,14 @@ class Pi0LightIncontextv14(_model.BaseModel):
                         image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
                     )
                     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
-                    image_sqeuence_tokens = self.image_proj(image_sqeuence_tokens)
+                    image_sqeuence_tokens = self.image_proj_promtp_expert(image_sqeuence_tokens)
 
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
                     )
 
                 # image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
-                image_sqeuence_tokens = self.img_pool.pool_bt(
+                image_sqeuence_tokens = self.img_pool_prompt_expert.pool_bt(
                     image_sqeuence_tokens,
                     mask=obs.incontext_image_masks[name]  # [B, T] 帧级 mask，内部会广播到 P
                 ).squeeze(axis=2)  # [B, T, D]
@@ -482,13 +484,13 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
-            image_tokens = self.image_proj(image_tokens)
+            image_tokens = self.image_proj_action_expert(image_tokens)
 
             # image_tokens = self.obs_img_proj(image_tokens)
             if self.avg_current_img:
                 # import ipdb; ipdb.set_trace()
                 # image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
-                image_tokens = self.img_pool(image_tokens)
+                image_tokens = self.img_pool_action_expert(image_tokens)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
             # import ipdb; ipdb.set_trace()
             # jax.debug.print("name = {}, obs.image_masks = {}", name, obs.image_masks[name])
@@ -774,10 +776,10 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
             for name, img in flat_imgs.items():
                 img_tokens, _ = self.PaliGemma.img(img, train=(train and not self.freeze_img_encoder))
-                img_tokens = self.image_proj(img_tokens)
+                img_tokens = self.image_proj_action_expert(img_tokens)
                 if self.avg_current_img:
                     # img_tokens = jnp.mean(img_tokens, axis=1, keepdims=True)
-                    img_tokens = self.img_pool(img_tokens)
+                    img_tokens = self.img_pool_action_expert(img_tokens)
                 tokens.append(img_tokens)
                 input_mask.append(einops.repeat(flat_img_masks[name], "bn -> bn s", s=img_tokens.shape[1]))
                 ar_mask += [False] * img_tokens.shape[1]
