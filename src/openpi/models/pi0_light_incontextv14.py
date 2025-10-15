@@ -284,6 +284,64 @@ class Pi0LightIncontextConfigv14(_model.BaseModelConfig):
             
         return nnx.All(*filters) if filters else nnx.Nothing
 
+'''
+
+def get_freeze_filter(self) -> nnx.filterlib.Filter:
+    """
+    Freezing policy (union-of-inclusions, then exclusions):
+
+    Inclusions (OR via Any):
+    - If main expert has LoRA → freeze its base weights: '.*llm.*'
+    - If action expert has LoRA → freeze its base weights: '.*llm.*_1.*'
+    - If freeze_img_encoder → freeze 'PaliGemma/img/.*'
+    - If freeze_llm_embedder → freeze '.*llm/embedder.*'
+
+    Exclusions (AND via All):
+    - Always keep LoRA adapters trainable: Not('.*lora.*')
+    - If only the main expert has LoRA → keep action base trainable: Not('.*llm.*_1.*')
+    """
+    inclusions: list[nnx.filterlib.Filter] = []
+    exclusions: list[nnx.filterlib.Filter] = []
+
+    # Optional toggles
+    if getattr(self, "freeze_img_encoder", False):
+        inclusions.append(nnx_utils.PathRegex(r"PaliGemma/img/.*"))
+    if getattr(self, "freeze_llm_embedder", False):
+        inclusions.append(nnx_utils.PathRegex(r".*llm/embedder.*"))
+
+    # LoRA presence for the two experts (robust across pi0 vs incontext)
+    main_variant = getattr(self, "paligemma_variant",
+                    getattr(self, "prompt_expert_variant", None))
+    act_variant = getattr(self, "action_expert_variant", None)
+    main_has_lora = isinstance(main_variant, str) and ("lora" in main_variant)
+    act_has_lora  = isinstance(act_variant, str) and ("lora" in act_variant)
+
+    # Base regexes (match your model paths; see model_structure_debug JSON)
+    main_base = nnx_utils.PathRegex(r".*llm.*")        # trunk / prompt expert
+    act_base  = nnx_utils.PathRegex(r".*llm.*_1.*")    # action expert
+    lora_any  = nnx_utils.PathRegex(r".*lora.*")       # any LoRA adapter
+
+    # LoRA-driven inclusions
+    if main_has_lora:
+        inclusions.append(main_base)
+        if not act_has_lora:
+            exclusions.append(nnx.Not(act_base))  # keep non-LoRA action base trainable
+    if act_has_lora:
+        inclusions.append(act_base)
+
+    # Always keep LoRA adapters trainable
+    exclusions.append(nnx.Not(lora_any))
+
+    # If nothing to freeze, return Nothing
+    if not inclusions:
+        return nnx.Nothing
+
+    # Union-of-inclusions, intersected with exclusions
+    return nnx.All(
+        nnx.Any(*inclusions),
+        *exclusions,
+    )
+'''
 
 
 class Pi0LightIncontextv14(_model.BaseModel):
@@ -369,8 +427,10 @@ class Pi0LightIncontextv14(_model.BaseModel):
             raise ValueError(f"Unknown SigLIP variant '{siglip_variant}' — unable to determine output dim.")
         self.image_proj_promtp_expert = nnx.Linear(siglip_output_dim, prompt_expert_config.width, rngs=rngs)
         self.image_proj_action_expert = nnx.Linear(siglip_output_dim, action_expert_config.width, rngs=rngs)
+        # self.image_proj_action_expert = self.image_proj_promtp_expert
         self.img_pool_prompt_expert = AttnPoolOne(prompt_expert_config.width, use_layernorm=True, rngs=rngs)
         self.img_pool_action_expert = AttnPoolOne(action_expert_config.width, use_layernorm=True, rngs=rngs)
+        # self.img_pool_action_expert = self.img_pool_prompt_expert
 
 
     @at.typecheck
@@ -782,7 +842,8 @@ class Pi0LightIncontextv14(_model.BaseModel):
                     img_tokens = self.img_pool_action_expert(img_tokens)
                 tokens.append(img_tokens)
                 input_mask.append(einops.repeat(flat_img_masks[name], "bn -> bn s", s=img_tokens.shape[1]))
-                ar_mask += [False] * img_tokens.shape[1]
+                ####### XJ: important bug fix: set an barrier between prompt expert & action expert!
+                ar_mask += [True] + ([False] * (img_tokens.shape[1] - 1))
 
             state_token = self.state_proj(flat_states_)[:, None, :]
             tokens.append(state_token)
@@ -1044,3 +1105,298 @@ class Pi0LightIncontextv14(_model.BaseModel):
         # cond: tail[0] == True 且 tail[1:] 全 False
         cond = jnp.logical_and(tail[0], jnp.all(jnp.logical_not(tail[1:])))
         _host_assert(cond, "{}: 动作块末尾 H 模式应为 [True, False×(H-1)]，实际 tail={}", name, tail)
+
+
+    ### XJ: for unit test only!
+    # =========================
+    # 新增：去随机化、可控 noise/t 的前向与 loss 变种
+    # =========================
+
+    def forward_vt_sequence(
+        self,
+        observation: _model.ObservationIncontext,
+        x_t: at.Float[at.Array, " b n h a"],
+        t:  at.Float[at.Array, " b n"],
+    ) -> at.Float[at.Array, " b n h a"]:
+        """
+        一次性把 N 帧展平为 BN，解码得到 v_t（deterministic=True），不做任何采样。
+        返回形状 [B,N,H,A]。
+        """
+        # 预处理（走 fused 版本；不启用训练随机性）
+        obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
+
+        # ---- 形状与 has_multi 判定，与 compute_loss 一致 ----
+        has_multi = (
+            (obs.current_state_seq is not None) and
+            (obs.current_images_seq is not None) and
+            (obs.current_image_masks_seq is not None)
+        )
+        if not has_multi:
+            # 单帧回退：把 current_* 补到 N=1
+            B = obs.state.shape[0]
+            x_t = x_t.reshape(B, 1, self.action_horizon, self.action_dim)
+            t   = t.reshape(B, 1)
+            obs_current_state_seq       = obs.state[:, None, :]
+            obs_current_images_seq      = {k: v[:, None, ...] for k, v in obs.images.items()}
+            obs_current_image_masks_seq = {k: v[:, None]      for k, v in obs.image_masks.items()}
+            N = 1
+        else:
+            N = x_t.shape[1]
+            obs_current_state_seq       = obs.current_state_seq
+            obs_current_images_seq      = obs.current_images_seq
+            obs_current_image_masks_seq = obs.current_image_masks_seq
+
+        # ---- midfix → encode_pm_only(deterministic=True) ----
+        midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)
+        midfix_attn = make_attn_mask(midfix_mask, midfix_ar)
+        pos_midfix  = jnp.cumsum(midfix_mask, axis=1) - 1
+        pm_cache = self._llm_encode_pm_only(
+            embedded_pm=[midfix_tokens, None],
+            positions_pm=pos_midfix,
+            mask_pm=midfix_attn,
+            deterministic=True,
+        )
+
+        # ---- 将 [B,N,...] 展平为 [BN,...]，构造 suffix，一次 decode ----
+        B = x_t.shape[0]
+        H = x_t.shape[2]
+        A = x_t.shape[3]
+        BN = B * N
+
+        flat_images = {name: einops.rearrange(img, "b n h w c -> (b n) h w c")
+                       for name, img in obs_current_images_seq.items()}
+        flat_img_masks = {name: einops.rearrange(msk, "b n -> (b n)")
+                          for name, msk in obs_current_image_masks_seq.items()}
+        flat_states = einops.rearrange(obs_current_state_seq, "b n a -> (b n) a")
+        flat_x_t    = einops.rearrange(x_t, "b n h a -> (b n) h a")
+        flat_t      = einops.rearrange(t,   "b n -> (b n)")
+
+        def build_suffix_tokens_from_flat(flat_imgs, flat_img_masks, flat_states_, flat_x_t_, flat_t_):
+            input_mask = []
+            ar_mask = []
+            tokens = []
+
+            for name, img in flat_imgs.items():
+                img_tokens, _ = self.PaliGemma.img(img, train=False)
+                img_tokens = self.image_proj_action_expert(img_tokens)
+                if self.avg_current_img:
+                    img_tokens = self.img_pool_action_expert(img_tokens)
+                tokens.append(img_tokens)
+                input_mask.append(einops.repeat(flat_img_masks[name], "bn -> bn s", s=img_tokens.shape[1]))
+                ar_mask += [False] * img_tokens.shape[1]
+
+            state_token = self.state_proj(flat_states_)[:, None, :]
+            tokens.append(state_token)
+            input_mask.append(jnp.ones((BN, 1), dtype=jnp.bool_))
+            ar_mask += [True]
+
+            time_emb = posemb_sincos(flat_t_, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
+            action_tokens = self.action_in_proj(flat_x_t_)
+            time_tokens   = einops.repeat(time_emb, "bn d -> bn h d", h=self.action_horizon)
+            atoks = self.action_time_mlp_out(nnx.swish(self.action_time_mlp_in(jnp.concatenate([action_tokens, time_tokens], axis=-1))))
+            tokens.append(atoks)
+            input_mask.append(jnp.ones(atoks.shape[:2], dtype=jnp.bool_))
+            ar_mask += [True] + ([False] * (self.action_horizon - 1))
+
+            tokens = jnp.concatenate(tokens, axis=1)
+            imask  = jnp.concatenate(input_mask, axis=1)
+            armask = jnp.array(ar_mask)
+            return tokens, imask, armask
+
+        suffix_tokens, suffix_mask, suffix_ar = build_suffix_tokens_from_flat(
+            flat_images, flat_img_masks, flat_states, flat_x_t, flat_t
+        )
+        suffix_attn = make_attn_mask(suffix_mask, suffix_ar)
+        midfix_seen = einops.repeat(midfix_mask, "b p -> (b n) s p", n=N, s=suffix_tokens.shape[1])
+        full_mask   = jnp.concatenate([midfix_seen, suffix_attn], axis=-1)
+
+        pos_offset = einops.repeat(jnp.sum(midfix_mask, axis=-1), "b -> (b n) 1", n=N)
+        pos_suf    = pos_offset + jnp.cumsum(suffix_mask, axis=-1) - 1
+
+        ep_index = einops.repeat(jnp.arange(B, dtype=jnp.int32), "b -> (b n)", n=N)
+        outs_suf = self._llm_decode_with_cache(
+            embedded_suf=[None, suffix_tokens],
+            positions_suf=pos_suf,
+            mask_suf=full_mask,
+            pm_cache=pm_cache,
+            ep_index=ep_index,
+            deterministic=True,
+        )
+        suffix_out = outs_suf[1]  # [BN,Ts,D]
+
+        action_start  = suffix_out.shape[1] - self.action_horizon
+        action_hidden = suffix_out[:, action_start:, :]
+        v_t = self.action_out_proj(action_hidden)  # [BN,H,A]
+        v_t = einops.rearrange(v_t, " (b n) h a -> b n h a", b=B, n=N)
+        return v_t
+
+
+    def forward_vt_stepwise(
+        self,
+        observation: _model.ObservationIncontext,
+        x_t: at.Float[at.Array, " b n h a"],
+        t:  at.Float[at.Array, " b n"],
+    ) -> at.Float[at.Array, " b n h a"]:
+        """
+        逐帧循环：每次只解一个帧的 suffix（deterministic=True），最后在 N 维拼接。
+        返回形状 [B,N,H,A]。
+        """
+        # 预处理
+        obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
+
+        # 判定 has_multi
+        has_multi = (
+            (obs.current_state_seq is not None) and
+            (obs.current_images_seq is not None) and
+            (obs.current_image_masks_seq is not None)
+        )
+
+        if not has_multi:
+            B = obs.state.shape[0]
+            x_t = x_t.reshape(B, 1, self.action_horizon, self.action_dim)
+            t   = t.reshape(B, 1)
+            obs_current_state_seq       = obs.state[:, None, :]
+            obs_current_images_seq      = {k: v[:, None, ...] for k, v in obs.images.items()}
+            obs_current_image_masks_seq = {k: v[:, None]      for k, v in obs.image_masks.items()}
+            N = 1
+        else:
+            N = x_t.shape[1]
+            obs_current_state_seq       = obs.current_state_seq
+            obs_current_images_seq      = obs.current_images_seq
+            obs_current_image_masks_seq = obs.current_image_masks_seq
+
+        B = x_t.shape[0]
+
+        # midfix & cache（共享）
+        midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)
+        midfix_attn = make_attn_mask(midfix_mask, midfix_ar)
+        pos_midfix  = jnp.cumsum(midfix_mask, axis=1) - 1
+        pm_cache = self._llm_encode_pm_only(
+            embedded_pm=[midfix_tokens, None],
+            positions_pm=pos_midfix,
+            mask_pm=midfix_attn,
+            deterministic=True,
+        )
+
+        vt_list = []
+        pos_offset = jnp.sum(midfix_mask, axis=-1)[:, None]   # [B,1]
+        base_ep = jnp.arange(B, dtype=jnp.int32)              # [B]
+
+        for n in range(N):
+            # 取第 n 帧
+            imgs_n = {name: obs_current_images_seq[name][:, n, ...]      for name in obs_current_images_seq}
+            msk_n  = {name: obs_current_image_masks_seq[name][:, n]      for name in obs_current_image_masks_seq}
+            st_n   = obs_current_state_seq[:, n, :]                       # [B,A]
+            xt_n   = x_t[:, n, :, :]                                      # [B,H,A]
+            t_n    = t[:, n]                                              # [B]
+
+            input_mask = []
+            ar_mask = []
+            tokens = []
+
+            for name, img in imgs_n.items():
+                img_tokens, _ = self.PaliGemma.img(img, train=False)
+                img_tokens = self.image_proj_action_expert(img_tokens)
+                if self.avg_current_img:
+                    img_tokens = self.img_pool_action_expert(img_tokens)
+                tokens.append(img_tokens)
+                input_mask.append(einops.repeat(msk_n[name], "b -> b s", s=img_tokens.shape[1]))
+                ar_mask += [False] * img_tokens.shape[1]
+
+            state_token = self.state_proj(st_n)[:, None, :]
+            tokens.append(state_token)
+            input_mask.append(jnp.ones((B, 1), dtype=jnp.bool_))
+            ar_mask += [True]
+
+            time_emb = posemb_sincos(t_n, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
+            action_tokens = self.action_in_proj(xt_n)
+            time_tokens   = einops.repeat(time_emb, "b d -> b h d", h=self.action_horizon)
+            atoks = self.action_time_mlp_out(nnx.swish(self.action_time_mlp_in(jnp.concatenate([action_tokens, time_tokens], axis=-1))))
+            tokens.append(atoks)
+            input_mask.append(jnp.ones(atoks.shape[:2], dtype=jnp.bool_))
+            ar_mask += [True] + ([False] * (self.action_horizon - 1))
+
+            suffix_tokens = jnp.concatenate(tokens, axis=1)
+            suffix_mask   = jnp.concatenate(input_mask, axis=1)
+            suffix_ar     = jnp.array(ar_mask)
+
+            suffix_attn = make_attn_mask(suffix_mask, suffix_ar)
+            midfix_seen = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_tokens.shape[1])
+            full_mask   = jnp.concatenate([midfix_seen, suffix_attn], axis=-1)
+
+            pos_suf = pos_offset + jnp.cumsum(suffix_mask, axis=-1) - 1  # [B,Ts]
+
+            outs_suf = self._llm_decode_with_cache(
+                embedded_suf=[None, suffix_tokens],
+                positions_suf=pos_suf,
+                mask_suf=full_mask,
+                pm_cache=pm_cache,
+                ep_index=base_ep,
+                deterministic=True,
+            )
+            suf_out = outs_suf[1]  # [B,Ts,D]
+
+            action_start  = suf_out.shape[1] - self.action_horizon
+            action_hidden = suf_out[:, action_start:, :]
+            vt_n = self.action_out_proj(action_hidden)  # [B,H,A]
+            vt_list.append(vt_n)
+
+        v_t = jnp.stack(vt_list, axis=1)  # [B,N,H,A]
+        return v_t
+
+
+    def compute_loss_sequence(
+        self,
+        rng_unused: at.KeyArrayLike,
+        observation: _model.ObservationIncontext,
+        actions: _model.Actions | None,
+        *,
+        noise: at.Float[at.Array, " b n h a"],
+        t:     at.Float[at.Array, " b n"],
+    ) -> at.Float[at.Array, " b n h"]:
+        """
+        用给定 noise/t 构造 x_t 与 u_t，走一次性 BN 解码，返回 [B,N,H] 的 MSE。
+        """
+        # 预处理以拿到 actions_seq
+        obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
+        has_multi = (obs.actions_seq is not None)
+        if not has_multi:
+            assert actions is not None, "单帧模式需要传入 actions [B,H,A]"
+            actions_seq = actions[:, None, :, :]
+        else:
+            actions_seq = obs.actions_seq  # [B,N,H,A]
+
+        x_t = t[..., None, None] * noise + (1.0 - t[..., None, None]) * actions_seq
+        u_t = noise - actions_seq
+
+        v_t = self.forward_vt_sequence(observation, x_t, t)  # [B,N,H,A]
+        loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)      # [B,N,H]
+        return loss
+
+
+    def compute_loss_stepwise(
+        self,
+        rng_unused: at.KeyArrayLike,
+        observation: _model.ObservationIncontext,
+        actions: _model.Actions | None,
+        *,
+        noise: at.Float[at.Array, " b n h a"],
+        t:     at.Float[at.Array, " b n"],
+    ) -> at.Float[at.Array, " b n h"]:
+        """
+        用给定 noise/t 构造 x_t 与 u_t，逐帧循环解码，返回 [B,N,H] 的 MSE。
+        """
+        obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
+        has_multi = (obs.actions_seq is not None)
+        if not has_multi:
+            assert actions is not None, "单帧模式需要传入 actions [B,H,A]"
+            actions_seq = actions[:, None, :, :]
+        else:
+            actions_seq = obs.actions_seq
+
+        x_t = t[..., None, None] * noise + (1.0 - t[..., None, None]) * actions_seq
+        u_t = noise - actions_seq
+
+        v_t = self.forward_vt_stepwise(observation, x_t, t)  # [B,N,H,A]
+        loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)      # [B,N,H]
+        return loss
