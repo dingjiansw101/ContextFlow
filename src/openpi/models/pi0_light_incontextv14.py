@@ -564,7 +564,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
                 )
             )
             # image tokens attend to each other
-            ar_mask += [False] * image_tokens.shape[1]
+            ar_mask += [True] + ([False] * (image_tokens.shape[1] - 1))
 
         # add a single state token
         state_token = self.state_proj(obs.state)[:, None, :]
@@ -829,7 +829,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
         flat_t      = einops.rearrange(t,   "b n -> (b n)")
 
         # 复用你已有的逻辑，构造 suffix
-        def build_suffix_tokens_from_flat(flat_imgs, flat_img_masks, flat_states_, flat_x_t_, flat_t_):
+        def inner_build_suffix_tokens_from_flat(flat_imgs, flat_img_masks, flat_states_, flat_x_t_, flat_t_):
             input_mask = []
             ar_mask = []
             tokens = []
@@ -864,7 +864,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
             armask = jnp.array(ar_mask)
             return tokens, imask, armask
 
-        suffix_tokens, suffix_mask, suffix_ar = build_suffix_tokens_from_flat(
+        suffix_tokens, suffix_mask, suffix_ar = inner_build_suffix_tokens_from_flat(
             flat_images, flat_img_masks, flat_states, flat_x_t, flat_t
         )
 
@@ -934,7 +934,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
                 assert loss.shape == (B, 1, H), f"单帧回退 loss 期望 [B,1,H]，got {loss.shape}"
 
         return loss if has_multi else loss[:, 0, :]
-
 
 
     @override
@@ -1112,6 +1111,51 @@ class Pi0LightIncontextv14(_model.BaseModel):
     # 新增：去随机化、可控 noise/t 的前向与 loss 变种
     # =========================
 
+    def _build_suffix_tokens_from_flat(
+        self,
+        flat_images,
+        flat_img_masks,
+        flat_states,
+        flat_x_t,
+        flat_t,
+    ):
+        tokens = []
+        input_mask = []
+        ar_mask = []
+
+        BN = flat_x_t.shape[0]
+
+        for name, img in flat_images.items():
+            img_tokens, _ = self.PaliGemma.img(img, train=False)
+            img_tokens = self.image_proj_action_expert(img_tokens)
+            if self.avg_current_img:
+                img_tokens = self.img_pool_action_expert(img_tokens)
+            tokens.append(img_tokens)
+            input_mask.append(einops.repeat(flat_img_masks[name], "bn -> bn s", s=img_tokens.shape[1]))
+            ar_mask += [True] + ([False] * (img_tokens.shape[1] - 1))
+
+        state_token = self.state_proj(flat_states)[:, None, :]
+        tokens.append(state_token)
+        input_mask.append(jnp.ones((BN, 1), dtype=jnp.bool_))
+        ar_mask += [True]
+
+        time_emb = posemb_sincos(flat_t, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
+        action_tokens = self.action_in_proj(flat_x_t)
+        time_tokens   = einops.repeat(time_emb, "bn d -> bn h d", h=self.action_horizon)
+        atoks = self.action_time_mlp_out(
+            nnx.swish(
+                self.action_time_mlp_in(jnp.concatenate([action_tokens, time_tokens], axis=-1))
+            )
+        )
+        tokens.append(atoks)
+        input_mask.append(jnp.ones(atoks.shape[:2], dtype=jnp.bool_))
+        ar_mask += [True] + ([False] * (self.action_horizon - 1))
+
+        tokens = jnp.concatenate(tokens, axis=1)
+        imask  = jnp.concatenate(input_mask, axis=1)
+        armask = jnp.array(ar_mask)
+        return tokens, imask, armask
+
     def forward_vt_sequence(
         self,
         observation: _model.ObservationIncontext,
@@ -1171,39 +1215,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
         flat_x_t    = einops.rearrange(x_t, "b n h a -> (b n) h a")
         flat_t      = einops.rearrange(t,   "b n -> (b n)")
 
-        def build_suffix_tokens_from_flat(flat_imgs, flat_img_masks, flat_states_, flat_x_t_, flat_t_):
-            input_mask = []
-            ar_mask = []
-            tokens = []
-
-            for name, img in flat_imgs.items():
-                img_tokens, _ = self.PaliGemma.img(img, train=False)
-                img_tokens = self.image_proj_action_expert(img_tokens)
-                if self.avg_current_img:
-                    img_tokens = self.img_pool_action_expert(img_tokens)
-                tokens.append(img_tokens)
-                input_mask.append(einops.repeat(flat_img_masks[name], "bn -> bn s", s=img_tokens.shape[1]))
-                ar_mask += [False] * img_tokens.shape[1]
-
-            state_token = self.state_proj(flat_states_)[:, None, :]
-            tokens.append(state_token)
-            input_mask.append(jnp.ones((BN, 1), dtype=jnp.bool_))
-            ar_mask += [True]
-
-            time_emb = posemb_sincos(flat_t_, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
-            action_tokens = self.action_in_proj(flat_x_t_)
-            time_tokens   = einops.repeat(time_emb, "bn d -> bn h d", h=self.action_horizon)
-            atoks = self.action_time_mlp_out(nnx.swish(self.action_time_mlp_in(jnp.concatenate([action_tokens, time_tokens], axis=-1))))
-            tokens.append(atoks)
-            input_mask.append(jnp.ones(atoks.shape[:2], dtype=jnp.bool_))
-            ar_mask += [True] + ([False] * (self.action_horizon - 1))
-
-            tokens = jnp.concatenate(tokens, axis=1)
-            imask  = jnp.concatenate(input_mask, axis=1)
-            armask = jnp.array(ar_mask)
-            return tokens, imask, armask
-
-        suffix_tokens, suffix_mask, suffix_ar = build_suffix_tokens_from_flat(
+        suffix_tokens, suffix_mask, suffix_ar = self._build_suffix_tokens_from_flat(
             flat_images, flat_img_masks, flat_states, flat_x_t, flat_t
         )
         suffix_attn = make_attn_mask(suffix_mask, suffix_ar)
@@ -1225,7 +1237,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
         suffix_out = outs_suf[1]  # [BN,Ts,D]
 
         action_start  = suffix_out.shape[1] - self.action_horizon
-        action_hidden = suffix_out[:, action_start:, :]
+        action_hidden = suffix_out[:, action_start:, :].astype(jnp.float32)
         v_t = self.action_out_proj(action_hidden)  # [BN,H,A]
         v_t = einops.rearrange(v_t, " (b n) h a -> b n h a", b=B, n=N)
         return v_t
@@ -1278,56 +1290,36 @@ class Pi0LightIncontextv14(_model.BaseModel):
             deterministic=True,
         )
 
+        flat_images = {name: einops.rearrange(img, "b n h w c -> (b n) h w c")
+                       for name, img in obs_current_images_seq.items()}
+        flat_img_masks = {name: einops.rearrange(msk, "b n -> (b n)")
+                          for name, msk in obs_current_image_masks_seq.items()}
+        flat_states = einops.rearrange(obs_current_state_seq, "b n a -> (b n) a")
+        flat_x_t    = einops.rearrange(x_t, "b n h a -> (b n) h a")
+        flat_t      = einops.rearrange(t,   "b n -> (b n)")
+
+        suffix_tokens_flat, suffix_mask_flat, suffix_ar = self._build_suffix_tokens_from_flat(
+            flat_images, flat_img_masks, flat_states, flat_x_t, flat_t
+        )
+        suffix_tokens_bn = einops.rearrange(suffix_tokens_flat, "(b n) s d -> b n s d", b=B, n=N)
+        suffix_mask_bn   = einops.rearrange(suffix_mask_flat, "(b n) s -> b n s", b=B, n=N)
+
         vt_list = []
         pos_offset = jnp.sum(midfix_mask, axis=-1)[:, None]   # [B,1]
         base_ep = jnp.arange(B, dtype=jnp.int32)              # [B]
 
         for n in range(N):
-            # 取第 n 帧
-            imgs_n = {name: obs_current_images_seq[name][:, n, ...]      for name in obs_current_images_seq}
-            msk_n  = {name: obs_current_image_masks_seq[name][:, n]      for name in obs_current_image_masks_seq}
-            st_n   = obs_current_state_seq[:, n, :]                       # [B,A]
-            xt_n   = x_t[:, n, :, :]                                      # [B,H,A]
-            t_n    = t[:, n]                                              # [B]
+            suffix_tokens_n = suffix_tokens_bn[:, n, :, :]
+            suffix_mask_n   = suffix_mask_bn[:, n, :]
 
-            input_mask = []
-            ar_mask = []
-            tokens = []
-
-            for name, img in imgs_n.items():
-                img_tokens, _ = self.PaliGemma.img(img, train=False)
-                img_tokens = self.image_proj_action_expert(img_tokens)
-                if self.avg_current_img:
-                    img_tokens = self.img_pool_action_expert(img_tokens)
-                tokens.append(img_tokens)
-                input_mask.append(einops.repeat(msk_n[name], "b -> b s", s=img_tokens.shape[1]))
-                ar_mask += [False] * img_tokens.shape[1]
-
-            state_token = self.state_proj(st_n)[:, None, :]
-            tokens.append(state_token)
-            input_mask.append(jnp.ones((B, 1), dtype=jnp.bool_))
-            ar_mask += [True]
-
-            time_emb = posemb_sincos(t_n, self.action_in_proj.out_features, min_period=4e-3, max_period=4.0)
-            action_tokens = self.action_in_proj(xt_n)
-            time_tokens   = einops.repeat(time_emb, "b d -> b h d", h=self.action_horizon)
-            atoks = self.action_time_mlp_out(nnx.swish(self.action_time_mlp_in(jnp.concatenate([action_tokens, time_tokens], axis=-1))))
-            tokens.append(atoks)
-            input_mask.append(jnp.ones(atoks.shape[:2], dtype=jnp.bool_))
-            ar_mask += [True] + ([False] * (self.action_horizon - 1))
-
-            suffix_tokens = jnp.concatenate(tokens, axis=1)
-            suffix_mask   = jnp.concatenate(input_mask, axis=1)
-            suffix_ar     = jnp.array(ar_mask)
-
-            suffix_attn = make_attn_mask(suffix_mask, suffix_ar)
-            midfix_seen = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_tokens.shape[1])
+            suffix_attn = make_attn_mask(suffix_mask_n, suffix_ar)
+            midfix_seen = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_tokens_n.shape[1])
             full_mask   = jnp.concatenate([midfix_seen, suffix_attn], axis=-1)
 
-            pos_suf = pos_offset + jnp.cumsum(suffix_mask, axis=-1) - 1  # [B,Ts]
+            pos_suf = pos_offset + jnp.cumsum(suffix_mask_n, axis=-1) - 1  # [B,Ts]
 
             outs_suf = self._llm_decode_with_cache(
-                embedded_suf=[None, suffix_tokens],
+                embedded_suf=[None, suffix_tokens_n],
                 positions_suf=pos_suf,
                 mask_suf=full_mask,
                 pm_cache=pm_cache,
@@ -1337,66 +1329,110 @@ class Pi0LightIncontextv14(_model.BaseModel):
             suf_out = outs_suf[1]  # [B,Ts,D]
 
             action_start  = suf_out.shape[1] - self.action_horizon
-            action_hidden = suf_out[:, action_start:, :]
+            action_hidden = suf_out[:, action_start:, :].astype(jnp.float32)
             vt_n = self.action_out_proj(action_hidden)  # [B,H,A]
             vt_list.append(vt_n)
 
         v_t = jnp.stack(vt_list, axis=1)  # [B,N,H,A]
         return v_t
 
+    def _mse_loss(vt, tgt, *, frame_mask=None):
+        # 统一精度，避免你现在遇到的 1e-5 漂移
+        vt  = vt.astype(jnp.float32)   # [B, N, H, A]
+        tgt = tgt.astype(jnp.float32)  # [B, N, H, A]
+
+        err2   = jnp.square(vt - tgt)                      # [B, N, H, A]
+        per_th = jnp.mean(err2, axis=-1, dtype=jnp.float32)  # [B, N, H] 先对 A 轴求均值
+
+        if frame_mask is None:
+            return per_th
+
+        # 帧级 mask: [B, N] -> [B, N, 1] 广播到 H 轴
+        fm = frame_mask.astype(jnp.float32)[..., None]      # [B, N, 1]
+        num = (per_th * fm)                                 # [B, N, H]
+        den = jnp.maximum(jnp.sum(fm, axis=-2, dtype=jnp.float32), 1.0)  # 对 N 轴计数，形状 [B, 1]
+        return num / den[:, None, :]                        # 归一化到每个 batch、每个 H
+
+    # 放到你的模型类里（两个 compute_loss_* 同文件）
+    def _merged_seq_mask(self, obs, image_keys=(
+        "base_0_rgb",
+        "left_wrist_0_rgb",
+        "right_wrist_0_rgb",
+    )):
+        ms = obs.current_image_masks_seq
+        if ms is None:
+            return None  # 不加权
+        mlist = [jnp.asarray(ms[k]) for k in image_keys if k in ms]
+        if len(mlist) == 0:
+            return None
+        # [B,N]：各相机按 AND 合并（与 tests 预期一致）
+        return jnp.logical_and.reduce(jnp.stack(mlist, axis=0), axis=0)
+
+    def _loss_core(self, obs, actions, noise, t, vt_fn):
+        # —— 统一动作序列来源 —— 
+        if obs.actions_seq is None:
+            assert actions is not None, "单帧模式需要 actions [B,H,A]"
+            a = actions[:, None, :, :]            # [B,1,H,A]
+        else:
+            a = obs.actions_seq                   # [B,N,H,A]
+
+        # —— 统一 dtype / 广播形状 —— 
+        a     = a.astype(jnp.float32)
+        eps   = noise.astype(jnp.float32)
+        t     = t.astype(jnp.float32)
+        t_exp = t[..., None, None]                # [B,N,1,1]
+        one   = jnp.array(1.0, dtype=jnp.float32)
+
+        # —— 完全相同的表达式树构造 x_t / u_t —— 
+        x_t = t_exp * eps + (one - t_exp) * a
+        u_t = eps - a
+
+        # —— 唯一分歧点：vt 的实现（sequence vs stepwise）——
+        v_t = vt_fn(obs, x_t, t)
+
+        # —— MSE：先对 A 轴显式求和再除，以固定规约顺序 —— 
+        diff = (v_t.astype(jnp.float32) - u_t)        # [B,N,H,A]
+        err  = diff * diff                            # [B,N,H,A]
+        A    = jnp.array(err.shape[-1], dtype=jnp.float32)
+        loss = jnp.sum(err, axis=-1) / A              # [B,N,H]
+
+        # —— 可选：序列掩码按同一处应用（随机掩码用例要这个）—— 
+        m = self._merged_seq_mask(obs)
+        if m is not None:
+            w = m.astype(jnp.float32)[..., None]      # [B,N,1]
+            loss = loss * w                           # [B,N,H]
+
+        return loss
+
 
     def compute_loss_sequence(
-        self,
-        rng_unused: at.KeyArrayLike,
-        observation: _model.ObservationIncontext,
-        actions: _model.Actions | None,
-        *,
-        noise: at.Float[at.Array, " b n h a"],
-        t:     at.Float[at.Array, " b n"],
-    ) -> at.Float[at.Array, " b n h"]:
-        """
-        用给定 noise/t 构造 x_t 与 u_t，走一次性 BN 解码，返回 [B,N,H] 的 MSE。
-        """
-        # 预处理以拿到 actions_seq
-        obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
-        has_multi = (obs.actions_seq is not None)
-        if not has_multi:
-            assert actions is not None, "单帧模式需要传入 actions [B,H,A]"
-            actions_seq = actions[:, None, :, :]
-        else:
-            actions_seq = obs.actions_seq  # [B,N,H,A]
-
-        x_t = t[..., None, None] * noise + (1.0 - t[..., None, None]) * actions_seq
-        u_t = noise - actions_seq
-
-        v_t = self.forward_vt_sequence(observation, x_t, t)  # [B,N,H,A]
-        loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)      # [B,N,H]
-        return loss
-
+        self, rng_unused, observation, actions, *, noise, t
+    ):
+        return self._loss_core(observation, actions, noise, t, vt_fn=self.forward_vt_sequence)
 
     def compute_loss_stepwise(
-        self,
-        rng_unused: at.KeyArrayLike,
-        observation: _model.ObservationIncontext,
-        actions: _model.Actions | None,
-        *,
-        noise: at.Float[at.Array, " b n h a"],
-        t:     at.Float[at.Array, " b n"],
-    ) -> at.Float[at.Array, " b n h"]:
-        """
-        用给定 noise/t 构造 x_t 与 u_t，逐帧循环解码，返回 [B,N,H] 的 MSE。
-        """
-        obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
-        has_multi = (obs.actions_seq is not None)
-        if not has_multi:
-            assert actions is not None, "单帧模式需要传入 actions [B,H,A]"
-            actions_seq = actions[:, None, :, :]
-        else:
-            actions_seq = obs.actions_seq
+        self, rng_unused, observation, actions, *, noise, t
+    ):
+        return self._loss_core(observation, actions, noise, t, vt_fn=self.forward_vt_stepwise)
 
-        x_t = t[..., None, None] * noise + (1.0 - t[..., None, None]) * actions_seq
-        u_t = noise - actions_seq
+    
+def _merge_current_frame_mask(obs, *, require_all=False):
+    masks = list(obs.current_image_masks_seq.values())  # 每个 [B,N] bool
+    if not masks:
+        B, N = obs.actions_seq.shape[:2]
+        return jnp.ones((B, N), dtype=jnp.bool_)
+    m = masks[0]
+    for mm in masks[1:]:
+        m = jnp.logical_and(m, mm) if require_all else jnp.logical_or(m, mm)
+    return m
 
-        v_t = self.forward_vt_stepwise(observation, x_t, t)  # [B,N,H,A]
-        loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)      # [B,N,H]
-        return loss
+def _loss_from_v_and_u(v_t, u_t, frame_mask=None):
+    v32 = v_t.astype(jnp.float32)
+    u32 = u_t.astype(jnp.float32)
+    per_th = jnp.mean(jnp.square(v32 - u32), axis=-1)  # [B,N,H]
+    if frame_mask is None:
+        return per_th
+    fm = frame_mask.astype(jnp.float32)[..., None]     # [B,N,1] -> [B,N,H]
+    # 若你只是要逐帧逐步对齐（不是要对 N 做聚合），也可以直接 `per_th * fm`
+    return per_th * fm  # 与另一条路径保持一模一样的形状与操作
+

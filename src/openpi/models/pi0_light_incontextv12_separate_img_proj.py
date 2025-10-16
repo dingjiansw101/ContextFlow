@@ -686,7 +686,7 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
                 )
             )
             # image tokens attend to each other
-            ar_mask += [False] * image_tokens.shape[1]
+            ar_mask += [True] + ([False] * (image_tokens.shape[1] - 1))
 
         # add a single state token
         state_token = self.state_proj(obs.state)[:, None, :]
