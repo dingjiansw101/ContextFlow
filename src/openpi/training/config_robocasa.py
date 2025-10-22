@@ -1874,38 +1874,7 @@ def build(api) -> list["api.TrainConfig"]:
             # batch size in total (bs_per_gpu = batch_size / #_GPUs)
             batch_size=128,
         ),        
-        api.TrainConfig(
-            # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0_robocasa_incontextv14_train_split --project-name=ddd --exp-name=ddd --overwrite
-            name="sequence_debug_pi0_robocasa_incontextv14_train_split",
-            model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-                vocab_size=50_000, 
-                prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
-                freeze_llm_embedder=False, freeze_img_encoder=False, 
-                siglip_variant="S/16",
-                sample_frames=2, sample_actions=32, random_select=True, 
-                use_frame_sequence_transform = True, 
-                frame_sequence_length = 6,
-            ),
-            data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
-                repo_id="daixianjie/robocasa_mg_lerobot",
-                base_config=api.DataConfig(
-                    local_files_only=False,  
-                    prompt_from_task=True,
-                ),
-                remove_task_list=api.DEFAULT_ROBOCASA_MG_TEST_TASK,
-                episode_json_path=api.DEFAULT_ROBOCASA_MG_EPISODE_JSON,
-            ),
-            vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-                    npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
-                ),
-            weight_loader=api.weight_loaders.EmptyLoader(),        
-            num_train_steps=20_000,
-            ema_decay=None,
-            num_workers=8,
-            # num_workers=1,
-            batch_size=4,
-            # wandb_enabled=False,
-        ),
+        
         api.TrainConfig(
             # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py sequence_compare_pi0_robocasa_incontextv12_train_split --project-name=ddd --exp-name=ddd --overwrite
             name="sequence_compare_pi0_robocasa_incontextv12_train_split",
@@ -1938,4 +1907,103 @@ def build(api) -> list["api.TrainConfig"]:
             batch_size=4*6,
             # wandb_enabled=False,
         ),
+        
+        #############
+        ##Robocasa###
+        #############
+        api.TrainConfig(
+            model_summary_json="sequence_avg_pi0mini_robocasa_incontextv14_train_split_v1.json",
+            name="sequence_avg_pi0mini_robocasa_incontextv14_train_split_v1",
+            assets_repo_override="debug_img_encoder",
+            model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+                    use_text_prompts=False,
+                    # vocab_size=50_000, 
+                    prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+                    freeze_llm_embedder=False, freeze_img_encoder=False, 
+                    siglip_variant="S/16",
+                    sample_frames=2, sample_actions=32, random_select=True, 
+                    use_frame_sequence_transform = True, 
+                    frame_sequence_length = 6,
+                avg_current_img=True,
+                ),
+            data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+                repo_id="daixianjie/robocasa_mg_lerobot",
+                base_config=api.DataConfig(
+                    local_files_only=False,  
+                    prompt_from_task=True,
+                ),
+                remove_task_list=api.DEFAULT_ROBOCASA_MG_TEST_TASK,
+                episode_json_path=api.DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+            ),
+            vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+                npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+            ),
+            weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+            # freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            #         vocab_size=50_000, 
+            #         prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+            #         freeze_llm_embedder=False, freeze_img_encoder=False, 
+            #         siglip_variant="S/16",
+            #         sample_frames=2, sample_actions=32, random_select=True, 
+            #         use_frame_sequence_transform = True, 
+            #         frame_sequence_length = 6,
+            #     avg_current_img=True,
+            # ).get_freeze_filter(),
+            lr_schedule = api._optimizer.CosineDecaySchedule(
+                    warmup_steps = 1_000,
+                    peak_lr= 2.5e-4,
+                    decay_steps= 500_000,
+                    decay_lr= 2.5e-5),
+            num_train_steps=500_000,
+            ema_decay=0.999,
+            num_workers=8,
+            batch_size=8,
+        ), 
+        api.TrainConfig(
+            name="sequence_avg_pi0mini_robocasa_incontextv14_inference",
+            assets_repo_override="debug_img_encoder",
+            model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+                    use_text_prompts=False,
+                    # vocab_size=50_000, 
+                    prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+                    freeze_llm_embedder=False, freeze_img_encoder=False, 
+                    siglip_variant="S/16",
+                    sample_frames=2, sample_actions=32, random_select=True, 
+                    use_frame_sequence_transform = True, 
+                    frame_sequence_length = 6,
+                avg_current_img=True,
+                ),
+            data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
+                repo_id="daixianjie/robocasa_mg_lerobot",
+                base_config=api.DataConfig(
+                    local_files_only=False,  
+                    prompt_from_task=True,
+                ),
+                # remove_task_list=api.DEFAULT_ROBOCASA_MG_TEST_TASK,
+                # episode_json_path=api.DEFAULT_ROBOCASA_MG_EPISODE_JSON,
+            ),
+            vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+                npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+            ),
+            weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+            # freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            #         vocab_size=50_000, 
+            #         prompt_expert_variant="gemma_A", action_expert_variant="gemma_B",
+            #         freeze_llm_embedder=False, freeze_img_encoder=False, 
+            #         siglip_variant="S/16",
+            #         sample_frames=2, sample_actions=32, random_select=True, 
+            #         use_frame_sequence_transform = True, 
+            #         frame_sequence_length = 6,
+            #     avg_current_img=True,
+            # ).get_freeze_filter(),
+            lr_schedule = api._optimizer.CosineDecaySchedule(
+                    warmup_steps = 1_000,
+                    peak_lr= 2.5e-4,
+                    decay_steps= 500_000,
+                    decay_lr= 2.5e-5),
+            num_train_steps=500_000,
+            ema_decay=0.999,
+            num_workers=8,
+            batch_size=8,
+        ), 
     ]

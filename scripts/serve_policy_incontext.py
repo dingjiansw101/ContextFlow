@@ -97,9 +97,27 @@ class EnvMode(enum.Enum):
     NO_SEQ_NO_AVG = "no_sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1"
     SEQ_AVG = "sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_train_split_v1"
     SEQ_NO_AVG = "sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1"
-    NO_SEQ_NO_AVG_V12 = "no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1"
+    NO_SEQ_NO_AVG_V12_ACTION_TOKEN = "no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1"
     NO_SEQ_NO_AVG_V12_PROMPT_TOKEN = "no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_train_split_v1"
+    # improve
+    SEQ_AVG_36_SEQ = "sequence_avg_cur_img_36_seq_pi0mini_libero_incontextv14_train_split_v1"
     
+    # v14
+    seq_avg_12 = "12_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_24 = "24_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_48 = "48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_96 = "96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_no_avg_12 = "12_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_no_avg_24 = "24_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_no_avg_48 = "48_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_6_prompt_img_8 = "8_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_6_prompt_img_16 = "16_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_6_prompt_img_32 = "32_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_6_robocasa = "sequence_avg_pi0mini_robocasa_incontextv14_train_split_v1"
+    
+    seq_avg_bs_8_seq_48 = "bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    seq_avg_bs_4_seq_96 = "bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+
 @dataclasses.dataclass
 class Checkpoint:
     """Load a policy from a trained checkpoint."""
@@ -397,7 +415,9 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     # cvpr
     EnvMode.SEQUENCE_DEBUG: Checkpoint(
         config="sequence_debug_pi0_libero_incontextv14_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_debug_pi0_libero_incontextv14_train_split_v3/ddd/19999"
+        # dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_debug_pi0_libero_incontextv14_train_split_v3/V3/19999"
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_debug_pi0_libero_incontextv14_train_split_v3/v1_same_proj/19999"
+
     ),
     # SEQ_NO_AVG
     EnvMode.SEQUENCE_DEBUG_PI0MINI_INCONTEXTV14_LIBEROV1: Checkpoint(
@@ -420,13 +440,84 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="sequence_no_avg_debug_pi0mini_libero_incontextv14_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1/sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1/19999"
     ),
-    EnvMode.NO_SEQ_NO_AVG_V12: Checkpoint(
+    EnvMode.NO_SEQ_NO_AVG_V12_ACTION_TOKEN: Checkpoint(
         config="no_sequence_no_avg_debug_pi0mini_libero_incontextv12_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1/no_sequence_no_avg_debug_pi0mini_libero_incontextv12_train_split_v1/19999"
     ),
     EnvMode.NO_SEQ_NO_AVG_V12_PROMPT_TOKEN: Checkpoint(
         config="no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_train_split_v1/no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_train_split_v1/19999"
+    ),
+    
+    # improve
+    EnvMode.SEQ_AVG_36_SEQ: Checkpoint(
+        config="sequence_avg_cur_img_36_seq_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_avg_cur_img_36_seq_pi0mini_libero_incontextv14_train_split_v1/sequence_avg_cur_img_36_seq_pi0mini_libero_incontextv14_train_split_v1/39999"
+    ),
+    
+    # v14
+    #seq_avg_12 = "12_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_avg_24 = "24_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_avg_48 = "48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_avg_96 = "96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_no_avg_12 = "12_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_no_avg_24 = "24_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_no_avg_48 = "48_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1"
+    #seq_avg_6_prompt_img_8 = "8_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1"
+
+    EnvMode.seq_avg_12: Checkpoint(
+        config="12_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/12_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_12/19999"
+    ),
+    EnvMode.seq_avg_24: Checkpoint(
+        config="24_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/24_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_24/19999"
+    ),
+    EnvMode.seq_avg_48: Checkpoint(
+        config="48_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_48/19999"
+    ),
+    EnvMode.seq_avg_96: Checkpoint(
+        config="96_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_96/19999"
+    ),
+    EnvMode.seq_no_avg_12: Checkpoint(
+        config="12_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/12_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1/seq_no_avg_12/19999"
+    ),
+    EnvMode.seq_no_avg_24: Checkpoint(
+        config="24_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/24_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1/seq_no_avg_24/19999"
+    ),
+    EnvMode.seq_no_avg_48: Checkpoint(
+        config="48_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/48_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1/seq_no_avg_48/19999"
+    ),
+    EnvMode.seq_avg_6_prompt_img_8: Checkpoint(
+        config="8_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/8_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_6_prompt_img_8/19999"
+    ),
+    EnvMode.seq_avg_6_prompt_img_16: Checkpoint(
+        config="16_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/16_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_6_prompt_img_16/19999"
+    ),
+    EnvMode.seq_avg_6_prompt_img_32: Checkpoint(
+        config="32_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/32_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_6_prompt_img_32/19999"
+    ),
+    EnvMode.seq_avg_6_robocasa: Checkpoint(
+        config="sequence_avg_pi0mini_robocasa_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/sequence_avg_pi0mini_robocasa_incontextv14_train_split_v1/seq_avg_6_robocasa/499999"
+    ),
+    
+    ### total_bs=384 variants; seq_avg
+    EnvMode.seq_avg_bs_8_seq_48: Checkpoint(
+        config="bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_bs_8_seq_48/499999"
+    ),
+    EnvMode.seq_avg_bs_4_seq_96: Checkpoint(
+        config="bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_inference",
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_bs_4_seq_96/499999"
     ),
 }
 

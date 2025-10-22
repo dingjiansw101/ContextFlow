@@ -1,5 +1,6 @@
 from collections.abc import Callable, Mapping, Sequence
 import dataclasses
+import logging
 import json
 from pathlib import Path
 import random
@@ -298,13 +299,39 @@ class InjectDemoIndexes(DataTransformFn):
             return data
         
         # === Otherwise: generate prompt ===
-        # 1) choose episodes
-        if split == "train" and self.random_select:
-            k = min(self.sample_episodes, len(episodes_for_task))
-            selected_episodes = random.sample(episodes_for_task, k)
-        else:
-            selected_episodes = episodes_for_task[: self.sample_episodes]
+        episodes_for_task = [int(ep) for ep in episodes_for_task]
 
+        episode_lengths = {ep: len(self.episode_to_indexes.get(ep, [])) for ep in episodes_for_task}
+        valid_candidates = [ep for ep in episodes_for_task if episode_lengths[ep] >= self.sample_frames]
+        fallback_candidates = [ep for ep in episodes_for_task if episode_lengths[ep] > 0]
+
+        candidates = valid_candidates if valid_candidates else fallback_candidates
+        if not candidates:
+            raise ValueError(
+                f"InjectDemoIndexes: no prompt episodes with frames for task {task_index}"
+            )
+        if valid_candidates and len(valid_candidates) < len(episodes_for_task):
+            logging.debug(
+                "InjectDemoIndexes: filtered out %d prompt episodes without enough frames for task %d",
+                len(episodes_for_task) - len(valid_candidates),
+                task_index,
+            )
+        elif not valid_candidates and fallback_candidates:
+            logging.warning(
+                "InjectDemoIndexes: using fallback prompt episodes with < %d frames for task %d",
+                self.sample_frames,
+                task_index,
+            )
+
+        if split == "train" and self.random_select:
+            k = min(self.sample_episodes, len(candidates))
+            selected_episodes = random.sample(candidates, k)
+        else:
+            selected_episodes = candidates[: self.sample_episodes]
+        if not selected_episodes:
+            raise ValueError(
+                f"InjectDemoIndexes: unable to choose prompt episodes for task {task_index}"
+            )
 
         # 2) choose frames per episode
         dem_prompt_indexes: List[List[int]] = []
@@ -336,17 +363,29 @@ class InjectDemoIndexes(DataTransformFn):
                 
                 
         for ep in selected_episodes:
-            frame_idxs = self.episode_to_indexes.get(ep, [])
+            frame_idxs = self.episode_to_indexes.get(int(ep), [])
             n = len(frame_idxs)
-            if n > self.sample_frames:
+            if n >= self.sample_frames:
                 pos = np.linspace(0, n - 1, num=self.sample_frames, dtype=int)
                 # pos_list.append(pos)
                 chosen = [frame_idxs[p] for p in pos]
+            elif n > 0:
+                logging.warning(
+                    "InjectDemoIndexes: padding episode %s for task %d because only %d frames available",
+                    ep,
+                    task_index,
+                    n,
+                )
+                chosen = list(frame_idxs)
+                pad_value = frame_idxs[-1]
+                while len(chosen) < self.sample_frames:
+                    chosen.append(pad_value)
             else:
-                chosen = frame_idxs
-                raise ValueError(f"InjectDemoIndexes (XJ): too few frames! len(frame_idxs)={n} in episode {selected_episodes} of task {task_index}, n<=self.sample_frames")
+                raise ValueError(
+                    f"InjectDemoIndexes: episode {ep} for task {task_index} has no frames available"
+                )
 
-            # XJ(stage-wise prompt): override dem_prompt_indexes only when sample 2 frames
+        # XJ(stage-wise prompt): override dem_prompt_indexes only when sample 2 frames
             if self.all_episode_stage is not None and self.override_index and self.sample_frames == 2 and self._episode_stage_map is not None:
                 if cur_stage is not None:
                     # override "chosen" by the first and last frames of the current stage (map to the frame doamin of selected demo-episode) 
@@ -593,8 +632,8 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
         ep_idx = int(data["episode_index"])
 
         # anchor（局部帧号），仅在 around/random* 下用于“尽量包含”
-        anchor_local = data.get("frame_index", None)
-        anchor_local = int(anchor_local) if anchor_local is not None else None
+        anchor_val = data.get("frame_index", None)
+        anchor_val = int(anchor_val) if anchor_val is not None else None
 
         # 取得 episode 的全局帧列表
         if self._epi2idx is None or ep_idx not in self._epi2idx:
@@ -605,8 +644,56 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
             assert isinstance(frame_list, list) and len(frame_list) >= self.n_frames, \
                 f"episode={ep_idx} 的帧数不足（{len(frame_list)} < n_frames={self.n_frames}）"
 
+        anchor_local = None
+        anchor_global = None
+        if anchor_val is not None:
+            if 0 <= anchor_val < len(frame_list):
+                anchor_local = anchor_val
+            else:
+                idx = None
+                try:
+                    idx = frame_list.index(anchor_val)
+                except ValueError:
+                    idx = None
+                if idx is None and "index" in data:
+                    try:
+                        global_candidate = int(data["index"])
+                    except (TypeError, ValueError):
+                        global_candidate = None
+                    if global_candidate is not None:
+                        try:
+                            idx = frame_list.index(global_candidate)
+                        except ValueError:
+                            idx = None
+                anchor_local = idx
+            if anchor_local is None and self.debug_checks:
+                logging.warning(
+                    "[AddCurrentFramesSequenceTransform] 无法匹配 anchor frame (frame_index=%s, index=%s) 在 episode=%s 的索引列表中（len=%s）",
+                    anchor_val,
+                    data.get("index"),
+                    ep_idx,
+                    len(frame_list),
+                )
+        if anchor_local is not None:
+            anchor_global = frame_list[anchor_local]
+
         # 采样全局帧索引
         chosen_global = self._pick_indices(frame_list, anchor_local)
+
+        if anchor_global is not None and anchor_global not in chosen_global:
+            merged = sorted({anchor_global, *chosen_global})
+            if len(merged) > self.n_frames:
+                drop_idx = None
+                anchor_pos = merged.index(anchor_global)
+                left_gap = anchor_pos
+                right_gap = len(merged) - anchor_pos - 1
+                if right_gap >= left_gap and anchor_pos + 1 < len(merged):
+                    drop_idx = anchor_pos + 1
+                elif anchor_pos > 0:
+                    drop_idx = anchor_pos - 1
+                if drop_idx is not None and merged[drop_idx] != anchor_global:
+                    merged.pop(drop_idx)
+            chosen_global = merged
 
         # 选取并堆叠
         items = [self.dataset[int(i)] for i in chosen_global]

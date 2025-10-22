@@ -90,7 +90,7 @@ class Config:
     lora_configs: dict[str, lora.LoRAConfig] = dataclasses.field(default_factory=dict)
     expert_name: str | None = None
 
-Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora"]
+Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_A", "gemma_B", "gemma_132m", "gemma_66m"]
 
 def get_config(variant: Variant, expert_name: str | None = None) -> Config:
     if variant == "dummy":
@@ -428,6 +428,7 @@ class Module(nn.Module):
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
     debug_checks: bool = True  # <<<<<< 顶层开关
+    use_text_prompts: bool = True
 
     def _zero_kv(self, B: int, dtype) -> KVCache:
         L = self.configs[0].depth
@@ -463,7 +464,8 @@ class Module(nn.Module):
 
     def setup(self):
         assert all(config.depth == self.configs[0].depth for config in self.configs)
-        self.embedder = Embedder(vocab_size=self.voc_size, embed_dim=self.configs[0].width, name="embedder")
+        if self.use_text_prompts:
+            self.embedder = Embedder(vocab_size=self.voc_size, embed_dim=self.configs[0].width, name="embedder")
 
         block_cls = nn.remat(
             Block,
@@ -493,7 +495,10 @@ class Module(nn.Module):
 
     @at.typecheck
     def embed(self, tokens: at.Int[at.Array, "b t"]) -> at.Float[at.Array, "b t d"]:
-        return self.embedder.encode(tokens).astype(self.embed_dtype)
+        if self.use_text_prompts:
+            return self.embedder.encode(tokens).astype(self.embed_dtype)
+        else:
+            raise ValueError(f"use_text_prompts is set to False but gemma.Module.embed is called")
 
     @at.typecheck
     def __call__(
@@ -585,7 +590,8 @@ class Module(nn.Module):
         return out, kv_out
 
     def init(self):
-        self.embed(jnp.zeros((1, 1), dtype=jnp.int32))
+        if self.use_text_prompts:
+            self.embed(jnp.zeros((1, 1), dtype=jnp.int32))
         self(
             [jnp.zeros((1, 1, c.width)) for c in self.configs],
             jnp.zeros((1, len(self.configs)), dtype=jnp.int32),

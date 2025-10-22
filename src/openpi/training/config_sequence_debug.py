@@ -173,7 +173,7 @@ def build(api) -> list["api.TrainConfig"]:
             use_delta_joint_actions=False,
             states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,#_V3,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
 
         ),
@@ -237,7 +237,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=32, random_select=True,  
             freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
             use_frame_sequence_transform=True, 
-            frame_sequence_length=6,
+            frame_sequence_length=24,
             avg_current_img=True,
             ),
         data=SequenceDebugLeRobotLiberoIncontextDataConfig(
@@ -267,12 +267,12 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=32, random_select=True, 
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
             use_frame_sequence_transform = True, 
-            frame_sequence_length=6,
+            frame_sequence_length=24,
             avg_current_img=True,
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32,
+        batch_size=16,
     ), 
     api.TrainConfig(
         name="sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_inference",
@@ -282,7 +282,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=32, random_select=True,  
             freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
             use_frame_sequence_transform = True, 
-            frame_sequence_length=6,
+            frame_sequence_length=24,
             avg_current_img=True,
             ),
         data=SequenceDebugLeRobotLiberoIncontextDataConfig(
@@ -310,103 +310,13 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=32, random_select=True, 
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
             use_frame_sequence_transform = True, 
-            frame_sequence_length=6,
+            frame_sequence_length=24,
             avg_current_img=True,
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32,
+        batch_size=16,
     ), 
-    # sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    # api.TrainConfig(
-    #     name="sequence_debug_pi0mini_libero_incontextv14_train_split_v1",
-    #     assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
-    #     model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=False, freeze_img_encoder=False, siglip_variant="S/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=False,
-    #         ),
-    #     data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-    #         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-    #     ),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
-    #     ),
-    #     weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     lr_schedule = api._optimizer.CosineDecaySchedule(
-    #         warmup_steps = 1_000,
-    #         peak_lr= 2.5e-5,
-    #         decay_steps= 20_000,
-    #         decay_lr= 2.5e-6),
-    #     num_train_steps= 20_000,
-    #     freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
-    #         sample_frames=2, sample_actions=32, random_select=True, 
-    #         freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
-    #         use_frame_sequence_transform = True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=False,
-    #     ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=8,
-    #     batch_size=32,
-    # ), 
-    # api.TrainConfig(
-    #     name="sequence_debug_pi0mini_libero_incontextv14_inference",
-    #     assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
-    #     model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
-    #         use_frame_sequence_transform = True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=False,
-    #         ),
-    #     data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #     ),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
-    #     ),
-    #     weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     lr_schedule = api._optimizer.CosineDecaySchedule(
-    #         warmup_steps = 1_000,
-    #         peak_lr= 2.5e-5,
-    #         decay_steps= 20_000,
-    #         decay_lr= 2.5e-6),
-    #     num_train_steps= 20_000,
-    #     freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
-    #         sample_frames=2, sample_actions=32, random_select=True, 
-    #         freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
-    #         use_frame_sequence_transform = True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=False,
-    #     ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=8,
-    #     batch_size=32,
-    # ), 
     # no sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
     api.TrainConfig(
         name="no_sequence_no_avg_debug_pi0mini_libero_incontextv14_train_split_v1",
@@ -451,7 +361,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     api.TrainConfig(
         name="no_sequence_no_avg_debug_pi0mini_libero_incontextv14_inference",
@@ -494,7 +404,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     # no sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
     api.TrainConfig(
@@ -540,7 +450,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     api.TrainConfig(
         name="no_sequence_avg_cur_img_debug_pi0mini_libero_incontextv14_inference",
@@ -583,7 +493,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     # sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
     api.TrainConfig(
@@ -624,7 +534,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=32, random_select=True, 
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
             use_frame_sequence_transform = False, 
-            frame_sequence_length=0,
+            frame_sequence_length=24,
             avg_current_img=False,
         ).get_freeze_filter(),
         ema_decay=None,
@@ -667,7 +577,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=32, random_select=True, 
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
             use_frame_sequence_transform = False, 
-            frame_sequence_length=0,
+            frame_sequence_length=24,
             avg_current_img=False,
         ).get_freeze_filter(),
         ema_decay=None,
@@ -714,12 +624,12 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     api.TrainConfig(
         name="no_sequence_no_avg_debug_pi0mini_libero_incontextv12_inference",
         assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
-        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+        model=api.pi0_light_incontextv12_separate_img_proj.Pi0LightIncontextConfigv12SepImgProj(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
             sample_frames=2, sample_actions=32, random_select=True,  
             freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
@@ -744,14 +654,14 @@ def build(api) -> list["api.TrainConfig"]:
             decay_steps= 20_000,
             decay_lr= 2.5e-6),
         num_train_steps= 20_000,
-        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+        freeze_filter=api.pi0_light_incontextv12_separate_img_proj.Pi0LightIncontextConfigv12SepImgProj(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
             sample_frames=2, sample_actions=32, random_select=True, 
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     # V12: no sequence training frames + pi0mini + without avg current img tokens + current img tokens in PROMPT expert
     api.TrainConfig(
@@ -791,7 +701,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
     ), 
     api.TrainConfig(
         name="no_sequence_no_avg_prompt_token_debug_pi0mini_libero_incontextv12_inference",
@@ -828,6 +738,1099 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
-        batch_size=32*6,
+        batch_size=32*6*2,
+    ),
+    ####################
+    #####seq_avg########
+    ####################
+    ####################
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="12_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=12,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=12,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=16,
+    ), 
+    api.TrainConfig(
+        name="12_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=12,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=12,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=16,
+    ), 
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="24_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=24,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=24,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=8,
+    ), 
+    api.TrainConfig(
+        name="24_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=24,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=24,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=8,
+    ), 
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
+    ), 
+    api.TrainConfig(
+        name="48_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
+    ), 
+    ####################
+    #####seq_no_avg#####
+    ####################
+    ####################
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="12_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=12,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=12,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=16,
+    ), 
+    api.TrainConfig(
+        name="12_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=12,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=12,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=16,
+    ), 
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="24_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=24,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=24,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=8,
+    ), 
+    api.TrainConfig(
+        name="24_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=24,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=24,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=8,
+    ), 
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="48_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=48,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
+    ), 
+    api.TrainConfig(
+        name="48_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=48,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
+    ), 
+    api.TrainConfig(
+        name="96_sequence_no_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=96,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=96,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=2,
+    ), 
+    api.TrainConfig(
+        name="96_sequence_no_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=96,
+            avg_current_img=False,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=96,
+            avg_current_img=False,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=2,
+    ), 
+    ####################
+    #####seq_avg########
+    #####prompt_img#####
+    ####################
+    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    api.TrainConfig(
+        name="8_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=8, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=8, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=12,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ), 
+    api.TrainConfig(
+        name="8_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=8, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=8, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ), 
+    api.TrainConfig(
+        name="16_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=16, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=16, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ), 
+    api.TrainConfig(
+        name="16_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=16, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=16, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ), 
+    api.TrainConfig(
+        name="32_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=32, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=32, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=12,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ), 
+    api.TrainConfig(
+        name="32_prompt_img_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=32, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=32, sample_actions=32, random_select=True, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+            use_frame_sequence_transform = True, 
+            frame_sequence_length=6,
+            avg_current_img=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ), 
+    #### total_bs=384 variants; seq_avg
+    api.TrainConfig(
+        name="bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+            ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=8,
+    ), 
+    api.TrainConfig(
+        name="bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=48,
+            avg_current_img=True,
+            ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=8,
+    ), 
+    api.TrainConfig(
+        name="bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=96,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=96,
+            avg_current_img=True,
+            ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
+    ), 
+    api.TrainConfig(
+        name="bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=96,
+            avg_current_img=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+            use_frame_sequence_transform=True, 
+            frame_sequence_length=96,
+            avg_current_img=True,
+            ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
     ), 
     ]

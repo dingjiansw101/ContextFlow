@@ -367,6 +367,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
             "configs": [prompt_expert_config, action_expert_config],
             "embed_dtype": config.dtype,
             "debug_checks":config.debug_fused_checks,
+            "use_text_prompts": config.use_text_prompts,
         }
         if config.vocab_size is not None:
             gemma_kwargs["voc_size"] = config.vocab_size

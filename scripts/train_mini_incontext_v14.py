@@ -27,7 +27,73 @@ import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
 import openpi.training.weight_loaders as _weight_loaders
 
+import json
+import flax
+from typing import Any
+from flax.nnx import filterlib
 
+def summarize_nnx_model(
+    model: nnx.Module,
+    freeze_filter: filterlib.Filter | None = None,  
+    output_path: str = "modelv14_structure_light_summary.json"
+):
+    graphdef, state = nnx.split(model)
+    flat = state.flat_state()
+    freeze_filter = freeze_filter or nnx.NoneFilter()
+
+    summary = {}
+    for path, param in flat.items():
+        path_str = "/".join(str(p) for p in path)
+        is_frozen = freeze_filter(path, param)
+        summary[path_str] = {
+            "shape": tuple(param.value.shape),
+            "dtype": str(param.value.dtype),
+            "frozen": is_frozen,
+            "num_params": int(param.value.size),
+        }
+
+    module_summary = {}
+
+    for path, info in summary.items():
+        parts = path.split("/")
+        top_group = parts[0]
+        sub_path = "/".join(parts[1:]) if len(parts) > 1 else ""
+
+        # === Refined PaliGemma/llm-based grouping ===
+        if top_group == "PaliGemma" and len(parts) > 2:
+            if parts[1] == "llm":
+                if parts[2] == "embedder":
+                    group_name = "PaliGemma/llm/embedder"
+                elif "_1" in path or "lora_" in path:
+                    group_name = "PaliGemma/llm/action_expert"
+                else:
+                    group_name = "PaliGemma/llm/vlm"
+            elif parts[1] == "img":
+                group_name = "PaliGemma/img"
+            else:
+                group_name = "PaliGemma/other"
+        else:
+            group_name = top_group  # e.g., action_in_proj, image_proj, etc.
+
+        if group_name not in module_summary:
+            module_summary[group_name] = {"total": 0, "trainable": 0}
+        module_summary[group_name]["total"] += info["num_params"]
+        if not info["frozen"]:
+            module_summary[group_name]["trainable"] += info["num_params"]
+
+    output = {
+        "parameter_details": summary,
+        "grouped_parameter_summary": module_summary,
+        "total_params": sum(i["num_params"] for i in summary.values()),
+        "trainable_params": sum(i["num_params"] for i in summary.values() if not i["frozen"]),
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(output, f, indent=2)
+    
+    print(f" Model structure summary written to: {output_path}")
+    
+    
 def init_logging():
     """Custom logging format for better readability."""
     level_mapping = {"DEBUG": "D", "INFO": "I", "WARNING": "W", "ERROR": "E", "CRITICAL": "C"}
@@ -86,6 +152,7 @@ def _load_weights_and_validate(
     vision_encoder_loader: _weight_loaders.WeightLoader | None = None,
     vision_encoder_prefix: str = "PaliGemma/img",
     verbose: bool = False,
+    config: _config.TrainConfig | None = None,  # 👈 新增参数
 ) -> at.Params:
     """
     Load model parameters, optionally replacing vision encoder subtree,
@@ -102,10 +169,22 @@ def _load_weights_and_validate(
             if not isinstance(v, jax.ShapeDtypeStruct)
         }, sep="/")
 
-    # Step 2: Replace vision encoder subtree (if needed)
+    # Step 2a: Replace vision encoder subtree (if needed)
     flat_loaded = flax.traverse_util.flatten_dict(loaded_params, sep="/")
     flat_vision = flax.traverse_util.flatten_dict(vision_encoder_loader.load(params_shape), sep="/")
     flat_expected = flax.traverse_util.flatten_dict(params_shape, sep="/")
+    
+    # Step 2b: Remove existing vision encoder keys
+    # --- 新增：根据 config.model.use_text_prompts 判断是否删除 embedder ---
+    if config is not None and hasattr(config.model, "use_text_prompts"):
+        if not getattr(config.model, "use_text_prompts"):
+            EMBED_PREFIX = "PaliGemma/llm/embedder"
+            flat_loaded = {
+                k: v for k, v in flat_loaded.items()
+                if not (k == EMBED_PREFIX or k.startswith(EMBED_PREFIX + "/"))
+            }
+            logging.info("[_load_weights_and_validate] Dropped embedder subtree (use_text_prompts=False).")
+    # --- 新增结束 ---
 
     # Step 3a: Remove existing vision encoder keys
     flat_loaded = {
@@ -183,6 +262,10 @@ def init_train_state(
         params = nnx.state(model)
         # Convert frozen params to bfloat16.
         params = nnx_utils.state_map(params, config.freeze_filter, lambda p: p.replace(p.value.astype(jnp.bfloat16)))
+        
+        if config.model_summary_json is not None:
+            logging.info("[InitTrainState] Summarizing model structure to JSON...")
+            summarize_nnx_model(model, config.freeze_filter, output_path=config.model_summary_json)
 
         return training_utils.TrainState(
             step=0,
@@ -202,9 +285,9 @@ def init_train_state(
 
     # XJ:debug
     if isinstance(config.vision_weight_loader, _weight_loaders.NoOpWeightLoader):
-        partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict())
+        partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict(), config=config,)
     else:
-        partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict(), vision_encoder_loader = config.vision_weight_loader)
+        partial_params = _load_weights_and_validate(config.weight_loader, train_state_shape.params.to_pure_dict(), vision_encoder_loader = config.vision_weight_loader, config=config,)
         
     
     replicated_sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())

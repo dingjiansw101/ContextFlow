@@ -21,8 +21,8 @@ LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 LIBERO_TEST_TASK_DICT = {
     "libero_spatial": [3,8],
     "libero_object":[5,7],
-    "libero_goal": [0,7],
-    "libero_10": [5,4],
+    "libero_goal": [1,8],
+    "libero_10": [0,6],
     "libero_90":[0],
 }
 

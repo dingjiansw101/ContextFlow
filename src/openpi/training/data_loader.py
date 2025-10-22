@@ -359,7 +359,6 @@ def create_incontext_data_loader(
                 dataset=dataset,
                 episode_to_indexes_file=config.data.episode_to_indexes_file,  # 你已有的 json
                 n_frames=config.model.frame_sequence_length,
-                sampling="uniform",                                            # 或 "around"
                 train_episode_index_list=getattr(data_config, "train_episode", None),
             )
         ])

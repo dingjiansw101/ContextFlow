@@ -589,6 +589,7 @@ class TrainConfig:
     # data parallel between 2 groups of devices.
     fsdp_devices: int = 1
     
+    model_summary_json: str | None = None
     # XJ: add override assets dir to avoid creating redundant assets folders/files
     assets_repo_override: str | None = None
     
