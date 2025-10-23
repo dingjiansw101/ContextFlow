@@ -513,11 +513,11 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     ### total_bs=384 variants; seq_avg
     EnvMode.seq_avg_bs_8_seq_48: Checkpoint(
         config="bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_bs_8_seq_48/499999"
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/bs_8_seq_48_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_bs_8_seq_48/19999"
     ),
     EnvMode.seq_avg_bs_4_seq_96: Checkpoint(
         config="bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_bs_4_seq_96/499999"
+        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/bs_4_seq_96_sequence_avg_pi0mini_libero_incontextv14_train_split_v1/seq_avg_bs_4_seq_96/19999"
     ),
 }
 
