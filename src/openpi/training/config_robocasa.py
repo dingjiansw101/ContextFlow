@@ -1923,7 +1923,7 @@ def build(api) -> list["api.TrainConfig"]:
                     siglip_variant="S/16",
                     sample_frames=2, sample_actions=32, random_select=True, 
                     use_frame_sequence_transform = True, 
-                    frame_sequence_length = 6,
+                    frame_sequence_length = 12,
                 avg_current_img=True,
                 ),
             data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
@@ -1950,14 +1950,14 @@ def build(api) -> list["api.TrainConfig"]:
             #     avg_current_img=True,
             # ).get_freeze_filter(),
             lr_schedule = api._optimizer.CosineDecaySchedule(
-                    warmup_steps = 1_000,
+                    warmup_steps = 10_000,
                     peak_lr= 2.5e-4,
                     decay_steps= 500_000,
                     decay_lr= 2.5e-5),
             num_train_steps=500_000,
-            ema_decay=0.999,
+            ema_decay=None,
             num_workers=8,
-            batch_size=8,
+            batch_size=12,
         ), 
         api.TrainConfig(
             name="sequence_avg_pi0mini_robocasa_incontextv14_inference",
@@ -1970,7 +1970,7 @@ def build(api) -> list["api.TrainConfig"]:
                     siglip_variant="S/16",
                     sample_frames=2, sample_actions=32, random_select=True, 
                     use_frame_sequence_transform = True, 
-                    frame_sequence_length = 6,
+                    frame_sequence_length = 12,
                 avg_current_img=True,
                 ),
             data=LeRobotRobocasaMgThreeImageIncontextDataConfig(
@@ -1997,13 +1997,13 @@ def build(api) -> list["api.TrainConfig"]:
             #     avg_current_img=True,
             # ).get_freeze_filter(),
             lr_schedule = api._optimizer.CosineDecaySchedule(
-                    warmup_steps = 1_000,
+                    warmup_steps = 10_000,
                     peak_lr= 2.5e-4,
                     decay_steps= 500_000,
                     decay_lr= 2.5e-5),
             num_train_steps=500_000,
-            ema_decay=0.999,
+            ema_decay=None,
             num_workers=8,
-            batch_size=8,
+            batch_size=12,
         ), 
     ]
