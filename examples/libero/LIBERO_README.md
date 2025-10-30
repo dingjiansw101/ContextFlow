@@ -38,8 +38,14 @@ uv pip install -e packages/openpi-client
 uv pip install -e third_party/libero
 export PYTHONPATH=$PYTHONPATH:$PWD/third_party/libero
 
-# Run the simulation
+# Run the simulation (default: split0, libero_spatial)
 python examples/libero/main_incontext.py
+
+# Run with a different task split
+python examples/libero/main_incontext.py --task-split split1
+
+# Run with a different task suite and split
+python examples/libero/main_incontext.py --task-suite-name libero_object --task-split split2
 ```
 
 Terminal window 2:
@@ -50,6 +56,16 @@ uv run scripts/serve_policy_incontext.py --env LIBERO
 ```
 
 Replace LIBERO with corresponding ENV from serve_policy_incontext.py (e.g., LIBERO_FM_LORA_INCONTEXT_SAMPLE2)
+
+### Task Splits
+
+The evaluation uses task splits to measure generalization on seen vs unseen tasks. Task splits are defined in `metadata/libero_task_splits/` with separate JSON files for seen and unseen tasks. Available splits: split0, split1, split2, split3.
+
+Key command-line arguments:
+- `--task-suite-name`: LIBERO task suite (libero_spatial, libero_object, libero_goal, libero_10, libero_90)
+- `--task-split`: Which task split to use (default: "split0")
+- `--task-splits-dir`: Directory containing task split JSON files (default: "metadata/libero_task_splits")
+- `--num-trials-per-task`: Number of rollouts per task (default: 50)
 
 ## Results
 

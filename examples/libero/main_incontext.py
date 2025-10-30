@@ -18,13 +18,27 @@ from collections import Counter
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 
-LIBERO_TEST_TASK_DICT = {
-    "libero_spatial": [3,8],
-    "libero_object":[5,7],
-    "libero_goal": [1,8],
-    "libero_10": [0,6],
-    "libero_90":[0],
-}
+
+def load_task_splits(task_splits_dir: str, split: str):
+    """Load seen and unseen task lists from JSON files.
+
+    Returns:
+        tuple: (seen_tasks_set, unseen_tasks_set) - sets of task descriptions with spaces
+    """
+    split_path = pathlib.Path(task_splits_dir) / split
+
+    with open(split_path / "seen_tasks.json", "r") as f:
+        seen_tasks = json.load(f)
+
+    with open(split_path / "unseen_tasks.json", "r") as f:
+        unseen_tasks = json.load(f)
+
+    # Normalize task names: replace underscores with spaces to match task_description format
+    seen_tasks_set = {task.replace("_", " ") for task in seen_tasks}
+    unseen_tasks_set = {task.replace("_", " ") for task in unseen_tasks}
+
+    return seen_tasks_set, unseen_tasks_set
+
 
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
@@ -63,6 +77,8 @@ class Args:
     # Utils
     #################################################################################################################
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
+    task_split: str = "split0"  # Which task split to use for seen/unseen task lists
+    task_splits_dir: str = "libero_task_splits"  # Directory containing task splits
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -70,6 +86,12 @@ class Args:
 def eval_libero(args: Args) -> None:
     # Set random seed
     np.random.seed(args.seed)
+
+    # Load seen and unseen task splits
+    seen_tasks, unseen_tasks = load_task_splits(args.task_splits_dir, args.task_split)
+    logging.info(f"Loaded task split: {args.task_split}")
+    logging.info(f"  Seen tasks: {len(seen_tasks)}")
+    logging.info(f"  Unseen tasks: {len(unseen_tasks)}")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
@@ -99,21 +121,14 @@ def eval_libero(args: Args) -> None:
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
 
-    # Xianjie: get the test task list based on the task suite name
-    # assigned_task_list = LIBERO_TEST_TASK_DICT[args.task_suite_name]
-
     # Start evaluation
     # Track per-task episode & success counts
     per_task_episodes  = Counter()
     per_task_successes = Counter()
     total_episodes, total_successes = 0, 0
 
-    unseen_ids = set(LIBERO_TEST_TASK_DICT[args.task_suite_name])
-
     for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
-    # for task_id in assigned_task_list:
         # Get task
-        
         task = task_suite.get_task(task_id)
 
         # Get default LIBERO initial states
@@ -216,29 +231,31 @@ def eval_libero(args: Args) -> None:
             logging.info(f"Success: {done}")
             logging.info(f"# episodes completed so far: {total_episodes}")
             logging.info(f"# successes: {total_successes} ({total_successes / total_episodes * 100:.1f}%)")
-        
-        per_task_episodes[task_id] = task_episodes
-        per_task_successes[task_id] = task_successes
+
+        # Track per-task results using task_description as key
+        per_task_episodes[task_description] = task_episodes
+        per_task_successes[task_description] = task_successes
+
         # Log final results
         logging.info(f"Current task success rate: {float(task_successes) / float(task_episodes)}")
         logging.info(f"Current total success rate: {float(total_successes) / float(total_episodes)}")
 
+    # Compute success rates for seen vs unseen tasks
     seen_rates, unseen_rates = [], []
-    for tid in range(num_tasks_in_suite):
-        rate = per_task_successes[tid] / per_task_episodes[tid]
-        if tid in unseen_ids:
+    for task_desc in per_task_episodes.keys():
+        rate = per_task_successes[task_desc] / per_task_episodes[task_desc]
+        if task_desc in unseen_tasks:
             unseen_rates.append(rate)
-        else:
+        elif task_desc in seen_tasks:
             seen_rates.append(rate)
+        else:
+            logging.warning(f"Task '{task_desc}' not found in seen or unseen lists")
 
+    avg_seen = sum(seen_rates) / len(seen_rates) if seen_rates else 0.0
     avg_unseen = sum(unseen_rates) / len(unseen_rates) if unseen_rates else 0.0
-    avg_seen   = sum(seen_rates)   / len(seen_rates)   if seen_rates   else 0.0
-    
-    logging.info(f"Average success on UNSEEN tasks {sorted(unseen_ids)}: {avg_unseen:.3f}")
-    logging.info(
-        f"Average success on SEEN tasks   {sorted(set(range(num_tasks_in_suite)) - unseen_ids)}: "
-        f"{avg_seen:.3f}"
-    )
+
+    logging.info(f"\nAverage success on SEEN tasks: {avg_seen:.3f} ({len(seen_rates)} tasks)")
+    logging.info(f"Average success on UNSEEN tasks: {avg_unseen:.3f} ({len(unseen_rates)} tasks)")
 
     logging.info(f"Total success rate: {float(total_successes) / float(total_episodes)}")
     logging.info(f"Total episodes: {total_episodes}")
