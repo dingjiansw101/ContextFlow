@@ -1,0 +1,16 @@
+{
+  "train_tasks": [
+        "pick up the alphabet soup and place it in the basket",
+        "pick up the cream cheese and place it in the basket",
+        "pick up the salad dressing and place it in the basket",
+        "pick up the bbq sauce and place it in the basket",
+        "pick up the ketchup and place it in the basket",
+        "pick up the tomato sauce and place it in the basket",
+        "pick up the butter and place it in the basket",
+        "pick up the milk and place it in the basket"
+  ],
+  "test_tasks": [
+        "pick up the chocolate pudding and place it in the basket",
+        "pick up the orange juice and place it in the basket"
+  ]
+}

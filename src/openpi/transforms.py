@@ -1001,8 +1001,16 @@ class AddStatesActionsPromptTransform(DataTransformFn):
 
     # Stage JSON (list of dicts; each entry has "episode_name" and "segments":[{start,end,label,id}, ...])
     all_episode_stage: Optional[str] = None
+    debug_checks: bool = False
 
     def __post_init__(self):
+        expected_idx_map: Optional[Dict[int, List[int]]] = None
+        if self.debug_checks and self.episode_to_indexes_file is not None:
+            idx_path = Path(self.episode_to_indexes_file)
+            if idx_path.exists():
+                with idx_path.open("r") as f:
+                    expected_idx_map = {int(k): v for k, v in json.load(f).items()}
+
         # ---- Load / Build caches for states & actions ----
         try:
             states = load_episode_states_from_json(self.states_cache_path)
@@ -1011,6 +1019,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             with Path(self.episode_to_indexes_file).open("r") as f:
                 raw = json.load(f)
             idx_map = {int(k): v for k, v in raw.items()}
+            expected_idx_map = expected_idx_map or idx_map
             states, actions = {}, {}
             for ep, idxs in tqdm(idx_map.items(), desc="Building caches", total=len(idx_map)):
                 state_list, action_list = [], []
@@ -1025,6 +1034,26 @@ class AddStatesActionsPromptTransform(DataTransformFn):
 
         object.__setattr__(self, "episode_to_all_states", states)
         object.__setattr__(self, "episode_to_all_first_actions", actions)
+
+        if self.debug_checks and expected_idx_map is not None:
+            expected_eps = set(expected_idx_map.keys())
+            state_eps = set(self.episode_to_all_states.keys())
+            action_eps = set(self.episode_to_all_first_actions.keys())
+            missing_state_eps = sorted(expected_eps - state_eps)
+            missing_action_eps = sorted(expected_eps - action_eps)
+            if missing_state_eps:
+                sample = ", ".join(str(x) for x in missing_state_eps[:10])
+                raise AssertionError(
+                    f"[AddStatesActionsPromptTransform] 缺少状态缓存的 episode: {sample}"
+                )
+            if missing_action_eps:
+                sample = ", ".join(str(x) for x in missing_action_eps[:10])
+                raise AssertionError(
+                    f"[AddStatesActionsPromptTransform] 缺少动作缓存的 episode: {sample}"
+                )
+            print(
+                f"[AddStatesActionsPromptTransform] 已载入状态/动作缓存，共 {len(state_eps)} 个 episode，来源 {self.states_cache_path} / {self.actions_cache_path}"
+            )
 
         # ---- Build stage map: {episode_name -> segments} ----
         stage_map: Optional[Dict[str, List[Dict[str, Any]]]] = None
@@ -1177,6 +1206,10 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         states_b, states_mask_b, actions_b, actions_mask_b = [], [], [], []
 
         for ep in eps:
+            if ep not in self.episode_to_all_states or ep not in self.episode_to_all_first_actions:
+                raise KeyError(
+                    f"[AddStatesActionsPromptTransform] 缓存中缺少 episode={ep}，请检查 states/actions cache 是否覆盖任务子集。"
+                )
             all_states = self.episode_to_all_states[ep]             # [T, D_s]
             all_actions = self.episode_to_all_first_actions[ep]     # [T, D_a]
             T = all_states.shape[0]

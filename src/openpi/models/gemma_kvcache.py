@@ -90,7 +90,7 @@ class Config:
     lora_configs: dict[str, lora.LoRAConfig] = dataclasses.field(default_factory=dict)
     expert_name: str | None = None
 
-Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_A", "gemma_B", "gemma_132m", "gemma_66m"]
+Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_A", "gemma_B", "gemma_132m", "gemma_66m", "gemma_43m", "gemma_52m" ]
 
 def get_config(variant: Variant, expert_name: str | None = None) -> Config:
     if variant == "dummy":
@@ -115,6 +115,20 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
         return Config(width=2048, depth=6, mlp_dim=2048, num_heads=8, num_kv_heads=1, head_dim=256, expert_name=expert_name)
     if variant == "gemma_66m":
         return Config(width=1024, depth=6, mlp_dim=2048, num_heads=8, num_kv_heads=1, head_dim=256, expert_name=expert_name)
+    if variant == "gemma_43m":
+        # ≈43.26M
+        return Config(
+            width=640, depth=8, mlp_dim=2048,
+            num_heads=8, num_kv_heads=1, head_dim=128,
+            expert_name=expert_name
+        )
+    if variant == "gemma_52m":
+        # ≈51.92M
+        return Config(
+            width=704, depth=8, mlp_dim=2304,
+            num_heads=8, num_kv_heads=1, head_dim=128,
+            expert_name=expert_name
+        )
     if variant == "gemma_A":
         return Config(width=512, depth=6, mlp_dim=768, num_heads=8, num_kv_heads=1, head_dim=256, expert_name=expert_name)
     if variant == "gemma_B":

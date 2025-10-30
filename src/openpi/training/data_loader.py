@@ -337,18 +337,21 @@ def create_incontext_data_loader(
 
     if config.model.use_action_state_prompts:
         print("Using action-state prompt")
+        debug_prompt_cache = getattr(config.data, "debug_prompt_cache", False)
         if config.data.episode_to_indexes_file is not None:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
                                                                 episode_to_indexes_file=config.data.episode_to_indexes_file,
                                                                 all_episode_stage=getattr(config.data, "all_episode_stage", None),
+                                                                debug_checks=debug_prompt_cache,
                                                                 )                                        
         else:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
                                                                 all_episode_stage=getattr(config.data, "all_episode_stage", None),
+                                                                debug_checks=debug_prompt_cache,
                                                                 )
         dataset = TransformedDataset(dataset, [add_demo_transform])
     

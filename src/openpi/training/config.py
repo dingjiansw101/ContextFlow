@@ -87,7 +87,7 @@ DEFAULT_LIBERO_TEST_TASK_V2 = [
         "put the white mug on the plate and put the chocolate pudding to the right of the plate",
         "pick up the book and place it in the back compartment of the caddy",
         # goal
-        # "turn on the stove",
+        "turn on the stove",
         "open the middle drawer of the cabinet",
         # object
         "pick up the milk and place it in the basket",

@@ -4945,5 +4945,4 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=32,
         # wandb_enabled=False,
     ),
-    
     ]

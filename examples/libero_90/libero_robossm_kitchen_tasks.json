@@ -1,0 +1,24 @@
+{
+  "train_tasks": [
+      "KITCHEN SCENE10 put the black bowl in the top drawer of the cabinet",
+      "KITCHEN SCENE1 put the black bowl on top of the cabinet",
+      "KITCHEN SCENE2 put the middle black bowl on top of the cabinet",
+      "KITCHEN SCENE4 put the black bowl on top of the cabinet",
+      "KITCHEN SCENE4 put the wine bottle in the bottom drawer of the cabinet",
+      "KITCHEN SCENE5 put the black bowl in the top drawer of the cabinet",
+      "KITCHEN SCENE5 put the black bowl on top of the cabinet",
+      "KITCHEN SCENE5 put the ketchup in the top drawer of the cabinet"
+  ],
+  "test_tasks": [
+      "KITCHEN SCENE10 put the black bowl in the top drawer of the cabinet",
+      "KITCHEN SCENE1 put the black bowl on top of the cabinet",
+      "KITCHEN SCENE2 put the middle black bowl on top of the cabinet",
+      "KITCHEN SCENE4 put the black bowl on top of the cabinet",
+      "KITCHEN SCENE4 put the wine bottle in the bottom drawer of the cabinet",
+      "KITCHEN SCENE5 put the black bowl in the top drawer of the cabinet",
+      "KITCHEN SCENE5 put the black bowl on top of the cabinet",
+      "KITCHEN SCENE5 put the ketchup in the top drawer of the cabinet",
+      "KITCHEN SCENE9 turn on the stove",
+      "KITCHEN SCENE9 turn on the stove and put the frying pan on it"
+  ]
+}

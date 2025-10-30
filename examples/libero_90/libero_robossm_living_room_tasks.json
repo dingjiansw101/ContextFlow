@@ -1,0 +1,35 @@
+{
+  "train_tasks": [
+        "LIVING ROOM SCENE1 pick up the alphabet soup and put it in the basket",
+        "LIVING ROOM SCENE1 pick up the cream cheese box and put it in the basket",
+        "LIVING ROOM SCENE1 pick up the ketchup and put it in the basket",
+        "LIVING ROOM SCENE1 pick up the tomato sauce and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the alphabet soup and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the butter and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the milk and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the orange juice and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the tomato sauce and put it in the basket",
+        "LIVING ROOM SCENE3 pick up the alphabet soup and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the butter and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the cream cheese and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the ketchup and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the tomato sauce and put it in the tray"
+  ],
+  "test_tasks": [
+        "LIVING ROOM SCENE1 pick up the alphabet soup and put it in the basket",
+        "LIVING ROOM SCENE1 pick up the cream cheese box and put it in the basket",
+        "LIVING ROOM SCENE1 pick up the ketchup and put it in the basket",
+        "LIVING ROOM SCENE1 pick up the tomato sauce and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the alphabet soup and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the butter and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the milk and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the orange juice and put it in the basket",
+        "LIVING ROOM SCENE2 pick up the tomato sauce and put it in the basket",
+        "LIVING ROOM SCENE3 pick up the alphabet soup and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the butter and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the cream cheese and put it in the tray",
+        "LIVING ROOM SCENE3 pick up the ketchup and put it in the tray",
+        "LIVING ROOM SCENE6 put the red mug on the plate",
+        "LIVING ROOM SCENE6 put the white mug on the plate"
+  ]
+}
