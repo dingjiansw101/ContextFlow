@@ -18,7 +18,7 @@ import openpi.training.sharding as sharding
 
 PALIGEMMA_VOCAB_SIZE = 257_152
 
-# 顶层 KVCache（给 scan 前）：[L,B,T,K,H]
+# Top-level KVCache (before scan): [L,B,T,K,H]
 KVCache: TypeAlias = tuple[
     at.Float[at.Array, "l b _t _k _h"],  # K: [L, B, T, K, H]
     at.Float[at.Array, "l b _t _v _h"],  # V: [L, B, T, V, H]
@@ -26,7 +26,7 @@ KVCache: TypeAlias = tuple[
 
 # -------- Debug helpers --------
 def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals: jax.Array):
-    """JAX 0-d bool -> host 端断言。健壮打印 debug 值，兼容回放/二次调用。"""
+    """Convert a JAX 0-d bool to a host-side assertion. Prints debug values robustly and remains replay-safe."""
     import numpy as np
 
     def _cb(p, *vals):
@@ -34,19 +34,19 @@ def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals: jax.Array):
             return
         try:
             vals_fmt = [np.asarray(v).tolist() for v in vals]
-            # 优先尝试格式化占位符
+            # Prefer formatting placeholders first
             if "{}" in msg:
                 text = msg.format(*vals_fmt)
             else:
                 text = msg
         except Exception:
-            # 极端情况（例如 vals 被丢弃）也给出可读调试信息
+            # Provide readable debug info even if vals are dropped
             try:
                 vals_fmt = [np.asarray(v).tolist() for v in vals]
             except Exception:
                 vals_fmt = ["<unavailable>"]
             text = f"{msg} | debug={vals_fmt}"
-        # 即使上面 format 成功，也把 debug 值附加上，方便回放场景定位
+        # Append debug values even when formatting succeeds to aid replay diagnostics
         try:
             extra = [np.asarray(v).tolist() for v in vals]
             if extra:
@@ -60,9 +60,9 @@ def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals: jax.Array):
 
 def _assert_block_ar_mask(ar_mask: jax.Array, H: int, _name: str):
     """
-    约定：后缀最后 H 个 token 是动作块，且模式应为：
-      [True, False, False, ..., False]  # 长度 H
-    其余位置不限。
+    Convention: the last H tokens mark the action block with pattern:
+      [True, False, False, ..., False]  # length H
+    Other positions are unrestricted.
     """
     m = jnp.asarray(ar_mask, dtype=bool).reshape(-1)     # [Ts]
     Ts = m.shape[0]
@@ -75,7 +75,7 @@ def _assert_block_ar_mask(ar_mask: jax.Array, H: int, _name: str):
 # -------- Online pm-cache type --------
 @dataclasses.dataclass
 class PMCache:
-    # (K, V) 按层堆叠（与 KVCache 顶层一致）
+    # Stack (K, V) per layer (same as the top-level KVCache layout)
     kv: KVCache  # tuple(k, v) with k: [L,B,Tpm,K,H], v: [L,B,Tpm,K,H]
 
 # -------- Config --------
@@ -90,7 +90,22 @@ class Config:
     lora_configs: dict[str, lora.LoRAConfig] = dataclasses.field(default_factory=dict)
     expert_name: str | None = None
 
-Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_A", "gemma_B", "gemma_132m", "gemma_66m", "gemma_43m", "gemma_52m" ]
+Variant = Literal[
+    "dummy",
+    "gemma_300m",
+    "gemma_2b",
+    "gemma_2b_lora",
+    "gemma_A",
+    "gemma_B",
+    "gemma_132m",
+    "gemma_66m",
+    "gemma_43m",
+    "gemma_52m",
+    "gemma_85m_d8",
+    "gemma_10m_d8",
+    "gemma_300m_v2",
+    "gemma_300m_lora",
+]
 
 def get_config(variant: Variant, expert_name: str | None = None) -> Config:
     if variant == "dummy":
@@ -116,19 +131,42 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
     if variant == "gemma_66m":
         return Config(width=1024, depth=6, mlp_dim=2048, num_heads=8, num_kv_heads=1, head_dim=256, expert_name=expert_name)
     if variant == "gemma_43m":
-        # ≈43.26M
+        # ~43.26M
         return Config(
             width=640, depth=8, mlp_dim=2048,
             num_heads=8, num_kv_heads=1, head_dim=128,
             expert_name=expert_name
         )
     if variant == "gemma_52m":
-        # ≈51.92M
+        # ~51.92M
         return Config(
             width=704, depth=8, mlp_dim=2304,
             num_heads=8, num_kv_heads=1, head_dim=128,
             expert_name=expert_name
         )
+
+    if variant == "gemma_85m_d8":
+        return Config(
+            width=768,
+            depth=8,
+            mlp_dim=3840,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=128,
+            expert_name=expert_name
+        )
+
+    if variant == "gemma_10m_d8":
+        return Config(
+          width=320,
+          depth=8,
+          mlp_dim=512,
+          num_heads=8,
+          num_kv_heads=1,
+          head_dim=128,
+          expert_name=expert_name
+        )
+    
     if variant == "gemma_A":
         return Config(width=512, depth=6, mlp_dim=768, num_heads=8, num_kv_heads=1, head_dim=256, expert_name=expert_name)
     if variant == "gemma_B":
@@ -171,11 +209,11 @@ class Attention(nn.Module):
     """Attention module."""
     configs: Sequence[Config]
     allow_bn_broadcast: bool = True
-    debug_checks: bool = True  # <<<<<< 开关
+    debug_checks: bool = True  # <<<<<< toggle
 
     @nn.compact
     def __call__(self, xs, positions, attn_mask, kv_cache, ep_index=None):
-        # 模型配置维一致性（轻量，保留）
+        # Ensure model config dimensions align (lightweight check worth keeping)
         assert all(cfg.head_dim     == self.configs[0].head_dim     for cfg in self.configs)
         assert all(cfg.num_heads    == self.configs[0].num_heads    for cfg in self.configs)
         assert all(cfg.num_kv_heads == self.configs[0].num_kv_heads for cfg in self.configs)
@@ -184,19 +222,19 @@ class Attention(nn.Module):
 
         if self.debug_checks:
             _host_assert(jnp.array(self.configs[0].head_dim % 2 == 0),
-                         "head_dim 必须为偶数，got {}", jnp.array(self.configs[0].head_dim))
+                         "head_dim must be even, got {}", jnp.array(self.configs[0].head_dim))
 
-        # === 1) 基础 dtype/shape 校验 ===
-        assert isinstance(xs, (list, tuple)) and any(x is not None for x in xs), "xs 至少应有一个非 None 分支"
+        # === 1) Basic dtype/shape validation ===
+        assert isinstance(xs, (list, tuple)) and any(x is not None for x in xs), "xs must contain at least one non-None branch"
         if self.debug_checks:
-            _host_assert(jnp.array(positions.ndim == 2), "positions 期望 [B,T]，got ndim={}", jnp.array(positions.ndim))
-            _host_assert(jnp.array(attn_mask.ndim == 4), "attn_mask 期望 [B,1,T,S]，got ndim={}", jnp.array(attn_mask.ndim))
+            _host_assert(jnp.array(positions.ndim == 2), "positions must be [B,T], got ndim={}", jnp.array(positions.ndim))
+            _host_assert(jnp.array(attn_mask.ndim == 4), "attn_mask must be [B,1,T,S], got ndim={}", jnp.array(attn_mask.ndim))
 
         x0 = next(x for x in xs if x is not None)
         Bq = int(x0.shape[0])
         dtype = x0.dtype
 
-        # === 2) 逐 expert 线性映射，收集 q/k/v ===
+        # === 2) Per-expert projections to gather q/k/v ===
         qkvs = []
         _nm = partial(_namev2, expert_names=[cfg.expert_name for cfg in self.configs]) \
             if self.configs[0].expert_name is not None else _namev2
@@ -229,59 +267,59 @@ class Attention(nn.Module):
                 k_e, v_e = kv_einsum("BSD,2KDH->2BSKH", x)  # [B,Ti,K,H]
             qkvs.append((q_e, k_e, v_e))
 
-        # 拼接时间维
+        # Concatenate along the time axis
         q = jnp.concatenate([q for q, _, _ in qkvs], axis=1)
         k_cur = jnp.concatenate([k for _, k, _ in qkvs], axis=1)
         v_cur = jnp.concatenate([v for _, _, v in qkvs], axis=1)
         Tq = int(q.shape[1])
         Tcur = int(k_cur.shape[1])
 
-        # Rope 前核对 positions 与 Tq
+        # Verify positions against Tq before applying RoPE
         if self.debug_checks:
-            _host_assert(jnp.array(positions.shape[0] == Bq), "positions B 不匹配，pos.B={}, Bq={}",
+            _host_assert(jnp.array(positions.shape[0] == Bq), "positions batch mismatch, pos.B={}, Bq={}",
                          jnp.array(positions.shape[0]), jnp.array(Bq))
-            _host_assert(jnp.array(positions.shape[1] == Tq), "positions T 不匹配，pos.T={}, Tq={}",
+            _host_assert(jnp.array(positions.shape[1] == Tq), "positions time mismatch, pos.T={}, Tq={}",
                          jnp.array(positions.shape[1]), jnp.array(Tq))
 
-        # RoPE + 缩放（cache 中的 K/V 在 encode 阶段已做过 RoPE，这里仅对当前 tokens）
+        # RoPE + scaling (cached K/V already had RoPE applied during encode; only apply to current tokens here)
         q = _apply_rope(q, positions=positions)
         q *= self.configs[0].head_dim ** -0.5
         k_cur = _apply_rope(k_cur, positions=positions)
 
         if self.debug_checks:
-            _host_assert(jnp.array(q.dtype == dtype),    "q dtype 不匹配", jnp.array(1))
-            _host_assert(jnp.array(k_cur.dtype == dtype),"k_cur dtype 不匹配", jnp.array(1))
-            _host_assert(jnp.array(v_cur.dtype == dtype),"v_cur dtype 不匹配", jnp.array(1))
+            _host_assert(jnp.array(q.dtype == dtype),    "q dtype mismatch", jnp.array(1))
+            _host_assert(jnp.array(k_cur.dtype == dtype),"k_cur dtype mismatch", jnp.array(1))
+            _host_assert(jnp.array(v_cur.dtype == dtype),"v_cur dtype mismatch", jnp.array(1))
 
-        # === 4) KV-cache 批广播 + 时间拼接（Attention 内部每层视图：cache 为 [B,Tpm,K,H]） ===
+        # === 4) Broadcast KV cache across batch and concatenate time (per-layer view inside Attention: cache is [B,Tpm,K,H]) ===
         cache_k, cache_v = kv_cache  # [Bcache, Tpm, K, H]
 
         if self.debug_checks:
-            _host_assert(jnp.array(cache_k.ndim == 4), "kv_cache.K 期望 [B,Tpm,K,H]，got ndim={}", jnp.array(cache_k.ndim))
-            _host_assert(jnp.array(cache_v.ndim == 4), "kv_cache.V 期望 [B,Tpm,K,H]，got ndim={}", jnp.array(cache_v.ndim))
+            _host_assert(jnp.array(cache_k.ndim == 4), "kv_cache.K expected [B,Tpm,K,H], got ndim={}", jnp.array(cache_k.ndim))
+            _host_assert(jnp.array(cache_v.ndim == 4), "kv_cache.V expected [B,Tpm,K,H], got ndim={}", jnp.array(cache_v.ndim))
 
-        B = int(q.shape[0])                  # 统一用 B 作为“当前 query 的 batch”
+        B = int(q.shape[0])                  # Use B consistently for the current query batch size
         Bc, Tpm = int(cache_k.shape[0]), int(cache_k.shape[1])
         if ep_index is not None:
-            # 有 ep_index：每个 query 行各自指向一个 episode（0..Bcache-1），这样无论 BN 如何打乱/混排都能对得上。
+            # With ep_index: each query row points to an episode (0..Bcache-1) so BN shuffling stays aligned.
             ep = jnp.asarray(ep_index)
             if self.debug_checks:
-                _host_assert(jnp.array(ep.ndim == 1), "ep_index 期望 1D，got ndim={}", jnp.array(ep.ndim))
-                _host_assert(jnp.array(ep.shape[0] == B), "ep_index 长度 {} != B {}", jnp.array(ep.shape[0]), jnp.array(B))
-                _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index 必须为整数 dtype", jnp.array(1))
+                _host_assert(jnp.array(ep.ndim == 1), "ep_index must be 1D, got ndim={}", jnp.array(ep.ndim))
+                _host_assert(jnp.array(ep.shape[0] == B), "ep_index length {} != B {}", jnp.array(ep.shape[0]), jnp.array(B))
+                _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index must be an integer dtype", jnp.array(1))
                 e_min = jnp.min(ep); e_max = jnp.max(ep)
                 _host_assert(jnp.array((e_min >= 0) & (e_max < Bc)),
-                             "ep_index 越界：允许范围 [0, {}), got min={}, max={}",
+                             "ep_index out of range: allowed [0, {}), got min={}, max={}",
                              jnp.array(Bc), e_min, e_max)
-            # 按映射逐样本挑选对应 episode 的 cache（注意：这里是普通 gather，而不是均匀 repeat）
+            # Gather per-sample cache entries according to ep_index (regular gather, not uniform repeat).
             cache_k = cache_k[ep, :, :, :]    # [B, Tpm, K, H]
             cache_v = cache_v[ep, :, :, :]
         else:
-            # 旧逻辑：如果 B 和 Bc 不同，且可以整除，则做均匀 repeat（BN 展开且按块排列时适用）
+            # Legacy path: if B and Bc differ but divide evenly, do uniform repeat (used when BN expands in contiguous blocks).
             if B != Bc:
                 if (B % Bc) != 0:
                     raise ValueError(f"kv_cache batch {Bc} not dividing current batch {B}. "
-                                     "若 batch 内样本来自不同 episode，请传 ep_index。")
+                                     "If samples in the batch come from different episodes, pass ep_index.")
                 if not self.allow_bn_broadcast:
                     raise ValueError("Batch mismatch but broadcasting disabled.")
                 N = B // Bc
@@ -294,22 +332,22 @@ class Attention(nn.Module):
                     broadcast_dimensions=(0, 2, 3, 4),
                 ).reshape(B, Tpm, cache_v.shape[2], cache_v.shape[3])
 
-        # K/H 对齐
+        # Align K/H dimensions
         if self.debug_checks:
             K_conf, H_conf = self.configs[0].num_kv_heads, self.configs[0].head_dim
-            _host_assert(jnp.array(k_cur.shape[-2] == K_conf), "k_cur K 维 {} != {}", jnp.array(k_cur.shape[-2]), jnp.array(K_conf))
-            _host_assert(jnp.array(k_cur.shape[-1] == H_conf), "k_cur H 维 {} != {}", jnp.array(k_cur.shape[-1]), jnp.array(H_conf))
-            _host_assert(jnp.array(v_cur.shape[-2] == K_conf), "v_cur K 维 {} != {}", jnp.array(v_cur.shape[-2]), jnp.array(K_conf))
-            _host_assert(jnp.array(v_cur.shape[-1] == H_conf), "v_cur H 维 {} != {}", jnp.array(v_cur.shape[-1]), jnp.array(H_conf))
+            _host_assert(jnp.array(k_cur.shape[-2] == K_conf), "k_cur K dimension {} != {}", jnp.array(k_cur.shape[-2]), jnp.array(K_conf))
+            _host_assert(jnp.array(k_cur.shape[-1] == H_conf), "k_cur H dimension {} != {}", jnp.array(k_cur.shape[-1]), jnp.array(H_conf))
+            _host_assert(jnp.array(v_cur.shape[-2] == K_conf), "v_cur K dimension {} != {}", jnp.array(v_cur.shape[-2]), jnp.array(K_conf))
+            _host_assert(jnp.array(v_cur.shape[-1] == H_conf), "v_cur H dimension {} != {}", jnp.array(v_cur.shape[-1]), jnp.array(H_conf))
 
-        # 拼接：先 cache 再当前
+        # Concatenate cached tokens first, then current tokens
         k = jnp.concatenate([cache_k, k_cur], axis=1)  # [Bq, Tpm+Tcur, K, H]
         v = jnp.concatenate([cache_v, v_cur], axis=1)
         if self.debug_checks:
-            _host_assert(jnp.array(k.shape[1] == (Tpm + Tcur)), "K 时间维 {} != Tpm+Tcur {}", jnp.array(k.shape[1]), jnp.array(Tpm + Tcur))
-            _host_assert(jnp.array(v.shape[1] == (Tpm + Tcur)), "V 时间维 {} != Tpm+Tcur {}", jnp.array(v.shape[1]), jnp.array(Tpm + Tcur))
+            _host_assert(jnp.array(k.shape[1] == (Tpm + Tcur)), "K time dimension {} != Tpm+Tcur {}", jnp.array(k.shape[1]), jnp.array(Tpm + Tcur))
+            _host_assert(jnp.array(v.shape[1] == (Tpm + Tcur)), "V time dimension {} != Tpm+Tcur {}", jnp.array(v.shape[1]), jnp.array(Tpm + Tcur))
 
-        # === 5) 注意力计算 + 掩码校验 ===
+        # === 5) Attention computation plus mask validation ===
         q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
         logits = jnp.einsum("BTKGH,BSKH->BKGTS", q, k, preferred_element_type=jnp.float32)
 
@@ -323,14 +361,14 @@ class Attention(nn.Module):
             _host_assert(jnp.array(attn_mask.shape[3] == expected_mask_shape[3]), "mask S {} != {}",
                          jnp.array(attn_mask.shape[3]), jnp.array(expected_mask_shape[3]))
 
-        big_neg = -2.3819763e38  # 与原 Gemma 对齐
+        big_neg = -2.3819763e38  # Match the original Gemma behavior
         masked_logits = jnp.where(attn_mask[:, :, None, :, :], logits, big_neg)
         probs = jax.nn.softmax(masked_logits, axis=-1).astype(dtype)
 
         encoded = jnp.einsum("BKGTS,BSKH->BTKGH", probs, v)
         encoded = einops.rearrange(encoded, "B T K G H -> B T (K G) H")
 
-        # === 6) 写回各 expert 的时间切片 ===
+        # === 6) Write back each expert's time slice
         out = []
         start = 0
         for i, (x, cfg) in enumerate(zip(xs, self.configs, strict=True)):
@@ -338,7 +376,7 @@ class Attention(nn.Module):
                 Ti = int(x.shape[1])
                 end = start + Ti
                 if self.debug_checks:
-                    _host_assert(jnp.array(end <= encoded.shape[1]), "encoded 切片越界 end={} > T={}",
+                    _host_assert(jnp.array(end <= encoded.shape[1]), "encoded slice out of bounds end={} > T={}",
                                  jnp.array(end), jnp.array(encoded.shape[1]))
                 out_e = lora.Einsum(
                     shape=(cfg.num_heads, cfg.head_dim, cfg.width),
@@ -385,7 +423,7 @@ class Block(nn.Module):
     configs: Sequence[Config]
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
-    debug_checks: bool = True  # <<<<<< 开关，往下传给 Attention
+    debug_checks: bool = True  # <<<<<< toggle forwarded to Attention
 
     @nn.compact
     def __call__(self, xs, kv_cache, positions, attn_mask, ep_index=None, deterministic=True):  # noqa: FBT002
@@ -441,7 +479,7 @@ class Module(nn.Module):
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
-    debug_checks: bool = True  # <<<<<< 顶层开关
+    debug_checks: bool = True  # <<<<<< top-level toggle
     use_text_prompts: bool = True
 
     def _zero_kv(self, B: int, dtype) -> KVCache:
@@ -454,27 +492,27 @@ class Module(nn.Module):
 
     @staticmethod
     def _assert_monotonic_positions(pos: jax.Array, mask: jax.Array, name: str):
-        """在有效 token 处检查 positions == cumsum(valid)-1。mask: [B,T]/[B,T,S]/[B,1,T,S]。"""
+        """Check positions == cumsum(valid)-1 on valid tokens. mask: [B,T]/[B,T,S]/[B,1,T,S]."""
         if mask.ndim == 4:
-            _host_assert(jnp.array(mask.shape[1] == 1), f"{name}: 4D mask 第二维应为 1，got {{}}", jnp.array(mask.shape[1]))
+            _host_assert(jnp.array(mask.shape[1] == 1), f"{name}: 4D mask second axis must be 1, got {{}}", jnp.array(mask.shape[1]))
             mask = jnp.squeeze(mask, axis=1)
         if mask.ndim == 3:
             token_mask = jnp.any(mask, axis=-1)        # [B,T,S] -> [B,T]
         elif mask.ndim == 2:
             token_mask = mask                           # [B,T]
         else:
-            raise ValueError(f"{name}: mask 维度必须是 2/3/4，got {mask.shape}")
+            raise ValueError(f"{name}: mask rank must be 2/3/4, got {mask.shape}")
 
-        _host_assert(jnp.array(pos.ndim == 2), f"{name}: positions 必须是 2D，ndim={{}}", jnp.array(pos.ndim))
+        _host_assert(jnp.array(pos.ndim == 2), f"{name}: positions must be 2D, ndim={{}}", jnp.array(pos.ndim))
         _host_assert(
             jnp.array((pos.shape[0] == token_mask.shape[0]) & (pos.shape[1] == token_mask.shape[1])),
-            f"{name}: positions 形状必须等于 token_mask 形状 (pos: [{{}}, {{}}], mask: [{{}}, {{}}])",
+            f"{name}: positions shape must match token_mask (pos: [{{}}, {{}}], mask: [{{}}, {{}}])",
             jnp.array(pos.shape[0]), jnp.array(pos.shape[1]),
             jnp.array(token_mask.shape[0]), jnp.array(token_mask.shape[1]),
         )
         ref = jnp.cumsum(token_mask, axis=-1) - 1
         ok = jnp.all(jnp.where(token_mask, pos == ref, True))
-        _host_assert(ok, f"{name} 不是基于 mask 的单调累计位置（应等于 cumsum(valid)-1）", jnp.array(1))
+        _host_assert(ok, f"{name} is not the mask-based monotonic cumulative position (should equal cumsum(valid)-1)", jnp.array(1))
 
     def setup(self):
         assert all(config.depth == self.configs[0].depth for config in self.configs)
@@ -487,7 +525,7 @@ class Module(nn.Module):
             static_argnums=(6,),  # 0=self, 6=deterministic
             policy=jax.checkpoint_policies.nothing_saveable,
         )
-        # 注意：in_axes 针对 carry 之后的参数：(kv_cache, positions, mask, ep_index, deterministic)
+        # Note: in_axes applies to arguments after the carry: (kv_cache, positions, mask, ep_index, deterministic)
         self.layers = nn.scan(
             block_cls,
             variable_axes={"params": 0},
@@ -498,7 +536,7 @@ class Module(nn.Module):
             configs=self.configs,
             dropout=self.dropout,
             dropout_bdims=self.dropout_bdims,
-            debug_checks=self.debug_checks,  # <<<<<< 传给 Block
+            debug_checks=self.debug_checks,  # <<<<<< forwarded to Block
         )
 
         if self.configs[0].expert_name is not None:
@@ -528,78 +566,78 @@ class Module(nn.Module):
         embedded = jax.tree.map(lambda e: e.astype(self.embed_dtype) if e is not None else None, embedded)
         mask_3d = jnp.asarray(mask)  # [B,T,S]
 
-        # 取 batch 大小 & dtype
+        # Extract batch size and dtype
         e_list = [e for e in embedded if e is not None]
-        _host_assert(jnp.array(len(e_list) > 0), "embedded 至少要有一个非 None 分支", jnp.array(len(e_list)))
+        _host_assert(jnp.array(len(e_list) > 0), "embedded must include at least one non-None branch", jnp.array(len(e_list)))
         B = int(e_list[0].shape[0])
         dt = jnp.dtype(self.embed_dtype)
 
         if self.debug_checks:
             same_B = jnp.array(all(int(e.shape[0]) == B for e in e_list))
-            _host_assert(same_B, "多 expert 的 batch 不一致", same_B)
+            _host_assert(same_B, "batch size mismatch across experts", same_B)
 
             T_sum = int(sum(int(e.shape[1]) for e in e_list))
             _host_assert(jnp.array(positions.shape[0] == B), "positions.B {} != {}", jnp.array(positions.shape[0]), jnp.array(B))
-            _host_assert(jnp.array(positions.shape[1] == T_sum), "positions.T {} != ∑T_i {}", jnp.array(positions.shape[1]), jnp.array(T_sum))
+            _host_assert(jnp.array(positions.shape[1] == T_sum), "positions.T {} != sum T_i {}", jnp.array(positions.shape[1]), jnp.array(T_sum))
 
             _host_assert(jnp.array(mask_3d.shape[0] == B), "mask.B {} != {}", jnp.array(mask_3d.shape[0]), jnp.array(B))
-            _host_assert(jnp.array(mask_3d.shape[1] == T_sum), "mask.T {} != ∑T_i {}", jnp.array(mask_3d.shape[1]), jnp.array(T_sum))
+            _host_assert(jnp.array(mask_3d.shape[1] == T_sum), "mask.T {} != sum T_i {}", jnp.array(mask_3d.shape[1]), jnp.array(T_sum))
 
             if kv_cache is None:
                 _host_assert(jnp.array(mask_3d.shape[2] == T_sum),
-                            "无 cache 时 S {} != T_sum {}", jnp.array(mask_3d.shape[2]), jnp.array(T_sum))
-                # 只要求非减 + 在 [0, T_sum-1] 范围内
+                            "Without cache S {} != T_sum {}", jnp.array(mask_3d.shape[2]), jnp.array(T_sum))
+                # Only require a non-decreasing sequence within [0, T_sum-1]
                 pos_d_ok = jnp.all((positions[:, 1:] - positions[:, :-1]) >= 0)
-                _host_assert(pos_d_ok, "positions 非单调不减", jnp.array(1))
+                _host_assert(pos_d_ok, "positions must be non-decreasing", jnp.array(1))
                 pos_min = jnp.min(positions)
                 pos_max = jnp.max(positions)
                 rng_ok = jnp.logical_and(pos_min >= 0, pos_max <= (T_sum - 1))
-                _host_assert(rng_ok, "positions 范围需在 [0, T_sum-1]，min={} max={}", pos_min, pos_max)
+                _host_assert(rng_ok, "positions range must lie in [0, T_sum-1], min={}, max={}", pos_min, pos_max)
             else:
                 pos_d_ok = jnp.all((positions[:, 1:] - positions[:, :-1]) >= 0)
-                _host_assert(pos_d_ok, "positions（带 cache）也必须非减", jnp.array(1))
+                _host_assert(pos_d_ok, "positions (with cache) must also be non-decreasing", jnp.array(1))
 
                 k0, v0 = kv_cache
                 L = self.configs[0].depth
-                _host_assert(jnp.array(k0.shape[0] == L), "外部 cache K 的层数 {} != L {}", jnp.array(k0.shape[0]), jnp.array(L))
-                _host_assert(jnp.array(v0.shape[0] == L), "外部 cache V 的层数 {} != L {}", jnp.array(v0.shape[0]), jnp.array(L))
-                _host_assert(jnp.array(k0.shape[1] == B), "外部 cache K 的 batch {} != {}", jnp.array(k0.shape[1]), jnp.array(B))
-                _host_assert(jnp.array(v0.shape[1] == B), "外部 cache V 的 batch {} != {}", jnp.array(v0.shape[1]), jnp.array(B))
+                _host_assert(jnp.array(k0.shape[0] == L), "external cache K layer count {} != L {}", jnp.array(k0.shape[0]), jnp.array(L))
+                _host_assert(jnp.array(v0.shape[0] == L), "external cache V layer count {} != L {}", jnp.array(v0.shape[0]), jnp.array(L))
+                _host_assert(jnp.array(k0.shape[1] == B), "external cache K batch {} != {}", jnp.array(k0.shape[1]), jnp.array(B))
+                _host_assert(jnp.array(v0.shape[1] == B), "external cache V batch {} != {}", jnp.array(v0.shape[1]), jnp.array(B))
 
-            # dtype 检查（只检查是否为 bool / int，不打印字符串）
-            _host_assert(jnp.array(mask_3d.dtype == jnp.bool_), "mask.dtype 必须为 bool", jnp.array(1))
-            _host_assert(jnp.array(positions.dtype in (jnp.int16, jnp.int32, jnp.int64)), "positions.dtype 必须为 int", jnp.array(1))
+            # dtype checks (ensure bool/int without printing strings)
+            _host_assert(jnp.array(mask_3d.dtype == jnp.bool_), "mask.dtype must be bool", jnp.array(1))
+            _host_assert(jnp.array(positions.dtype in (jnp.int16, jnp.int32, jnp.int64)), "positions.dtype must be int", jnp.array(1))
 
         if self.debug_checks and ep_index is not None:
             ep = jnp.asarray(ep_index)
-            Bq = int(e_list[0].shape[0])                    # 当前 query batch
-            _host_assert(jnp.array(ep.ndim == 1), "ep_index 期望 1D，got ndim={}", jnp.array(ep.ndim))
-            _host_assert(jnp.array(ep.shape[0] == Bq), "ep_index 长度 {} != B {}", jnp.array(ep.shape[0]), jnp.array(Bq))
-            _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index 必须为整数 dtype", jnp.array(1))
+            Bq = int(e_list[0].shape[0])                    # Current query batch
+            _host_assert(jnp.array(ep.ndim == 1), "ep_index must be 1D, got ndim={}", jnp.array(ep.ndim))
+            _host_assert(jnp.array(ep.shape[0] == Bq), "ep_index length {} != B {}", jnp.array(ep.shape[0]), jnp.array(Bq))
+            _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index must be an integer dtype", jnp.array(1))
             if kv_cache is not None:
                 k0, _ = kv_cache
-                Bc = int(k0.shape[1])                       # 注意：顶层 KVCache 是 [L,Bc,...]
+                Bc = int(k0.shape[1])                       # Note: the top-level KVCache is [L,Bc,...]
                 e_min = jnp.min(ep); e_max = jnp.max(ep)
                 _host_assert(jnp.array((e_min >= 0) & (e_max < Bc)),
-                             "ep_index 越界：允许范围 [0, {}), got min={}, max={}",
+                             "ep_index out of range: allowed [0, {}), got min={}, max={}",
                              jnp.array(Bc), e_min, e_max)
                 
         kv_arg = kv_cache if kv_cache is not None else self._zero_kv(B, dt)
 
-        # 扩成 [B,1,T,S] 再进入 scan/Attention
+        # Expand to [B,1,T,S] before entering scan/Attention
         mask_4d = mask_3d[:, None, :, :]
 
         embedded, kv_out = self.layers(embedded, kv_arg, positions, mask_4d, ep_index, deterministic)
         out = [f(e) if e is not None else e for f, e in zip(self.final_norms, embedded, strict=True)]
 
         if self.debug_checks:
-            _host_assert(jnp.array(isinstance(kv_out, tuple) and len(kv_out) == 2), "kv_out 必须为 (k,v)", jnp.array(1))
+            _host_assert(jnp.array(isinstance(kv_out, tuple) and len(kv_out) == 2), "kv_out must be (k,v)", jnp.array(1))
             L = self.configs[0].depth
             k_out, v_out = kv_out
-            _host_assert(jnp.array(k_out.shape[0] == L), "kv_out.K L 维 {} != {}", jnp.array(k_out.shape[0]), jnp.array(L))
-            _host_assert(jnp.array(v_out.shape[0] == L), "kv_out.V L 维 {} != {}", jnp.array(v_out.shape[0]), jnp.array(L))
-            _host_assert(jnp.array(k_out.shape[1] == B), "kv_out.K B 维 {} != {}", jnp.array(k_out.shape[1]), jnp.array(B))
-            _host_assert(jnp.array(v_out.shape[1] == B), "kv_out.V B 维 {} != {}", jnp.array(v_out.shape[1]), jnp.array(B))
+            _host_assert(jnp.array(k_out.shape[0] == L), "kv_out.K L dimension {} != {}", jnp.array(k_out.shape[0]), jnp.array(L))
+            _host_assert(jnp.array(v_out.shape[0] == L), "kv_out.V L dimension {} != {}", jnp.array(v_out.shape[0]), jnp.array(L))
+            _host_assert(jnp.array(k_out.shape[1] == B), "kv_out.K B dimension {} != {}", jnp.array(k_out.shape[1]), jnp.array(B))
+            _host_assert(jnp.array(v_out.shape[1] == B), "kv_out.V B dimension {} != {}", jnp.array(v_out.shape[1]), jnp.array(B))
 
         return out, kv_out
 
@@ -636,12 +674,12 @@ class Module(nn.Module):
             Tpm_cache = k_all.shape[2]
             Tpm_input = positions_pm.shape[1]
             _host_assert(jnp.array(Tpm_cache == Tpm_input),
-                         "pm_cache T ({}) 应等于 positions_pm.shape[1] ({})",
+                         "pm_cache T ({}) must equal positions_pm.shape[1] ({})",
                          jnp.array(Tpm_cache), jnp.array(Tpm_input))
             valid_pm = jnp.any(mask_pm.astype(bool), axis=-1)  # [B,Tpm]
             Tpm_valid_min = jnp.min(jnp.sum(valid_pm, axis=-1))
             _host_assert(jnp.array((Tpm_valid_min <= Tpm_cache) & (Tpm_valid_min >= 0)),
-                         "mask_pm 有效 token 最小值 {} 不应超过 pm_cache T {}",
+                         "mask_pm minimum valid token {} must not exceed pm_cache T {}",
                          jnp.array(Tpm_valid_min), jnp.array(Tpm_cache))
         return PMCache(kv_cache)
 
@@ -649,7 +687,7 @@ class Module(nn.Module):
     @at.typecheck
     def decode_with_cache(
         self,
-        embedded_suf: Sequence[at.Float[at.Array, "b t d"] | None],  # b 实际是 BN
+        embedded_suf: Sequence[at.Float[at.Array, "b t d"] | None],  # b is actually the BN dimension
         positions_suf: at.Int[at.Array, "b t"],
         mask_suf: at.Bool[at.Array, "b t s"],  # s = Tpm+Ts
         *,
@@ -669,13 +707,13 @@ class Module(nn.Module):
             e0 = next(e for e in embedded_suf if e is not None)
             Bq = int(e0.shape[0])
             ep = jnp.asarray(ep_index)
-            _host_assert(jnp.array(ep.ndim == 1), "ep_index 期望 1D，got ndim={}", jnp.array(ep.ndim))
-            _host_assert(jnp.array(ep.shape[0] == Bq), "ep_index 长度 {} != B {}", jnp.array(ep.shape[0]), jnp.array(Bq))
-            _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index 必须为整数 dtype", jnp.array(1))
+            _host_assert(jnp.array(ep.ndim == 1), "ep_index must be 1D, got ndim={}", jnp.array(ep.ndim))
+            _host_assert(jnp.array(ep.shape[0] == Bq), "ep_index length {} != B {}", jnp.array(ep.shape[0]), jnp.array(Bq))
+            _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index must be an integer dtype", jnp.array(1))
             Bc = int(pm_cache.kv[0].shape[1])
             e_min = jnp.min(ep); e_max = jnp.max(ep)
             _host_assert(jnp.array((e_min >= 0) & (e_max < Bc)),
-                         "ep_index 越界：允许范围 [0, {}), got min={}, max={}",
+                         "ep_index out of range: allowed [0, {}), got min={}, max={}",
                          jnp.array(Bc), e_min, e_max)
 
         outputs, _ = self.layers(embedded_suf, pm_cache.kv, positions_suf, mask_suf_b, ep_index, deterministic)
@@ -683,7 +721,7 @@ class Module(nn.Module):
 
         if self.debug_checks:
             ok_dtype = jnp.array(all((e is None) or (e.dtype == jnp.dtype(self.embed_dtype)) for e in outs))
-            _host_assert(ok_dtype, "decode_with_cache 输出 dtype 不一致", ok_dtype)
+            _host_assert(ok_dtype, "decode_with_cache output dtype mismatch", ok_dtype)
         return outs
 
 # -------- Utils --------
