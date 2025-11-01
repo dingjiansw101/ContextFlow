@@ -1256,7 +1256,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         stacked_states_mask = np.stack(states_mask_b, axis=0)
         stacked_actions = np.stack(actions_b, axis=0)
         stacked_actions_mask = np.stack(actions_mask_b, axis=0)
-
         # Single-episode squeeze
         if len(eps) == 1:
             data["dem_prompt_all_states"] = stacked_states[0]

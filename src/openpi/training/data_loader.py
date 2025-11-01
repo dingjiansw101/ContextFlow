@@ -317,7 +317,6 @@ def create_data_loader(
         def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
             self._data_config = data_config
             self._data_loader = data_loader
-            self._dataset = dataset
 
 
         def data_config(self) -> _config.DataConfig:
@@ -411,7 +410,6 @@ def create_incontext_data_loader(
         seed=config.seed,
     )
 
-    # import ipdb; ipdb.set_trace()
     class DataLoaderImpl(DataLoader):
         def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader, dataset: Dataset):
             self._data_config = data_config
@@ -427,6 +425,58 @@ def create_incontext_data_loader(
                 yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
 
     return DataLoaderImpl(data_config, data_loader, dataset)
+
+
+def create_custom_incontext_data_loader(
+    config: _config.TrainConfig,
+    *,
+    sharding: jax.sharding.Sharding | None = None,
+    skip_norm_stats: bool = False,
+    shuffle: bool = False,
+    num_batches: int | None = None,
+    num_workers: int = 0,
+) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
+    """Create a data loader for training.
+
+    Args:
+        config: The training configuration.
+        sharding: The sharding to use for the data loader. If None, the data loader will
+            use a single device sharding.
+        skip_norm_stats: Whether to skip data normalization.
+        shuffle: Whether to shuffle the data.
+        num_batches: Determines the number of batches to return. If the number exceeds the
+            number of batches in the dataset, the data loader will loop over the dataset.
+            If not provided, will iterate over the dataset indefinitely.
+        num_workers: The number of worker processes to use. If zero, the data loader will
+            execute in the main process.
+    """
+    data_config = config.data.create(config.assets_dirs, config.model)
+    dataset = create_custom_dataset(data_config, config.model)
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
+
+    data_loader = TorchDataLoader(
+        dataset,
+        local_batch_size=config.batch_size // jax.process_count(),
+        sharding=sharding,
+        shuffle=shuffle,
+        num_batches=num_batches,
+        num_workers=num_workers,
+        seed=config.seed,
+    )
+
+    class DataLoaderImpl(DataLoader):
+        def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
+            self._data_config = data_config
+            self._data_loader = data_loader
+
+        def data_config(self) -> _config.DataConfig:
+            return self._data_config
+
+        def __iter__(self):
+            for batch in self._data_loader:
+                yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
+
+    return DataLoaderImpl(data_config, data_loader)
 
 
 class TorchDataLoader:

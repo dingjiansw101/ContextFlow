@@ -5,9 +5,13 @@ lerobot.common.datasets.lerobot_dataset.LeRobotDataset and add or modify
 functionality for specific use cases.
 """
 
+import json
+import random
+from pathlib import Path
 from typing import Any, Dict, SupportsIndex
 from typing import Callable
-
+import torch
+import numpy as np
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
 
@@ -40,18 +44,21 @@ class CustomLeRobotDataset(LeRobotDataset):
         download_videos: bool = True,
         local_files_only: bool = False,
         video_backend: str | None = None,
-        n: int = 1,
-        m: int = 2,
+        num_current_frames: int = 1,
+        num_sample_frames: int = 2,
+        num_sample_actions: int = 32,
+        task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
     ):
         """
         CustomLeRobotDataset extends LeRobotDataset to load both sequences and in-context demonstrations.
 
-        Args:  
-            repo_id: Dataset repository id.  
-            root, episodes, image_transforms, delta_timestamps, tolerance_s, download_videos, local_files_only, video_backend: Same as LeRobotDataset.  
-            n (int): Number of consecutive frames for main context.  
-            m (int): Number of frames for in-context demonstration.  
-            incontext_subsample_stride (int): Stride for subsampling in-context demo.  
+        Args:
+            repo_id: Dataset repository id.
+            root, episodes, image_transforms, delta_timestamps, tolerance_s, download_videos, local_files_only, video_backend: Same as LeRobotDataset.
+            num_current_frames (int): Number of consecutive frames for current frames sequence.
+            num_sample_frames (int): Number of frames for in-context demonstration.
+            num_sample_actions (int): Number of actions for in-context demonstration.
+            task_to_episode_path (str): Path to task_to_episode.json mapping file.
         """
 
         # Initialize parent - all LeRobotDataset code, including file loading and indexing
@@ -66,17 +73,26 @@ class CustomLeRobotDataset(LeRobotDataset):
             local_files_only=local_files_only,
             video_backend=video_backend,
         )
-        self.n = n
-        self.m = m
+        self.num_current_frames = num_current_frames
+        self.num_sample_frames = num_sample_frames
+        self.num_sample_actions = num_sample_actions
         self.action_horizon = len(delta_timestamps["actions"])
+
+        # Load task-to-episode and episode-to-indexes mappings
+        self.task_to_episode = {}
+
+        assert task_to_episode_path is not None, "task_to_episode_path is not set"
+        with Path(task_to_episode_path).open("r") as f:
+            task_to_episode_str = json.load(f)
+        self.task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
         """Get a single sample from the dataset with custom processing.
         Return:
-        (1) n consecutive frames from the dataset, each frame at time step t includes: 
+        (1) num_current_frames consecutive frames from the dataset, each frame at time step t includes: 
             (a) image, state, and action at time step t.
             (b) state, and action in [t, t + h - 1], h is the action horizon.
-        make sure the n + h time steps are consecutive in the same episode.
+        make sure the num_current_frames + h time steps are consecutive in the same episode.
         if t + h - 1 is greater than the episode length, how to handle the situation? 
         Check the original implementation of __getitem__ method of LeRobotDataset.
         (2) m subsampled frames as a in-context demonstration, it's from another episode but same task:
@@ -98,7 +114,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         """
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
-
+        # import ipdb; ipdb.set_trace()
         query_indices = None
         if self.delta_indices is not None:
             current_ep_idx = self.episodes.index(ep_idx) if self.episodes is not None else ep_idx
@@ -108,15 +124,61 @@ class CustomLeRobotDataset(LeRobotDataset):
             for key, val in query_result.items():
                 item[key] = val
 
+        # Load in-context demonstration from another episode with the same task
+        task_index = int(item["task_index"])
+        incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index)
+        item.update(incontext_demo)
+        # TODO: check if transforms are applied to the in-context demonstration
         import ipdb; ipdb.set_trace()
-        # TODO: 1. load in-context demonstration
-        # TODO: 2. check the transform is applied to the in-context demonstration
-        # item["dem_prompt_images"] and item["dem_prompt_images_mask"] are the in-context demonstration
-        # get ep_idx: the episode index of another episode, and same task
-
-    def load_incontext_demonstration(self, idx: int, ep_idx: int) -> Dict[str, Any]:
-        """Load in-context demonstration from the dataset."""
-        ep_start = self.episode_data_index["from"][ep_idx]
-        ep_end = self.episode_data_index["to"][ep_idx]
-
         return item
+
+    def load_incontext_demonstration(self, current_ep_idx: int, task_index: int) -> Dict[str, Any]:
+        """Load in-context demonstration from another episode with the same task.
+
+        Args:
+            current_ep_idx: The episode index of the current frame
+            task_index: The task index to match
+
+        Returns:
+            Dictionary containing sampled frames from another episode with the same task
+        """
+        # Get all episodes for this task
+        episodes_for_task = self.task_to_episode.get(task_index, [])
+
+        # Filter out the current episode to get a different one
+        other_episodes = [ep for ep in episodes_for_task if ep != current_ep_idx]
+
+        # Randomly select another episode
+        selected_ep_idx = random.choice(other_episodes)
+
+        episode_idx = selected_ep_idx if self.episodes is None else self.episodes.index(selected_ep_idx)
+        # get the frame indices for the episode
+
+        ep_start = self.episode_data_index["from"][episode_idx]
+        ep_end = self.episode_data_index["to"][episode_idx]
+
+        # Uniformly sample m frames between ep_start and ep_end
+        frame_indices = list(range(ep_start, ep_end))
+        num_frames = len(frame_indices)
+
+        assert self.num_sample_frames <= num_frames, f"num_sample_frames ({self.num_sample_frames}) must be less than or equal to num_frames ({num_frames})"
+        # Use evenly-spaced sampling when we have enough frames
+        positions = np.linspace(0, num_frames - 1, num=self.num_sample_frames, dtype=int)
+        sampled_indices = [frame_indices[p] for p in positions]
+
+        # Load the frames using HuggingFace dataset API
+        sampled_frames = self.hf_dataset.select(sampled_indices)
+
+        data = {}
+        data["dem_prompt_images"] = {}
+        data["dem_prompt_images"]["image"] = torch.stack(sampled_frames["image"])
+        data["dem_prompt_images"]["wrist_image"] = torch.stack(sampled_frames["wrist_image"])
+        # TODO: add an option to sample different number of states and actions
+        assert self.num_sample_actions <= num_frames, f"num_sample_actions ({self.num_sample_actions}) must be less than or equal to num_frames ({num_frames})"
+        positions_actions = np.linspace(0, num_frames - 1, num=self.num_sample_actions, dtype=int)
+        sampled_indices_actions = [frame_indices[p] for p in positions_actions]
+        sampled_frames_actions = self.hf_dataset.select(sampled_indices_actions)
+        data["dem_prompt_states"] = torch.stack(sampled_frames_actions["state"])
+        data["dem_prompt_actions"] = torch.stack(sampled_frames_actions["actions"])
+
+        return data
