@@ -1,8 +1,11 @@
 import dataclasses
 
 import jax
+import jax.numpy as jnp
+import numpy as np
 
 from openpi.models import pi0
+import openpi.models.model as _model
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
 from openpi.training.data_loader import create_dataset, create_custom_dataset
@@ -123,6 +126,80 @@ def test_libero_incontext_data_loader():
     # ipdb.set_trace()
 
 
+def test_create_custom_incontext_data_loader():
+    """Test create_custom_incontext_data_loader with CustomLeRobotDataset."""
+    # Setup: Get config and modify batch size for faster testing
+    config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
+    config = dataclasses.replace(config, batch_size=2)
+
+    # Create data loader using CustomLeRobotDataset
+    data_loader = _data_loader.create_custom_incontext_data_loader(
+        config,
+        skip_norm_stats=True,
+        num_batches=1
+    )
+
+    # Get one batch
+    data_iter = iter(data_loader)
+    obs, actions = next(data_iter)
+
+    # Verify types
+    assert isinstance(obs, _model.ObservationIncontext), "Observation should be ObservationIncontext"
+    assert isinstance(actions, (np.ndarray, jnp.ndarray)), "Actions should be numpy/jax array"
+
+    # Verify standard observation fields exist
+    assert hasattr(obs, 'images'), "Should have images field"
+    assert hasattr(obs, 'image_masks'), "Should have image_masks field"
+    assert hasattr(obs, 'state'), "Should have state field"
+
+    # Verify required camera keys
+    assert 'base_0_rgb' in obs.images, "Should have base_0_rgb camera"
+    assert 'left_wrist_0_rgb' in obs.images, "Should have left_wrist_0_rgb camera"
+    assert 'right_wrist_0_rgb' in obs.images, "Should have right_wrist_0_rgb camera"
+
+    # Verify batch dimensions
+    batch_size = config.batch_size
+    assert obs.state.shape[0] == batch_size, f"State batch size should be {batch_size}"
+    assert actions.shape[0] == batch_size, f"Actions batch size should be {batch_size}"
+
+    # Verify in-context (demo) fields from CustomLeRobotDataset
+    assert obs.incontext_images is not None, "Should have incontext_images"
+    assert obs.incontext_states is not None, "Should have incontext_states"
+    assert obs.incontext_actions is not None, "Should have incontext_actions"
+    assert obs.incontext_selected_episode is not None, "Should have incontext_selected_episode"
+
+    # Verify incontext image batch dimensions
+    for key, img_batch in obs.incontext_images.items():
+        assert img_batch.shape[0] == batch_size, f"Incontext image {key} batch size should be {batch_size}"
+
+    # Verify incontext states/actions shapes [batch_size, num_frames, dim]
+    assert obs.incontext_states.shape[0] == batch_size, "Incontext states batch size mismatch"
+    assert len(obs.incontext_states.shape) == 3, "Incontext states should be 3D [batch, frames, dim]"
+
+    assert obs.incontext_actions.shape[0] == batch_size, "Incontext actions batch size mismatch"
+    assert len(obs.incontext_actions.shape) == 3, "Incontext actions should be 3D [batch, frames, dim]"
+
+    # Verify masks exist and have correct batch size
+    assert obs.incontext_state_masks is not None, "Should have incontext_state_masks"
+    assert obs.incontext_action_masks is not None, "Should have incontext_action_masks"
+    assert obs.incontext_state_masks.shape[0] == batch_size, "State masks batch size mismatch"
+    assert obs.incontext_action_masks.shape[0] == batch_size, "Action masks batch size mismatch"
+
+    # Verify action output shape
+    expected_action_shape = (batch_size, config.model.action_horizon, config.model.action_dim)
+    assert actions.shape == expected_action_shape, f"Actions shape should be {expected_action_shape}"
+
+    # Verify image data ranges (should be float32 in [-1, 1])
+    for key, img in obs.images.items():
+        assert img.dtype in [np.float32, jnp.float32], f"Image {key} should be float32"
+        assert np.all(img >= -1.0) and np.all(img <= 1.0), f"Image {key} should be in [-1, 1] range"
+
+    # Verify incontext image data ranges
+    for key, img in obs.incontext_images.items():
+        assert img.dtype in [np.float32, jnp.float32], f"Incontext image {key} should be float32"
+        assert np.all(img >= -1.0) and np.all(img <= 1.0), f"Incontext image {key} should be in [-1, 1] range"
+
+
 def test_AddImagePromptTransform():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
     config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
@@ -148,4 +225,5 @@ if __name__ == "__main__":
     # test_libero_incontext_dataset()
     # test_libero_incontext_data_loader()
     # test_AddImagePromptTransform()
-    test_custom_lerobot_dataset()
+    # test_custom_lerobot_dataset()
+    test_create_custom_incontext_data_loader()

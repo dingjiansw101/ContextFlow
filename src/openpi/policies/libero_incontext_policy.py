@@ -246,6 +246,16 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
                     dem_images_processed["left_wrist_0_rgb"] = stacked
                     dem_image_mask["left_wrist_0_rgb"] = np.ones(len(stacked), dtype=bool)
 
+            # Add right_wrist_0_rgb as zeros (similar to current observation)
+            if "base_0_rgb" in dem_images_processed:
+                sample_image = dem_images_processed["base_0_rgb"]
+                dem_images_processed["right_wrist_0_rgb"] = np.zeros_like(sample_image)
+                dem_image_mask["right_wrist_0_rgb"] = np.full(
+                    len(sample_image),
+                    fill_value=(not mask_padding),  # False if mask_padding, True otherwise
+                    dtype=bool
+                )
+
             inputs["dem_prompt_images"] = dem_images_processed
             inputs["dem_prompt_images_mask"] = dem_image_mask
 
@@ -257,8 +267,8 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             # Pad entire batch at once (VECTORIZED)
             padded_states = transforms.pad_to_dim(dem_states, self.action_dim, axis=-1)
 
-            inputs["dem_prompt_states"] = padded_states
-            inputs["dem_prompt_states_mask"] = np.ones(len(padded_states), dtype=bool)
+            inputs["dem_prompt_all_states"] = padded_states
+            inputs["dem_prompt_all_states_mask"] = np.ones(len(padded_states), dtype=bool)
 
         # Process dem_prompt_actions (NEW for CustomLeRobotDataset)
         if "dem_prompt_actions" in data:
@@ -268,8 +278,8 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             # Pad entire batch at once (VECTORIZED)
             padded_actions = transforms.pad_to_dim(dem_actions, self.action_dim, axis=-1)
 
-            inputs["dem_prompt_actions"] = padded_actions
-            inputs["dem_prompt_actions_mask"] = np.ones(len(padded_actions), dtype=bool)
+            inputs["dem_prompt_all_actions"] = padded_actions
+            inputs["dem_prompt_all_actions_mask"] = np.ones(len(padded_actions), dtype=bool)
 
         # Pass through optional fields (same as LiberoIncontextInputs_refactor)
         if "actions" in data:

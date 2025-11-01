@@ -222,9 +222,9 @@ def create_custom_dataset(data_config: _config.DataConfig, model_config: _model.
         },
         local_files_only=data_config.local_files_only,
         # Pass CustomLeRobotDataset specific parameters from data_config
-        frame_sequence_length=getattr(data_config, 'frame_sequence_length', 1),
-        sample_frames=getattr(data_config, 'sample_frames', 2),
-        sample_actions=getattr(data_config, 'sample_actions', 32),
+        num_current_frames=getattr(data_config, 'frame_sequence_length', 1),
+        num_sample_frames=getattr(data_config, 'sample_frames', 2),
+        num_sample_actions=getattr(data_config, 'sample_actions', 32),
         task_to_episode_path=getattr(data_config, 'task_to_episode_path', "metadata/libero/task_to_episode.json"),
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)

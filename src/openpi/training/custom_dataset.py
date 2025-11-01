@@ -130,7 +130,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         item.update(incontext_demo)
         # TODO: check if transforms are applied to the in-context demonstration
         # TODO: load current frames sequence
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         return item
 
     def load_incontext_demonstration(self, current_ep_idx: int, task_index: int) -> Dict[str, Any]:
@@ -174,12 +174,15 @@ class CustomLeRobotDataset(LeRobotDataset):
         data["dem_prompt_images"] = {}
         data["dem_prompt_images"]["image"] = torch.stack(sampled_frames["image"])
         data["dem_prompt_images"]["wrist_image"] = torch.stack(sampled_frames["wrist_image"])
-        # TODO: add an option to sample different number of states and actions
+
         assert self.num_sample_actions <= num_frames, f"num_sample_actions ({self.num_sample_actions}) must be less than or equal to num_frames ({num_frames})"
         positions_actions = np.linspace(0, num_frames - 1, num=self.num_sample_actions, dtype=int)
         sampled_indices_actions = [frame_indices[p] for p in positions_actions]
         sampled_frames_actions = self.hf_dataset.select(sampled_indices_actions)
         data["dem_prompt_states"] = torch.stack(sampled_frames_actions["state"])
         data["dem_prompt_actions"] = torch.stack(sampled_frames_actions["actions"])
+
+        # Add selected_episode for compatibility with ObservationIncontext
+        data["selected_episode"] = np.array([selected_ep_idx], dtype=np.int32)
 
         return data
