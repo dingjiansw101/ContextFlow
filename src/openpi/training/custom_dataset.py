@@ -6,6 +6,7 @@ functionality for specific use cases.
 """
 
 from typing import Any, Dict, SupportsIndex
+from typing import Callable
 
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
@@ -33,7 +34,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         repo_id: str,
         root: str | None = None,
         episodes: list[int] | None = None,
-        image_transforms: callable | None = None,
+        image_transforms: Callable | None = None,
         delta_timestamps: dict[list[float]] | None = None,
         tolerance_s: float = 1e-4,
         download_videos: bool = True,
@@ -67,7 +68,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         )
         self.n = n
         self.m = m
-        self.action_horizon = len(delta_timestamps["action"])
+        self.action_horizon = len(delta_timestamps["actions"])
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
         """Get a single sample from the dataset with custom processing.
@@ -108,4 +109,14 @@ class CustomLeRobotDataset(LeRobotDataset):
                 item[key] = val
 
         import ipdb; ipdb.set_trace()
+        # TODO: 1. load in-context demonstration
+        # TODO: 2. check the transform is applied to the in-context demonstration
+        # item["dem_prompt_images"] and item["dem_prompt_images_mask"] are the in-context demonstration
+        # get ep_idx: the episode index of another episode, and same task
+
+    def load_incontext_demonstration(self, idx: int, ep_idx: int) -> Dict[str, Any]:
+        """Load in-context demonstration from the dataset."""
+        ep_start = self.episode_data_index["from"][ep_idx]
+        ep_end = self.episode_data_index["to"][ep_idx]
+
         return item
