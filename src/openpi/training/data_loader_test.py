@@ -5,7 +5,7 @@ import jax
 from openpi.models import pi0
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
-from openpi.training.data_loader import create_dataset
+from openpi.training.data_loader import create_dataset, create_custom_dataset
 from openpi.training.data_loader import transform_dataset, TransformedDataset
 import openpi.transforms as _transforms
 
@@ -104,6 +104,13 @@ def test_libero_incontext_dataset():
         # import ipdb;
         # ipdb.set_trace()
 
+def test_custom_lerobot_dataset():
+    # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
+    config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
+    data_config = config.data.create(config.assets_dirs, config.model)
+    dataset = create_custom_dataset(data_config, config.model)
+    for i in range(len(dataset)):
+        print(dataset[i].keys())
 
 def test_libero_incontext_data_loader():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
@@ -138,4 +145,5 @@ def test_AddImagePromptTransform():
 if __name__ == "__main__":
     # test_libero_incontext_dataset()
     # test_libero_incontext_data_loader()
-    test_AddImagePromptTransform()
+    # test_AddImagePromptTransform()
+    test_custom_lerobot_dataset()

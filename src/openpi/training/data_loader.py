@@ -17,6 +17,8 @@ import openpi.models.model as _model
 import openpi.training.config as _config
 import openpi.transforms as _transforms
 
+from openpi.training.custom_dataset import CustomLeRobotDataset
+
 T_co = TypeVar("T_co", covariant=True)
 
 import dataclasses
@@ -198,6 +200,33 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
 
     return dataset
+
+
+
+def create_custom_dataset(data_config: _config.DataConfig, model_config: _model.BaseModelConfig) -> Dataset:
+    """Create a custom dataset for training, using CustomLeRobotDataset."""
+
+    repo_id = data_config.repo_id
+    if repo_id is None:
+        raise ValueError("Repo ID is not set. Cannot create dataset.")
+    if repo_id == "fake":
+        return FakeDataset(model_config, num_samples=1024)
+    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, local_files_only=data_config.local_files_only)
+    # Build delta_timestamps for each action sequence key (for compatibility)
+    dataset = CustomLeRobotDataset(
+        data_config.repo_id,
+        episodes=data_config.train_episode if not is_effective_none(data_config.train_episode) else None,
+        delta_timestamps = {
+            key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
+            for key in data_config.action_sequence_keys
+        },
+        local_files_only=data_config.local_files_only,
+    )
+    # Optionally: Prompt transform for task if needed (as in regular dataset)
+    if data_config.prompt_from_task:
+        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
+    return dataset
+
 
 
 # def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
