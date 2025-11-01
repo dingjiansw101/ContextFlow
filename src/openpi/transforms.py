@@ -1517,6 +1517,9 @@ class ResizeImages(DataTransformFn):
 
     def __call__(self, data: DataDict) -> DataDict:
         data["image"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["image"].items()}
+        # Resize demonstration prompt images if present (for CustomLeRobotDataset)
+        if "dem_prompt_images" in data:
+            data["dem_prompt_images"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["dem_prompt_images"].items()}
         return data
 
 

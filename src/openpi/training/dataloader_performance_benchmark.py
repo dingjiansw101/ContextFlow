@@ -91,6 +91,7 @@ def benchmark_loader(
     num_workers: int,
     num_batches: int,
     skip_norm_stats: bool = True,
+    sample_frames: int | None = None,
 ) -> TimingResult:
     """Benchmark a single data loader configuration.
 
@@ -100,12 +101,13 @@ def benchmark_loader(
         num_workers: Number of workers for data loading
         num_batches: Number of batches to iterate through
         skip_norm_stats: Whether to skip normalization stats
+        sample_frames: Override sample_frames in config (if applicable)
 
     Returns:
         TimingResult containing all benchmark metrics
     """
     print(f"\nBenchmarking: {config_name}")
-    print(f"  batch_size={batch_size}, num_workers={num_workers}, num_batches={num_batches}")
+    print(f"  batch_size={batch_size}, num_workers={num_workers}, num_batches={num_batches}, sample_frames={sample_frames}")
 
     # Force garbage collection before measuring
     gc.collect()
@@ -115,6 +117,21 @@ def benchmark_loader(
     t_start = time.perf_counter()
     config = _config.get_config(config_name)
     config = dataclasses.replace(config, batch_size=batch_size, num_workers=num_workers)
+
+    # Override sample_frames if specified (for custom dataset configs)
+    if sample_frames is not None:
+        # Override in model config if it has sample_frames
+        if hasattr(config.model, 'sample_frames'):
+            config = dataclasses.replace(
+                config,
+                model=dataclasses.replace(config.model, sample_frames=sample_frames)
+            )
+        # Override in data config if it has sample_frames
+        if hasattr(config.data, 'sample_frames'):
+            config = dataclasses.replace(
+                config,
+                data=dataclasses.replace(config.data, sample_frames=sample_frames)
+            )
 
     # Determine which create function to use
     if "custom_dataset" in config_name:
@@ -311,6 +328,12 @@ def main():
         default=True,
         help="Skip normalization stats",
     )
+    parser.add_argument(
+        "--sample-frames",
+        type=int,
+        default=None,
+        help="Override sample_frames for custom dataset config (if applicable)",
+    )
 
     args = parser.parse_args()
 
@@ -320,6 +343,8 @@ def main():
     print(f"  Batch sizes: {args.batch_sizes}")
     print(f"  Num workers: {args.num_workers}")
     print(f"  Num batches: {args.num_batches}")
+    if args.sample_frames is not None:
+        print(f"  Sample frames override: {args.sample_frames}")
 
     results = []
 
@@ -332,6 +357,7 @@ def main():
                 num_workers,
                 args.num_batches,
                 args.skip_norm_stats,
+                args.sample_frames,
             )
 
             # Benchmark regular dataset
@@ -341,6 +367,7 @@ def main():
                 num_workers,
                 args.num_batches,
                 args.skip_norm_stats,
+                args.sample_frames,
             )
 
             results.append((custom_result, regular_result))
