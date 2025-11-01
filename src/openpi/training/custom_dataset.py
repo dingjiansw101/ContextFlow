@@ -129,6 +129,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index)
         item.update(incontext_demo)
         # TODO: check if transforms are applied to the in-context demonstration
+        # TODO: load current frames sequence
         import ipdb; ipdb.set_trace()
         return item
 

@@ -153,6 +153,82 @@ def build(api) -> list["api.TrainConfig"]:
             )
 
     @dataclasses.dataclass(frozen=True)
+    class CustomLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
+        """Config for CustomLeRobotDataset with in-context learning.
+
+        Unlike LeRobotLiberoIncontextDataConfig which uses transforms to add
+        demonstration data, CustomLeRobotLiberoIncontextDataConfig delegates this to
+        the dataset itself via CustomLeRobotDataset.
+        """
+        use_delta_joint_actions: bool = False
+
+        # CustomLeRobotDataset specific parameters
+        frame_sequence_length: int = 1  # Number of consecutive frames for main context
+        sample_frames: int = 2  # Number of frames for in-context demonstration
+        sample_actions: int = 32  # Number of actions for in-context demonstration
+        task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
+            # Make inputs look like they come from the Libero environment
+            # Pass through dem_prompt_* keys from CustomLeRobotDataset
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "observation/image": "image",
+                            "observation/wrist_image": "wrist_image",
+                            "observation/state": "state",
+                            "actions": "actions",
+                            "prompt": "prompt",
+                            "episode_index": "episode_index",
+                            "frame_index": "frame_index",
+                            "index": "index",
+                            "task_index": "task_index",
+                            # Pass through dem_prompt_* keys from CustomLeRobotDataset
+                            "dem_prompt_images": "dem_prompt_images",
+                            "dem_prompt_states": "dem_prompt_states",
+                            "dem_prompt_actions": "dem_prompt_actions",
+                        }
+                    )
+                ]
+            )
+
+            # Calculate training episode indices
+            train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+
+            # Prepare data for policy training
+            # NOTE: CustomLeRobotDataset handles demo loading internally,
+            # so we DON'T use InjectDemoIndexes
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+
+            # Use delta actions (not for gripper)
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            # Model transforms include things like tokenizing the prompt and action targets
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                train_episode=train_epi,
+            )
+
+    @dataclasses.dataclass(frozen=True)
     class LeRobotLiberoStageIncontextDataConfig(api.DataConfigFactory):
         use_delta_joint_actions: bool = True
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
