@@ -43,18 +43,17 @@ class CustomLeRobotDataset(LeRobotDataset):
         m is the number of subsampled frames for an in-context demonstration episode.
         n and m are hyperparameters, they are set in the initialization of class, you can set them in the config file.
 
+        To read multiple frames from the dataset, you can use huggingface's dataset API to read the dataset:
+        e.g, .select(), compared to read the dataset one by one, we can use select function to read a sequence of frames at the same time.
+
         TODO: check how is the LeRobotDataset used in create_incontext_data_loader of data_loader.py 
         what are the transforms applied to the LeRobotDataset?
 
         If we use the CustomLeRobotDataset, we will need to write a new create_data_loader_incontextv2 function in data_loader.py     
         The transform AddImagePromptTransform, AddStatesActionsPromptTransform, AddCurrentFramesSequenceTransform are not needed anymore with CustomLeRobotDataset.
-        But we want the data loading and processing of CustomLeRobotDataset + create_data_loader_incontextv2 is the same as the LeRobotDataset + create_incontext_data_loader.
-        Make sure the CustomLeRobotDataset is compatible with the create_data_loader_incontextv2 function, and the transforms.
-        
-        optional, if can speed up the data loading, you can use the following cache files:
-        states_cache_path: str = "metadata/libero/episode_states_cache.json"
-        actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
+        Make sure the CustomLeRobotDataset is compatible with the create_data_loader_incontextv2 function, and the other transforms.
+        Make sure we can get same data with: (1) CustomLeRobotDataset + create_data_loader_incontextv2, and (2) LeRobotDataset + create_incontext_data_loader.
+
      
         """
         pass
