@@ -186,9 +186,14 @@ def build(api) -> list["api.TrainConfig"]:
                             "index": "index",
                             "task_index": "task_index",
                             # Pass through dem_prompt_* keys from CustomLeRobotDataset
-                            "dem_prompt_images": "dem_prompt_images",
+                            # dem_prompt_images is nested, so map the flattened keys
+                            "dem_prompt_images": {
+                                "image": "dem_prompt_images/image",
+                                "wrist_image": "dem_prompt_images/wrist_image"
+                            },
                             "dem_prompt_states": "dem_prompt_states",
                             "dem_prompt_actions": "dem_prompt_actions",
+                            "selected_episode": "selected_episode",
                         }
                     )
                 ]
@@ -4370,9 +4375,50 @@ def build(api) -> list["api.TrainConfig"]:
             freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=16,
-        batch_size=32,
-    ), 
+        # num_workers=16,
+        # batch_size=32,
+        num_workers=2,
+        batch_size=2,
+    ),
+    api.TrainConfig(
+        name="pi0mini_incontext_libero_custom_dataset_debug",
+        model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=CustomLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            frame_sequence_length=1,
+            sample_frames=2,
+            sample_actions=32,
+            task_to_episode_path="metadata/libero/task_to_episode.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz",  # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule=api._optimizer.CosineDecaySchedule(
+            warmup_steps=1_000,
+            peak_lr=2.5e-5,
+            decay_steps=20_000,
+            decay_lr=2.5e-6),
+        num_train_steps=20_000,  # Reduced for debugging
+        freeze_filter=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=True,
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=2,  # Reduced for debugging
+        batch_size=2,  # Reduced for debugging
+    ),
         #
     # XJ libero_with_depth: just to pull newly generated libero dataset with depth image but with more episodes
     #

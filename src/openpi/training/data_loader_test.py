@@ -128,9 +128,8 @@ def test_libero_incontext_data_loader():
 
 def test_create_custom_incontext_data_loader():
     """Test create_custom_incontext_data_loader with CustomLeRobotDataset."""
-    # Setup: Get config and modify batch size for faster testing
-    config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
-    config = dataclasses.replace(config, batch_size=2)
+    # Setup: Get config using CustomLeRobotLiberoIncontextDataConfig
+    config = _config.get_config("pi0mini_incontext_libero_custom_dataset_debug")
 
     # Create data loader using CustomLeRobotDataset
     data_loader = _data_loader.create_custom_incontext_data_loader(
