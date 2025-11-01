@@ -180,7 +180,6 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
         raise ValueError("Repo ID is not set. Cannot create dataset.")
     if repo_id == "fake":
         return FakeDataset(model_config, num_samples=1024)
-
     dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, local_files_only=data_config.local_files_only)
     dataset = lerobot_dataset.LeRobotDataset(
         data_config.repo_id,

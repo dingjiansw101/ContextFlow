@@ -77,3 +77,7 @@ If you follow the training instructions and hyperparameters in the `pi0_libero` 
 | π0 @ 30k (finetuned) | 96.8 | 98.8 | 95.8 | 85.2 | 94.15 |
 
 Note that the hyperparameters for these runs are not tuned and $\pi_0$-FAST does not use a FAST tokenizer optimized for Libero. Likely, the results could be improved with more tuning, we mainly use these results as an example of how to use openpi to fine-tune $\pi_0$ models on a new dataset.
+
+## Default Value
+### pi0 libero
+action horizon: 50

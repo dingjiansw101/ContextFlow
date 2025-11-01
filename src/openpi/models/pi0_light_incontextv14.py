@@ -34,7 +34,7 @@ SIGLIP_OUTPUT_DIM = {
 }
 
 def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals):
-    """JAX 0-d bool -> host端断言，避免 Tracer 具体化。"""
+    """Convert a scalar JAX boolean into a host-side assertion without materializing a Tracer."""
     import numpy as np
     def _cb(p, *vals):
         if not bool(p):
@@ -90,9 +90,9 @@ def posemb_sincos(
 
 class AttnPoolOne(nnx.Module):
     """
-    将 [B, P, D] 的 patch tokens 压成 [B, 1, D] 的单图像 token。
-    - 使用可学习 query 向量 q 对每个 patch 打分（点积/√D），softmax 加权求和。
-    - 可选 mask: [B, P] 的 bool，False 的位置会被 -inf 屏蔽。
+    Pool [B, P, D] patch tokens down to a single [B, 1, D] image token.
+    - A learnable query vector q scores each patch (dot product / sqrt(D)), then applies softmax weighting.
+    - Optional mask: bool [B, P]; False entries are replaced with -inf.
     """
     def __init__(self, d_model: int, use_layernorm: bool = True, rngs: nnx.Rngs | None = None):
         dtype = jnp.bfloat16
@@ -112,11 +112,11 @@ class AttnPoolOne(nnx.Module):
         if mask is not None:
             scores = jnp.where(mask, scores, -jnp.inf)
 
-            # 防 NaN：若某个样本所有位置都被屏蔽，则令权重全 0，pooled 也置 0
+            # Prevent NaNs: if an example masks every position, force weights and pooled output to zero.
             all_masked = jnp.logical_not(jnp.any(mask, axis=1))          # [B]
-            # 先正常 softmax（可能有 -inf）
+            # Run the standard softmax first (may include -inf).
             w = jax.nn.softmax(scores, axis=1)                           # [B, P]
-            # 将全屏蔽样本的 w 清零
+            # Zero out weights for fully masked examples.
             w = jnp.where(all_masked[:, None], jnp.zeros_like(w), w)
         else:
             w = jax.nn.softmax(scores, axis=1)
@@ -127,8 +127,8 @@ class AttnPoolOne(nnx.Module):
 
     def pool_bt(self, x: jnp.ndarray, mask: jnp.ndarray | None = None) -> jnp.ndarray:
         """
-        对 [B, T, P, D] 每一帧做单独池化 → [B, T, 1, D]
-        mask 若给出应为 [B, T] 或 [B, T, P]（若为 [B,T] 会自动广播到每帧的 P）
+        Pool each frame in [B, T, P, D] independently -> [B, T, 1, D].
+        If provided, the mask should be [B, T] or [B, T, P] (a [B, T] mask broadcasts across patches).
         """
         B, T, P, D = x.shape
         x_bt = x.reshape(B*T, P, D)
@@ -136,7 +136,7 @@ class AttnPoolOne(nnx.Module):
             m_bt = None
         else:
             if mask.ndim == 2:
-                # [B,T] → [B,T,P]
+                # [B,T] -> [B,T,P]
                 mask = einops.repeat(mask, "b t -> b t p", p=P)
             m_bt = mask.reshape(B*T, P)
         pooled_bt = self(x_bt, m_bt)                # [B*T, 1, D]
@@ -291,14 +291,14 @@ def get_freeze_filter(self) -> nnx.filterlib.Filter:
     Freezing policy (union-of-inclusions, then exclusions):
 
     Inclusions (OR via Any):
-    - If main expert has LoRA → freeze its base weights: '.*llm.*'
-    - If action expert has LoRA → freeze its base weights: '.*llm.*_1.*'
-    - If freeze_img_encoder → freeze 'PaliGemma/img/.*'
-    - If freeze_llm_embedder → freeze '.*llm/embedder.*'
+    - If main expert has LoRA -> freeze its base weights: '.*llm.*'
+    - If action expert has LoRA -> freeze its base weights: '.*llm.*_1.*'
+    - If freeze_img_encoder -> freeze 'PaliGemma/img/.*'
+    - If freeze_llm_embedder -> freeze '.*llm/embedder.*'
 
     Exclusions (AND via All):
     - Always keep LoRA adapters trainable: Not('.*lora.*')
-    - If only the main expert has LoRA → keep action base trainable: Not('.*llm.*_1.*')
+    - If only the main expert has LoRA -> keep action base trainable: Not('.*llm.*_1.*')
     """
     inclusions: list[nnx.filterlib.Filter] = []
     exclusions: list[nnx.filterlib.Filter] = []
@@ -425,7 +425,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
         try:
             siglip_output_dim = SIGLIP_OUTPUT_DIM[siglip_key]
         except KeyError:
-            raise ValueError(f"Unknown SigLIP variant '{siglip_variant}' — unable to determine output dim.")
+            raise ValueError(f"Unknown SigLIP variant '{siglip_variant}' -- unable to determine output dim.")
         self.image_proj_promtp_expert = nnx.Linear(siglip_output_dim, prompt_expert_config.width, rngs=rngs)
         self.image_proj_action_expert = nnx.Linear(siglip_output_dim, action_expert_config.width, rngs=rngs)
         # self.image_proj_action_expert = self.image_proj_promtp_expert
@@ -488,7 +488,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
                 # image_sqeuence_tokens = jnp.mean(image_sqeuence_tokens, axis=2)
                 image_sqeuence_tokens = self.img_pool_prompt_expert.pool_bt(
                     image_sqeuence_tokens,
-                    mask=obs.incontext_image_masks[name]  # [B, T] 帧级 mask，内部会广播到 P
+                    mask=obs.incontext_image_masks[name]  # [B, T] frame-level mask, broadcast across patches internally.
                 ).squeeze(axis=2)  # [B, T, D]
                 # image_sqeuence_tokens = self.img_proj(image_sqeuence_tokens)
                 tokens.append(image_sqeuence_tokens)
@@ -617,104 +617,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
     #     suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(observation, x_t, time)
     #     input_mask = jnp.concatenate([midfix_mask, suffix_mask], axis=1)
     #     ar_mask = jnp.concatenate([midfix_ar_mask, suffix_ar_mask], axis=0)
-    #     attn_mask = make_attn_mask(input_mask, ar_mask)
-    #     positions = jnp.cumsum(input_mask, axis=1) - 1
-    #     # import ipdb; ipdb.set_trace()
-    #     (midfix_out, suffix_out), _ = self.PaliGemma.llm(
-    #         [midfix_tokens, suffix_tokens], mask=attn_mask, positions=positions
-    #     )
-    #     v_t = self.action_out_proj(suffix_out[:, -self.action_horizon :])
-
-    #     return jnp.mean(jnp.square(v_t - u_t), axis=-1)
-    
-    # @override
-    # def compute_loss(
-    #     self,
-    #     rng: at.KeyArrayLike,
-    #     observation: _model.ObservationIncontext,
-    #     actions: _model.Actions,
-    #     *,
-    #     train: bool = False,
-    # ) -> at.Float[at.Array, "*b ah"]:
-    #     """
-    #     方案B版 compute_loss：
-    #     1) midfix 走一次前向，构建“可微”的 per-layer KV（deterministic=True，避免同迭代内抖动）
-    #     2) suffix（含 state + [可选：当前帧图像] + H 个 action）一次性前向，复用 midfix KV
-    #     3) 对最后 H 个 action 位置投线性头得到 v_t，做 FM 的 MSE(v_t, u_t)
-    #     """
-
-    #     # ---------------------------
-    #     # 0) 预处理 + FM 合成
-    #     # ---------------------------
-    #     preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
-    #     obs = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
-
-    #     # 真值动作 x0、噪声 eps、采样时间 t（Single-t；对样本内 H 广播）
-    #     noise = jax.random.normal(noise_rng, actions.shape)                          # [B,H,A]
-    #     t = jax.random.beta(time_rng, 1.5, 1, actions.shape[:-2]) * 0.999 + 0.001    # [B]
-    #     t_exp = t[..., None, None]                                                   # [B,1,1]
-    #     x_t = t_exp * noise + (1.0 - t_exp) * actions                                # [B,H,A]
-    #     u_t = noise - actions                                                        # [B,H,A]
-
-    #     # ---------------------------
-    #     # 1) midfix → 可微 KV（一次）
-    #     # ---------------------------
-    #     # 约定：embed_midfix 仅包含 in-context 演示/文本等“提示侧”信息，不含“当前帧图像”
-    #     midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)               # tokens:[B,S_mid,D], mask:[B,S_mid]
-    #     midfix_attn = make_attn_mask(midfix_mask, midfix_ar)                         # [B,S_mid,S_mid]
-    #     pos_midfix = jnp.cumsum(midfix_mask, axis=1) - 1                             # [B,S_mid]
-
-    #     # 关键：midfix 路径 deterministic=True，使得同一迭代内复用的 KV 不随 dropout 抖动
-    #     pm_cache = self.PaliGemma.llm(
-    #         [midfix_tokens, None],
-    #         positions=pos_midfix,
-    #         mask=midfix_attn,
-    #         deterministic=True,
-    #         method="encode_pm_only",
-    #     )
-
-    #     # ---------------------------
-    #     # 2) suffix（一次性） + 复用 midfix KV
-    #     # ---------------------------
-    #     # 约定：embed_suffix 输出包含 [state] + [可选：当前帧图像 tokens] + [H 个 action tokens]
-    #     suffix_tokens, suffix_mask, suffix_ar = self.embed_suffix(obs, x_t, t)       # tokens:[B,Ts,D], mask:[B,Ts]
-    #     suffix_attn = make_attn_mask(suffix_mask, suffix_ar)                         # [B,Ts,Ts]
-
-    #     # 让 suffix 的每个 query 都能看到 midfix 的所有 key/value
-    #     midfix_seen = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_tokens.shape[1])  # [B,Ts,S_mid]
-    #     mask_full = jnp.concatenate([midfix_seen, suffix_attn], axis=-1)                   # [B,Ts,S_mid+Ts]
-
-    #     # suffix 的绝对位置整体偏移到 midfix 之后
-    #     pos_suf = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_mask, axis=-1) - 1  # [B,Ts]
-        
-    #     assert mask_full.shape[-1] == midfix_mask.shape[1] + suffix_mask.shape[1]
-    #     assert pos_suf.shape == (suffix_tokens.shape[0], suffix_tokens.shape[1])
-        
-    #     # 只解码 action_expert 分支；复用上面得到的 pm_cache
-    #     B = obs.state.shape[0]
-    #     ep_index = einops.repeat(jnp.arange(B, dtype=jnp.int32), "b -> (b n)", n=1)
-    #     outs_suf = self.PaliGemma.llm(
-    #         [None, suffix_tokens],
-    #         positions=pos_suf,
-    #         mask=mask_full,
-    #         pm_cache=pm_cache,
-    #         ep_index=ep_index,
-    #         deterministic=True,
-    #         method="decode_with_cache",
-    #     )
-    #     suffix_out = outs_suf[1]   # action_expert 对应的输出，形状 [B,Ts,D]
-
-    #     # ---------------------------
-    #     # 3) 取出动作位、投头、计算 FM Loss
-    #     # ---------------------------
-    #     # 约定：suffix 的最后 H 个 token 是 action 位置（前面可能是 state / 当前帧图像）
-    #     action_start = suffix_out.shape[1] - self.action_horizon
-    #     action_hidden = suffix_out[:, action_start:, :]         # [B,H,D]
-    #     v_t = self.action_out_proj(action_hidden)               # [B,H,A]
-
-    #     # 对最后一维 A 求 MSE，返回 [B,H]（保持与你原实现一致）
-    #     return jnp.mean(jnp.square(v_t - u_t), axis=-1)
-
     @override
     def compute_loss(
         self,
@@ -730,7 +632,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
             self._dbg_reset_flags()
 
         # ---------------------------
-        # 0) 预处理 & 判定是否多帧
+        # 0) Preprocess and detect multi-frame batches
         # ---------------------------
         preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
         obs = _model.preprocess_observation_incontext_fused(preprocess_rng, observation, train=train)
@@ -743,15 +645,15 @@ class Pi0LightIncontextv14(_model.BaseModel):
         )
 
         B = obs.state.shape[0]
-        assert B > 0, "批大小 B 必须 > 0"
+        assert B > 0, "Batch size B must be > 0"
 
         if has_multi:
-            # 形状期望检查
-            assert obs.actions_seq.ndim == 4, f"obs.actions_seq 期望 [B,N,H,A]，got {obs.actions_seq.shape}"
+            # Validate expected shapes
+            assert obs.actions_seq.ndim == 4, f"obs.actions_seq expected [B,N,H,A], got {obs.actions_seq.shape}"
             N = obs.current_state_seq.shape[1]
             H = obs.actions_seq.shape[2]
             A = obs.actions_seq.shape[3]
-            assert N > 0 and H > 0 and A > 0, f"N/H/A 必须 > 0，got N={N}, H={H}, A={A}"
+            assert N > 0 and H > 0 and A > 0, f"N/H/A must be > 0, got N={N}, H={H}, A={A}"
 
             actions_seq = obs.actions_seq
             obs_current_state_seq       = obs.current_state_seq
@@ -759,12 +661,12 @@ class Pi0LightIncontextv14(_model.BaseModel):
             obs_current_image_masks_seq = obs.current_image_masks_seq
 
             if cfg_dbg:
-                # 所有相机视角的序列长度一致
+                # Ensure every camera view has the same sequence length
                 lens = [v.shape[1] for v in obs_current_images_seq.values()]
-                assert all(L == N for L in lens), f"各相机 N 不一致: {lens}"
+                assert all(L == N for L in lens), f"Per-camera sequence length mismatch: {lens}"
         else:
-            # 单帧回退
-            assert actions.ndim == 3, f"单帧模式期望 actions=[B,H,A]，got {actions.shape}"
+            # Fallback to a single-frame path
+            assert actions.ndim == 3, f"Single-frame mode expects actions=[B,H,A], got {actions.shape}"
             N = 1
             H, A = actions.shape[1], actions.shape[2]
             actions_seq = actions[:, None, :, :]
@@ -772,12 +674,12 @@ class Pi0LightIncontextv14(_model.BaseModel):
             obs_current_images_seq      = {k: v[:, None, ...] for k, v in obs.images.items()}
             obs_current_image_masks_seq = {k: v[:, None]      for k, v in obs.image_masks.items()}
 
-        # 如果你“必须”强制 fused 路径（例如训练阶段），可以加这一条硬断言：
+        # Optional hard assertion to enforce the fused path during training
         if cfg_dbg and train:
-            assert has_multi and N > 1, "训练时要求走 Fused-N 路径，但检测到非多帧（N<=1）。"
+            assert has_multi and N > 1, "Training requires the fused-N path, but the input is not multi-frame (N<=1)."
 
         # ---------------------------
-        # 1) FM 噪声合成
+        # 1) FM noise synthesis
         # ---------------------------
         noise = jax.random.normal(noise_rng, actions_seq.shape)                       # [B,N,H,A]
         t     = jax.random.beta(time_rng, 1.5, 1, (B, N)) * 0.999 + 0.001            # [B,N]
@@ -790,12 +692,12 @@ class Pi0LightIncontextv14(_model.BaseModel):
             self._assert_shape(t,     (B, N),       "t")
 
         # ---------------------------
-        # 2) midfix → encode_pm_only（一次）
+        # 2) midfix -> encode_pm_only (single pass)
         # ---------------------------
         midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)               # [B, S_mid, D], [B, S_mid], [S_mid]
         if cfg_dbg:
             self._assert_bool_mask(midfix_mask, "midfix_mask")
-            assert midfix_ar.ndim == 1, f"midfix_ar 期望 [S_mid]，got {midfix_ar.shape}"
+            assert midfix_ar.ndim == 1, f"midfix_ar expected [S_mid], got {midfix_ar.shape}"
 
         midfix_attn = make_attn_mask(midfix_mask, midfix_ar)                         # [B,S_mid,S_mid]
         pos_midfix  = jnp.cumsum(midfix_mask, axis=1) - 1                             # [B,S_mid]
@@ -814,11 +716,11 @@ class Pi0LightIncontextv14(_model.BaseModel):
         )
 
         if cfg_dbg:
-            assert self._dbg_used_encode_pm_only, "未走 encode_pm_only 路径（包装器未被触发）"
-            assert pm_cache is not None, "encode_pm_only 应返回 pm_cache，但得到 None"
+            assert self._dbg_used_encode_pm_only, "encode_pm_only path was not executed (wrapper not triggered)"
+            assert pm_cache is not None, "encode_pm_only should return pm_cache but got None"
 
         # ---------------------------
-        # 3) 构造后缀 BN，一次 decode_with_cache
+        # 3) Build the BN suffix and run decode_with_cache once
         # ---------------------------
         BN = B * N
         flat_images = {name: einops.rearrange(img, "b n h w c -> (b n) h w c")
@@ -829,7 +731,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
         flat_x_t    = einops.rearrange(x_t, "b n h a -> (b n) h a")
         flat_t      = einops.rearrange(t,   "b n -> (b n)")
 
-        # 复用你已有的逻辑，构造 suffix
+        # Reuse the existing logic to construct the suffix tokens
         def inner_build_suffix_tokens_from_flat(flat_imgs, flat_img_masks, flat_states_, flat_x_t_, flat_t_):
             input_mask = []
             ar_mask = []
@@ -872,8 +774,8 @@ class Pi0LightIncontextv14(_model.BaseModel):
         if cfg_dbg:
             self._assert_shape(suffix_tokens, (BN, None, None), "suffix_tokens")
             self._assert_bool_mask(suffix_mask, "suffix_mask")
-            assert suffix_ar.ndim == 1, f"suffix_ar 期望 [Ts]，got {suffix_ar.shape}"
-            # 检查动作块 AR 规则是否满足（尾部 H 个 token）
+            assert suffix_ar.ndim == 1, f"suffix_ar expected [Ts], got {suffix_ar.shape}"
+            # Ensure the action block AR constraint holds for the trailing H tokens
             self._assert_block_ar_mask(suffix_ar, self.action_horizon, "suffix_ar")
 
         suffix_attn = make_attn_mask(suffix_mask, suffix_ar)                          # [BN,Ts,Ts]
@@ -906,15 +808,15 @@ class Pi0LightIncontextv14(_model.BaseModel):
         suffix_out = outs_suf[1]   # [BN,Ts,D]
 
         if cfg_dbg:
-            assert self._dbg_used_decode_with_cache, "未走 decode_with_cache 路径（包装器未被触发）"
-            # 软校验：suffix_out 的 batch 应为 BN
+            assert self._dbg_used_decode_with_cache, "decode_with_cache path was not executed (wrapper not triggered)"
+            # Soft check: suffix_out should have BN batches
             self._assert_shape(suffix_out, (BN, None, None), "suffix_out")
 
         # ---------------------------
-        # 4) 动作位 & Loss
+        # 4) Action positions and loss
         # ---------------------------
         action_start  = suffix_out.shape[1] - self.action_horizon
-        assert action_start >= 0, f"Ts ({suffix_out.shape[1]}) 必须 ≥ action_horizon ({self.action_horizon})"
+        assert action_start >= 0, f"Ts ({suffix_out.shape[1]}) must be >= action_horizon ({self.action_horizon})"
         action_hidden = suffix_out[:, action_start:, :]
         v_t = self.action_out_proj(action_hidden)  # [BN,H,A]
         v_t = einops.rearrange(v_t, " (b n) h a -> b n h a", b=B, n=N)
@@ -925,14 +827,14 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
         loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)  # [B,N,H]
 
-        # 最后形状断言 & “确实为 fused”的强证据
+        # Final shape assertions to confirm we are truly in the fused path
         if has_multi:
             if cfg_dbg:
-                assert loss.shape == (B, N, H), f"loss 期望 [B,N,H]，got {loss.shape}"
-                assert N > 1, "has_multi=True 但 N<=1，不满足 fused-multi 的语义。"
+                assert loss.shape == (B, N, H), f"loss expected [B,N,H], got {loss.shape}"
+                assert N > 1, "has_multi=True but N<=1, which violates fused-multi semantics."
         else:
             if cfg_dbg:
-                assert loss.shape == (B, 1, H), f"单帧回退 loss 期望 [B,1,H]，got {loss.shape}"
+                assert loss.shape == (B, 1, H), f"Single-frame fallback loss expected [B,1,H], got {loss.shape}"
 
         return loss if has_multi else loss[:, 0, :]
 
@@ -995,10 +897,10 @@ class Pi0LightIncontextv14(_model.BaseModel):
         return x_0
 
     # ---------------------------
-    # Debug helpers（轻量包装 & 断言工具）
+    # Debug helpers (lightweight wrappers & assertions)
     # ---------------------------
     def _dbg_reset_flags(self):
-        # 记录是否真的调用了 encode_pm_only / decode_with_cache
+        # Track whether encode_pm_only / decode_with_cache were actually invoked.
         self._dbg_used_encode_pm_only = False
         self._dbg_used_decode_with_cache = False
         self._dbg_last_pm_cache = None
@@ -1016,8 +918,8 @@ class Pi0LightIncontextv14(_model.BaseModel):
         return pm_cache
 
     def _llm_decode_with_cache(self, *, embedded_suf, positions_suf, mask_suf, pm_cache, ep_index, deterministic):
-        # 确保复用的 pm_cache 非空
-        assert pm_cache is not None, "decode_with_cache 期望传入非空 pm_cache，但得到 None。"
+        # Ensure the reused pm_cache is populated.
+        assert pm_cache is not None, "decode_with_cache expects a non-empty pm_cache but received None."
         self._dbg_used_decode_with_cache = True
         return self.PaliGemma.llm(
             embedded_suf=embedded_suf,
@@ -1031,15 +933,15 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
     @staticmethod
     def _assert_bool_mask(x, name: str):
-        assert x.dtype == jnp.bool_, f"{name} 必须是 bool mask，当前 dtype={x.dtype}"
+        assert x.dtype == jnp.bool_, f"{name} must be a bool mask; current dtype={x.dtype}"
 
     @staticmethod
     def _assert_shape(x, shape, name: str):
-        # shape 元素可用 None 表示“任意”
-        assert len(x.shape) == len(shape), f"{name} 维度数不符：got {x.shape}, expect {shape}"
+        # Elements of shape may be None to indicate "any".
+        assert len(x.shape) == len(shape), f"{name} rank mismatch: got {x.shape}, expect {shape}"
         for i, (got, exp) in enumerate(zip(x.shape, shape)):
             if exp is not None and got != exp:
-                raise AssertionError(f"{name} 维度[{i}]不符：got {x.shape}, expect {shape}")
+                raise AssertionError(f"{name} dimension[{i}] mismatch: got {x.shape}, expect {shape}")
         
     @staticmethod
     def _assert_monotonic_positions(pos: jax.Array,
@@ -1047,69 +949,65 @@ class Pi0LightIncontextv14(_model.BaseModel):
                                     name: str,
                                     allow_offset: bool = False):
         """
-        检查 positions 在“有效 token”处是否按步进 1 递增。
-        - 当 allow_offset=False：要求等于 cumsum(valid)-1
-        - 当 allow_offset=True ：允许整体加一个 batch-wise 偏移（例如 suffix 放在 midfix 之后）
-        允许 mask 为 [B,T] / [B,T,S] / [B,1,T,S]。
+        Verify that positions increment by one wherever the token mask is valid.
+        - With allow_offset=False: positions must equal cumsum(valid) - 1.
+        - With allow_offset=True: a batch-wise offset is allowed (e.g., suffix appended after midfix).
+        Accepts masks shaped [B,T], [B,T,S], or [B,1,T,S].
         """
-        # 1) 统一 token 级 mask: [B,T]
+        # 1) Normalize the mask to token-level [B,T].
         if mask.ndim == 4:
-            assert mask.shape[1] == 1, f"{name}: 4D mask 第二维应为 1, got {mask.shape}"
+            assert mask.shape[1] == 1, f"{name}: 4D mask dimension 1 should be 1, got {mask.shape}"
             mask = jnp.squeeze(mask, axis=1)        # [B,T,S]
         if mask.ndim == 3:
             token_mask = jnp.any(mask, axis=-1)     # [B,T]
         elif mask.ndim == 2:
             token_mask = mask                       # [B,T]
         else:
-            raise ValueError(f"{name}: mask 维度必须是 2/3/4, got {mask.shape}")
+            raise ValueError(f"{name}: mask rank must be 2/3/4, got {mask.shape}")
 
-        # 2) 形状一致（用 host 断言避免 Tracer 转换）
-        _host_assert(jnp.array(pos.ndim == 2), "{}: positions 必须是 [B,T]", name)
+        # 2) Validate shapes using host assertions to avoid materializing tracers.
+        _host_assert(jnp.array(pos.ndim == 2), "{}: positions must be [B,T]", name)
         _host_assert(jnp.array((pos.shape[0] == token_mask.shape[0]) &
                             (pos.shape[1] == token_mask.shape[1])),
-                    "{}: positions 形状 {} 必须等于 token_mask 形状 {}",
+                    "{}: positions shape {} must equal token_mask shape {}",
                     name, pos.shape, token_mask.shape)
 
-        # 3) 参考序列
+        # 3) Reference sequence
         ref_incr = jnp.cumsum(token_mask, axis=-1) - 1   # [B,T]
 
         if allow_offset:
-            # 计算每个 batch 的“起始位置”作为 offset（第一个 valid 的 positions）
+            # Compute the first valid position per batch to use as an offset.
             big = jnp.iinfo(jnp.int32).max
-            # 把无效处置为 +inf，再取最小值就等于“第一个有效位置”
             first_pos = jnp.min(jnp.where(token_mask, pos, big), axis=1)   # [B]
-            # 防止全无效（极端情况），把 +inf 替回 0
+            # Handle the all-invalid case by replacing +inf with 0.
             first_pos = jnp.where(first_pos == big, 0, first_pos)
             ref = first_pos[:, None] + ref_incr
         else:
             ref = ref_incr
 
         ok = jnp.all(jnp.where(token_mask, pos == ref, True))
-        _host_assert(ok, "{} 不是基于 mask 的（允许偏移={}）单调累计位置", name, allow_offset)
+        _host_assert(ok, "{} is not a mask-aligned (allow_offset={}) monotonic position sequence", name, allow_offset)
 
 
     @staticmethod
     def _assert_block_ar_mask(ar_mask: jax.Array, H: int, name: str):
         """
-        约定：后缀最后 H 个 token 是动作块，且模式应为：
-        [True, False, False, ..., False]  # 长度 H
-        其余位置不限。
+        Convention: the final H suffix tokens form the action block and must follow:
+        [True, False, False, ..., False]  (length H). Other positions are unconstrained.
         """
         m = jnp.asarray(ar_mask, dtype=bool).reshape(-1)     # [Ts]
-        Ts = m.shape[0]                                      # 这是 Python int（静态 shape），可直接比较
+        Ts = m.shape[0]                                      # Python int (static shape), safe to compare directly
         if Ts < H:
-            # 这条在 trace 前就能跑到，保留原生 assert 也没问题
             raise AssertionError(f"{name}: len(ar_mask)={Ts} < action_horizon={H}")
 
         tail = m[-H:]                                        # [H]
-        # cond: tail[0] == True 且 tail[1:] 全 False
         cond = jnp.logical_and(tail[0], jnp.all(jnp.logical_not(tail[1:])))
-        _host_assert(cond, "{}: 动作块末尾 H 模式应为 [True, False×(H-1)]，实际 tail={}", name, tail)
+        _host_assert(cond, "{}: action block tail should be [True, False*(H-1)], actual tail={}", name, tail)
 
 
-    ### XJ: for unit test only!
+    ### XJ: for unit tests only.
     # =========================
-    # 新增：去随机化、可控 noise/t 的前向与 loss 变种
+    # Deterministic forward/loss variants with controllable noise/t
     # =========================
 
     def _build_suffix_tokens_from_flat(
@@ -1164,20 +1062,20 @@ class Pi0LightIncontextv14(_model.BaseModel):
         t:  at.Float[at.Array, " b n"],
     ) -> at.Float[at.Array, " b n h a"]:
         """
-        一次性把 N 帧展平为 BN，解码得到 v_t（deterministic=True），不做任何采样。
-        返回形状 [B,N,H,A]。
+        Flatten all N frames to BN, decode v_t with deterministic=True, without any sampling.
+        Returns shape [B, N, H, A].
         """
-        # 预处理（走 fused 版本；不启用训练随机性）
+        # Preprocess using the fused pipeline (no training randomness).
         obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
 
-        # ---- 形状与 has_multi 判定，与 compute_loss 一致 ----
+        # ---- Shape / has_multi detection matches compute_loss ----
         has_multi = (
             (obs.current_state_seq is not None) and
             (obs.current_images_seq is not None) and
             (obs.current_image_masks_seq is not None)
         )
         if not has_multi:
-            # 单帧回退：把 current_* 补到 N=1
+            # Single-frame fallback: pad current_* to N=1.
             B = obs.state.shape[0]
             x_t = x_t.reshape(B, 1, self.action_horizon, self.action_dim)
             t   = t.reshape(B, 1)
@@ -1191,7 +1089,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
             obs_current_images_seq      = obs.current_images_seq
             obs_current_image_masks_seq = obs.current_image_masks_seq
 
-        # ---- midfix → encode_pm_only(deterministic=True) ----
+        # ---- midfix -> encode_pm_only (deterministic=True) ----
         midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)
         midfix_attn = make_attn_mask(midfix_mask, midfix_ar)
         pos_midfix  = jnp.cumsum(midfix_mask, axis=1) - 1
@@ -1202,7 +1100,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
             deterministic=True,
         )
 
-        # ---- 将 [B,N,...] 展平为 [BN,...]，构造 suffix，一次 decode ----
+        # ---- Flatten [B,N,...] to [BN,...], build suffix, decode once ----
         B = x_t.shape[0]
         H = x_t.shape[2]
         A = x_t.shape[3]
@@ -1251,13 +1149,13 @@ class Pi0LightIncontextv14(_model.BaseModel):
         t:  at.Float[at.Array, " b n"],
     ) -> at.Float[at.Array, " b n h a"]:
         """
-        逐帧循环：每次只解一个帧的 suffix（deterministic=True），最后在 N 维拼接。
-        返回形状 [B,N,H,A]。
+        Decode one frame at a time (deterministic=True) and concatenate along N.
+        Returns shape [B, N, H, A].
         """
-        # 预处理
+        # Preprocess.
         obs = _model.preprocess_observation_incontext_fused(None, observation, train=False)
 
-        # 判定 has_multi
+        # Determine whether we have multi-frame data.
         has_multi = (
             (obs.current_state_seq is not None) and
             (obs.current_images_seq is not None) and
@@ -1280,7 +1178,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
         B = x_t.shape[0]
 
-        # midfix & cache（共享）
+        # Shared midfix & cache.
         midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)
         midfix_attn = make_attn_mask(midfix_mask, midfix_ar)
         pos_midfix  = jnp.cumsum(midfix_mask, axis=1) - 1
@@ -1338,23 +1236,23 @@ class Pi0LightIncontextv14(_model.BaseModel):
         return v_t
 
     def _mse_loss(vt, tgt, *, frame_mask=None):
-        # 统一精度，避免你现在遇到的 1e-5 漂移
+        # Use consistent precision to avoid the ~1e-5 drift seen in practice.
         vt  = vt.astype(jnp.float32)   # [B, N, H, A]
         tgt = tgt.astype(jnp.float32)  # [B, N, H, A]
 
         err2   = jnp.square(vt - tgt)                      # [B, N, H, A]
-        per_th = jnp.mean(err2, axis=-1, dtype=jnp.float32)  # [B, N, H] 先对 A 轴求均值
+        per_th = jnp.mean(err2, axis=-1, dtype=jnp.float32)  # [B, N, H]; mean over the action dimension.
 
         if frame_mask is None:
             return per_th
 
-        # 帧级 mask: [B, N] -> [B, N, 1] 广播到 H 轴
+        # Frame-level mask: [B, N] -> broadcast to [B, N, 1] across H.
         fm = frame_mask.astype(jnp.float32)[..., None]      # [B, N, 1]
         num = (per_th * fm)                                 # [B, N, H]
-        den = jnp.maximum(jnp.sum(fm, axis=-2, dtype=jnp.float32), 1.0)  # 对 N 轴计数，形状 [B, 1]
-        return num / den[:, None, :]                        # 归一化到每个 batch、每个 H
+        den = jnp.maximum(jnp.sum(fm, axis=-2, dtype=jnp.float32), 1.0)  # Count along N, shape [B, 1]
+        return num / den[:, None, :]                        # Normalize per batch and horizon.
 
-    # 放到你的模型类里（两个 compute_loss_* 同文件）
+    # Helper used inside the model (shared by both compute_loss_* variants).
     def _merged_seq_mask(self, obs, image_keys=(
         "base_0_rgb",
         "left_wrist_0_rgb",
@@ -1362,42 +1260,42 @@ class Pi0LightIncontextv14(_model.BaseModel):
     )):
         ms = obs.current_image_masks_seq
         if ms is None:
-            return None  # 不加权
+            return None  # No weighting available.
         mlist = [jnp.asarray(ms[k]) for k in image_keys if k in ms]
         if len(mlist) == 0:
             return None
-        # [B,N]：各相机按 AND 合并（与 tests 预期一致）
+        # [B,N]: AND across selected camera views (matches test expectations).
         return jnp.logical_and.reduce(jnp.stack(mlist, axis=0), axis=0)
 
     def _loss_core(self, obs, actions, noise, t, vt_fn):
-        # —— 统一动作序列来源 —— 
+        # -- Normalize the source of action sequences --
         if obs.actions_seq is None:
-            assert actions is not None, "单帧模式需要 actions [B,H,A]"
+            assert actions is not None, "Single-frame mode requires actions shaped [B,H,A]"
             a = actions[:, None, :, :]            # [B,1,H,A]
         else:
             a = obs.actions_seq                   # [B,N,H,A]
 
-        # —— 统一 dtype / 广播形状 —— 
+        # -- Align dtype and broadcast shapes --
         a     = a.astype(jnp.float32)
         eps   = noise.astype(jnp.float32)
         t     = t.astype(jnp.float32)
         t_exp = t[..., None, None]                # [B,N,1,1]
         one   = jnp.array(1.0, dtype=jnp.float32)
 
-        # —— 完全相同的表达式树构造 x_t / u_t —— 
+        # -- Construct x_t / u_t using identical expression trees --
         x_t = t_exp * eps + (one - t_exp) * a
         u_t = eps - a
 
-        # —— 唯一分歧点：vt 的实现（sequence vs stepwise）——
+        # -- The only difference is how vt is produced (sequence vs. stepwise) --
         v_t = vt_fn(obs, x_t, t)
 
-        # —— MSE：先对 A 轴显式求和再除，以固定规约顺序 —— 
+        # -- MSE: sum across actions then divide to keep a consistent reduction order --
         diff = (v_t.astype(jnp.float32) - u_t)        # [B,N,H,A]
         err  = diff * diff                            # [B,N,H,A]
         A    = jnp.array(err.shape[-1], dtype=jnp.float32)
         loss = jnp.sum(err, axis=-1) / A              # [B,N,H]
 
-        # —— 可选：序列掩码按同一处应用（随机掩码用例要这个）—— 
+        # -- Optional: apply sequence masks at a single location (needed for random masking) --
         m = self._merged_seq_mask(obs)
         if m is not None:
             w = m.astype(jnp.float32)[..., None]      # [B,N,1]
@@ -1418,7 +1316,7 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
     
 def _merge_current_frame_mask(obs, *, require_all=False):
-    masks = list(obs.current_image_masks_seq.values())  # 每个 [B,N] bool
+    masks = list(obs.current_image_masks_seq.values())  # Each is [B,N] bool
     if not masks:
         B, N = obs.actions_seq.shape[:2]
         return jnp.ones((B, N), dtype=jnp.bool_)
@@ -1434,6 +1332,5 @@ def _loss_from_v_and_u(v_t, u_t, frame_mask=None):
     if frame_mask is None:
         return per_th
     fm = frame_mask.astype(jnp.float32)[..., None]     # [B,N,1] -> [B,N,H]
-    # 若你只是要逐帧逐步对齐（不是要对 N 做聚合），也可以直接 `per_th * fm`
-    return per_th * fm  # 与另一条路径保持一模一样的形状与操作
-
+    # When you only need per-frame alignment (no aggregation over N), `per_th * fm` is sufficient.
+    return per_th * fm  # Keeps identical shape and operations to the alternative path.
