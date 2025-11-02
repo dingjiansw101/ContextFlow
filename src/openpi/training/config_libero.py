@@ -167,6 +167,11 @@ def build(api) -> list["api.TrainConfig"]:
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
         task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+        random_select: bool = True  # If True, randomly select demo episodes; if False, use deterministic selection
+        norm_stats_aliases: dict[str, str] | None = dataclasses.field(default_factory=lambda: {
+            "dem_prompt_all_states": "state",
+            "dem_prompt_all_actions": "actions",
+        })
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
@@ -4380,11 +4385,53 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=2,
         batch_size=2,
     ),
+
+    api.TrainConfig(
+        name="pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline",
+        model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
+            sample_frames=2, sample_actions=32, random_select=False,  
+            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            libero_input_refactor=True,
+        ),
+        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
+            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz", # S/16
+        ),
+        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        lr_schedule = api._optimizer.CosineDecaySchedule(
+            warmup_steps = 1_000,
+            peak_lr= 2.5e-5,
+            decay_steps= 20_000,
+            decay_lr= 2.5e-6),
+        num_train_steps= 20_000,
+        freeze_filter=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m", 
+            sample_frames=2, sample_actions=32, random_select=False, 
+            freeze_llm_embedder=True, freeze_img_encoder = False, siglip_variant="S/16",
+        ).get_freeze_filter(),
+        ema_decay=None,
+        # num_workers=16,
+        # batch_size=32,
+        num_workers=2,
+        batch_size=2,
+    ),
+
     api.TrainConfig(
         name="pi0mini_incontext_libero_custom_dataset_debug",
         model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-            sample_frames=2, sample_actions=32, random_select=True,
+            sample_frames=2, sample_actions=32, random_select=False,
             freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
         data=CustomLeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
@@ -4399,6 +4446,7 @@ def build(api) -> list["api.TrainConfig"]:
             task_to_episode_path="metadata/libero/task_to_episode.json",
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            random_select=False,
         ),
         vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz",  # S/16
@@ -4412,7 +4460,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_train_steps=20_000,  # Reduced for debugging
         freeze_filter=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-            sample_frames=2, sample_actions=32, random_select=True,
+            sample_frames=2, sample_actions=32, random_select=False,
             freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
         ).get_freeze_filter(),
         ema_decay=None,

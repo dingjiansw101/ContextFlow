@@ -48,6 +48,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         num_sample_frames: int = 2,
         num_sample_actions: int = 32,
         task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
+        random_select: bool = True,
     ):
         """
         CustomLeRobotDataset extends LeRobotDataset to load both sequences and in-context demonstrations.
@@ -59,6 +60,7 @@ class CustomLeRobotDataset(LeRobotDataset):
             num_sample_frames (int): Number of frames for in-context demonstration.
             num_sample_actions (int): Number of actions for in-context demonstration.
             task_to_episode_path (str): Path to task_to_episode.json mapping file.
+            random_select (bool): If True, randomly select demo episodes; if False, use deterministic selection (first episode).
         """
 
         # Initialize parent - all LeRobotDataset code, including file loading and indexing
@@ -77,6 +79,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         self.num_sample_frames = num_sample_frames
         self.num_sample_actions = num_sample_actions
         self.action_horizon = len(delta_timestamps["actions"])
+        self.random_select = random_select
 
         # Load task-to-episode and episode-to-indexes mappings
         self.task_to_episode = {}
@@ -143,14 +146,17 @@ class CustomLeRobotDataset(LeRobotDataset):
         Returns:
             Dictionary containing sampled frames from another episode with the same task
         """
-        # Get all episodes for this task
-        episodes_for_task = self.task_to_episode.get(task_index, [])
+        # Mirror InjectDemoIndexes selection so comparison tests match the baseline loader.
+        # TODO: do we need to exclude the current episode?
+        other_episodes = [int(ep) for ep in self.task_to_episode.get(task_index, [])]
+        if not other_episodes:
+            raise ValueError(f"No episodes available for task {task_index}")
 
-        # Filter out the current episode to get a different one
-        other_episodes = [ep for ep in episodes_for_task if ep != current_ep_idx]
-
-        # Randomly select another episode
-        selected_ep_idx = random.choice(other_episodes)
+        # print(f"other_episodes: {other_episodes}")
+        if self.random_select:
+            selected_ep_idx = random.choice(other_episodes)
+        else:
+            selected_ep_idx = other_episodes[0]
 
         episode_idx = selected_ep_idx if self.episodes is None else self.episodes.index(selected_ep_idx)
         # get the frame indices for the episode

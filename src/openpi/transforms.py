@@ -322,7 +322,6 @@ class InjectDemoIndexes(DataTransformFn):
                 self.sample_frames,
                 task_index,
             )
-
         if split == "train" and self.random_select:
             k = min(self.sample_episodes, len(candidates))
             selected_episodes = random.sample(candidates, k)
@@ -1454,21 +1453,60 @@ class Normalize(DataTransformFn):
     use_quantiles: bool = False
     # If true, will raise an error if any of the keys in the norm stats are not present in the data.
     strict: bool = False
+    # Optional mapping from data keys to norm_stats keys for aliasing
+    # Example: {"dem_prompt_states": "state", "dem_prompt_actions": "actions"}
+    norm_stats_aliases: dict[str, str] | None = None
 
     def __post_init__(self):
         if self.norm_stats is not None and self.use_quantiles:
             _assert_quantile_stats(self.norm_stats)
+        # Validate that aliases point to existing norm_stats keys
+        if self.norm_stats_aliases is not None and self.norm_stats:
+            flat_stats = flatten_dict(self.norm_stats)
+            for alias_key, target_key in self.norm_stats_aliases.items():
+                if target_key not in flat_stats:
+                    raise ValueError(
+                        f"Alias '{alias_key}' points to non-existent norm_stats key '{target_key}'. "
+                        f"Available keys: {list(flat_stats.keys())}"
+                    )
 
     def __call__(self, data: DataDict) -> DataDict:
         if self.norm_stats is None:
             return data
 
+        # Expand norm_stats to include aliases
+        expanded_norm_stats = self._expand_norm_stats_with_aliases()
         return apply_tree(
             data,
-            self.norm_stats,
+            expanded_norm_stats,
             self._normalize_quantile if self.use_quantiles else self._normalize,
             strict=self.strict,
         )
+
+    def _expand_norm_stats_with_aliases(self) -> at.PyTree[NormStats]:
+        """Create an expanded norm_stats dict that includes alias mappings.
+
+        For each alias, add an entry in norm_stats that points to the same
+        NormStats object as the target key. This allows demo data keys to
+        use the same normalization statistics as current observation keys.
+
+        Returns:
+            Expanded norm_stats dict with aliases resolved.
+        """
+        if self.norm_stats_aliases is None:
+            return self.norm_stats
+
+        # Flatten to work with simple string keys
+        flat_stats = flatten_dict(self.norm_stats)
+
+        # Add alias entries (shallow copy - same NormStats objects)
+        for alias_key, target_key in self.norm_stats_aliases.items():
+            # Only add if alias doesn't already exist (original takes precedence)
+            if alias_key not in flat_stats:
+                flat_stats[alias_key] = flat_stats[target_key]
+
+        # Unflatten back to nested structure
+        return unflatten_dict(flat_stats)
 
     def _normalize(self, x, stats: NormStats):
         return (x - stats.mean) / (stats.std + 1e-6)
@@ -1484,22 +1522,63 @@ class Unnormalize(DataTransformFn):
     norm_stats: at.PyTree[NormStats] | None
     # If true, will use quantile normalization. Otherwise, normal z-score normalization will be used.
     use_quantiles: bool = False
+    # Optional mapping from data keys to norm_stats keys for aliasing
+    # Example: {"dem_prompt_states": "state", "dem_prompt_actions": "actions"}
+    norm_stats_aliases: dict[str, str] | None = None
 
     def __post_init__(self):
         if self.norm_stats is not None and self.use_quantiles:
             _assert_quantile_stats(self.norm_stats)
 
+        # Validate that aliases point to existing norm_stats keys
+        if self.norm_stats_aliases is not None and self.norm_stats is not None:
+            flat_stats = flatten_dict(self.norm_stats)
+            for alias_key, target_key in self.norm_stats_aliases.items():
+                if target_key not in flat_stats:
+                    raise ValueError(
+                        f"Alias '{alias_key}' points to non-existent norm_stats key '{target_key}'. "
+                        f"Available keys: {list(flat_stats.keys())}"
+                    )
+
     def __call__(self, data: DataDict) -> DataDict:
         if self.norm_stats is None:
             return data
 
+        # Expand norm_stats to include aliases
+        expanded_norm_stats = self._expand_norm_stats_with_aliases()
+
         # Make sure that all the keys in the norm stats are present in the data.
         return apply_tree(
             data,
-            self.norm_stats,
+            expanded_norm_stats,
             self._unnormalize_quantile if self.use_quantiles else self._unnormalize,
             strict=True,
         )
+
+    def _expand_norm_stats_with_aliases(self) -> at.PyTree[NormStats]:
+        """Create an expanded norm_stats dict that includes alias mappings.
+
+        For each alias, add an entry in norm_stats that points to the same
+        NormStats object as the target key. This allows demo data keys to
+        use the same normalization statistics as current observation keys.
+
+        Returns:
+            Expanded norm_stats dict with aliases resolved.
+        """
+        if self.norm_stats_aliases is None:
+            return self.norm_stats
+
+        # Flatten to work with simple string keys
+        flat_stats = flatten_dict(self.norm_stats)
+
+        # Add alias entries (shallow copy - same NormStats objects)
+        for alias_key, target_key in self.norm_stats_aliases.items():
+            # Only add if alias doesn't already exist (original takes precedence)
+            if alias_key not in flat_stats:
+                flat_stats[alias_key] = flat_stats[target_key]
+
+        # Unflatten back to nested structure
+        return unflatten_dict(flat_stats)
 
     def _unnormalize(self, x, stats: NormStats):
         return x * (stats.std + 1e-6) + stats.mean

@@ -203,8 +203,19 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
 
 
 
-def create_custom_dataset(data_config: _config.DataConfig, model_config: _model.BaseModelConfig) -> Dataset:
-    """Create a custom dataset for training, using CustomLeRobotDataset."""
+def create_custom_dataset(
+    data_config: _config.DataConfig,
+    model_config: _model.BaseModelConfig,
+    data_config_factory: _config.DataConfigFactory | None = None,
+) -> Dataset:
+    """Create a custom dataset for training, using CustomLeRobotDataset.
+
+    Args:
+        data_config: The data configuration created by the factory.
+        model_config: The model configuration.
+        data_config_factory: The factory that created data_config. Used to access
+            custom fields like random_select, sample_frames, etc.
+    """
 
     repo_id = data_config.repo_id
     if repo_id is None:
@@ -212,6 +223,22 @@ def create_custom_dataset(data_config: _config.DataConfig, model_config: _model.
     if repo_id == "fake":
         return FakeDataset(model_config, num_samples=1024)
     dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, local_files_only=data_config.local_files_only)
+
+    # Get CustomLeRobotDataset-specific parameters from factory (if provided) or use defaults
+    if data_config_factory is not None:
+        num_current_frames = getattr(data_config_factory, 'frame_sequence_length', 1)
+        num_sample_frames = getattr(data_config_factory, 'sample_frames', 2)
+        num_sample_actions = getattr(data_config_factory, 'sample_actions', 32)
+        task_to_episode_path = getattr(data_config_factory, 'task_to_episode_path', "metadata/libero/task_to_episode.json")
+        random_select = getattr(data_config_factory, 'random_select', True)
+    else:
+        # Fallback to defaults if no factory provided
+        num_current_frames = 1
+        num_sample_frames = 2
+        num_sample_actions = 32
+        task_to_episode_path = "metadata/libero/task_to_episode.json"
+        random_select = True
+
     # Build delta_timestamps for each action sequence key (for compatibility)
     dataset = CustomLeRobotDataset(
         data_config.repo_id,
@@ -221,11 +248,12 @@ def create_custom_dataset(data_config: _config.DataConfig, model_config: _model.
             for key in data_config.action_sequence_keys
         },
         local_files_only=data_config.local_files_only,
-        # Pass CustomLeRobotDataset specific parameters from data_config
-        num_current_frames=getattr(data_config, 'frame_sequence_length', 1),
-        num_sample_frames=getattr(data_config, 'sample_frames', 2),
-        num_sample_actions=getattr(data_config, 'sample_actions', 32),
-        task_to_episode_path=getattr(data_config, 'task_to_episode_path', "metadata/libero/task_to_episode.json"),
+        # Pass CustomLeRobotDataset specific parameters from factory
+        num_current_frames=num_current_frames,
+        num_sample_frames=num_sample_frames,
+        num_sample_actions=num_sample_actions,
+        task_to_episode_path=task_to_episode_path,
+        random_select=random_select,
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)
     if data_config.prompt_from_task:
@@ -254,7 +282,7 @@ def create_custom_dataset(data_config: _config.DataConfig, model_config: _model.
 #             *data_config.model_transforms.inputs,
 #         ],
 #     )
-def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
+def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False, norm_stats_aliases: dict[str, str] | None = None) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
     if data_config.repo_id != "fake" and not skip_norm_stats:
@@ -264,12 +292,15 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
             )
         norm_stats = data_config.norm_stats
-
     # 先把原先的 transforms 串起来（不改变语义）
     seq: list[_transforms.DataTransformFn] = [
         *data_config.repack_transforms.inputs,
         *data_config.data_transforms.inputs,
-        _transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
+        _transforms.Normalize(
+            norm_stats,
+            use_quantiles=data_config.use_quantile_norm,
+            norm_stats_aliases=norm_stats_aliases,
+        ),
         *data_config.model_transforms.inputs,
     ]
 
@@ -456,8 +487,8 @@ def create_custom_incontext_data_loader(
             execute in the main process.
     """
     data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_custom_dataset(data_config, config.model)
-    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
+    dataset = create_custom_dataset(data_config, config.model, config.data)
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases)
 
     data_loader = TorchDataLoader(
         dataset,

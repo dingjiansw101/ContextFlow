@@ -134,7 +134,7 @@ def test_create_custom_incontext_data_loader():
     # Create data loader using CustomLeRobotDataset
     data_loader = _data_loader.create_custom_incontext_data_loader(
         config,
-        skip_norm_stats=True,
+        skip_norm_stats=False,
         num_batches=1
     )
 

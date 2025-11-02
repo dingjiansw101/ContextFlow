@@ -17,7 +17,7 @@ Usage:
     # Compare custom configs:
     python src/openpi/training/dataloader_comparison_test.py \
         --config1 pi0mini_incontext_libero_custom_dataset_debug \
-        --config2 pi0mini_incontext_libero_low_mem_finetune_train
+        --config2 pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline
 """
 
 from __future__ import annotations
@@ -136,7 +136,15 @@ def compare_dicts(
         val1 = dict1[key]
         val2 = dict2[key]
         full_name = f"{name}/{key}" if name != "root" else key
-
+        # if "states" in key:
+        #     import ipdb; ipdb.set_trace()
+        #     print(f"val1: {val1}")
+        #     print(f"val2: {val2}")
+        #     print(f"full_name: {full_name}")
+        #     print(f"rtol: {rtol}")
+        #     print(f"atol: {atol}")
+        #     print(f"messages: {messages}")
+        #     print(f"all_match: {all_match}")
         if isinstance(val1, dict) and isinstance(val2, dict):
             # Recursive comparison for nested dicts
             match, sub_messages = compare_dicts(val1, val2, full_name, rtol, atol)
@@ -232,16 +240,23 @@ def compare_dataloaders(
         num_workers=0,  # Deterministic: no multiprocessing
     )
 
+    # Override random_select=False for deterministic demo selection (if applicable)
+    if hasattr(config1.data, 'random_select'):
+        config1 = dataclasses.replace(
+            config1,
+            data=dataclasses.replace(config1.data, random_select=False)
+        )
+
     if "custom_dataset" in config1_name:
         loader1 = _data_loader.create_custom_incontext_data_loader(
             config1,
-            skip_norm_stats=True,
+            skip_norm_stats=False,
             num_batches=num_batches,
         )
     else:
         loader1 = _data_loader.create_incontext_data_loader(
             config1,
-            skip_norm_stats=True,
+            skip_norm_stats=False,
             num_batches=num_batches,
         )
 
@@ -257,16 +272,23 @@ def compare_dataloaders(
         num_workers=0,  # Deterministic: no multiprocessing
     )
 
+    # Override random_select=False for deterministic demo selection (if applicable)
+    if hasattr(config2.data, 'random_select'):
+        config2 = dataclasses.replace(
+            config2,
+            data=dataclasses.replace(config2.data, random_select=False)
+        )
+
     if "custom_dataset" in config2_name:
         loader2 = _data_loader.create_custom_incontext_data_loader(
             config2,
-            skip_norm_stats=True,
+            skip_norm_stats=False,
             num_batches=num_batches,
         )
     else:
         loader2 = _data_loader.create_incontext_data_loader(
             config2,
-            skip_norm_stats=True,
+            skip_norm_stats=False,
             num_batches=num_batches,
         )
 
@@ -317,7 +339,7 @@ def main():
     )
     parser.add_argument(
         "--config2",
-        default="pi0mini_incontext_libero_low_mem_finetune_train",
+        default="pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline",
         help="Second config name",
     )
     parser.add_argument(

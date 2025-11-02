@@ -3,7 +3,7 @@
 
 Compares:
 1. pi0mini_incontext_libero_custom_dataset_debug (CustomLeRobotDataset)
-2. pi0mini_incontext_libero_low_mem_finetune_train (LeRobotDataset + transforms)
+2. pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline (LeRobotDataset + transforms)
 
 Usage:
     # Basic run with default parameters (batch_sizes=[2, 16], workers=[0, 2], batches=30):
@@ -21,7 +21,7 @@ Usage:
     # Compare different configs:
     python src/openpi/training/dataloader_performance_benchmark.py \
         --config1 pi0mini_incontext_libero_custom_dataset_debug \
-        --config2 pi0mini_incontext_libero_low_mem_finetune_train
+        --config2 pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline
 
 Output:
     - Loader creation time
@@ -299,7 +299,7 @@ def main():
     )
     parser.add_argument(
         "--config2",
-        default="pi0mini_incontext_libero_low_mem_finetune_train",
+        default="pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline",
         help="Second config (Regular)",
     )
     parser.add_argument(
