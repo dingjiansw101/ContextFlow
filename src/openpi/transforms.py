@@ -1471,7 +1471,7 @@ class Normalize(DataTransformFn):
                     )
 
     def __call__(self, data: DataDict) -> DataDict:
-        if self.norm_stats is None:
+        if not self.norm_stats:
             return data
 
         # Expand norm_stats to include aliases
@@ -1531,7 +1531,7 @@ class Unnormalize(DataTransformFn):
             _assert_quantile_stats(self.norm_stats)
 
         # Validate that aliases point to existing norm_stats keys
-        if self.norm_stats_aliases is not None and self.norm_stats is not None:
+        if self.norm_stats_aliases is not None and self.norm_stats:
             flat_stats = flatten_dict(self.norm_stats)
             for alias_key, target_key in self.norm_stats_aliases.items():
                 if target_key not in flat_stats:
@@ -1541,7 +1541,7 @@ class Unnormalize(DataTransformFn):
                     )
 
     def __call__(self, data: DataDict) -> DataDict:
-        if self.norm_stats is None:
+        if not self.norm_stats:
             return data
 
         # Expand norm_stats to include aliases
