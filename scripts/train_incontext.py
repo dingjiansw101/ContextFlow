@@ -219,12 +219,20 @@ def main(config: _config.TrainConfig):
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
 
-    data_loader = _data_loader.create_incontext_data_loader(
-        config,
-        sharding=data_sharding,
-        num_workers=config.num_workers,
-        shuffle=True,
-    )
+    if config.use_custom_dataloader:
+        data_loader = _data_loader.create_custom_incontext_data_loader(
+            config,
+            sharding=data_sharding,
+            num_workers=config.num_workers,
+            shuffle=True,
+        )
+    else:
+        data_loader = _data_loader.create_incontext_data_loader(
+            config,
+            sharding=data_sharding,
+            num_workers=config.num_workers,
+            shuffle=True,
+        )
     data_iter = iter(data_loader)
     batch = next(data_iter)
     # jax.debug.print("batch = {} ", batch)

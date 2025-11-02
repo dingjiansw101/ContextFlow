@@ -247,7 +247,7 @@ def compare_dataloaders(
             data=dataclasses.replace(config1.data, random_select=False)
         )
 
-    if "custom_dataset" in config1_name:
+    if config1.use_custom_dataloader:
         loader1 = _data_loader.create_custom_incontext_data_loader(
             config1,
             skip_norm_stats=False,
@@ -273,13 +273,13 @@ def compare_dataloaders(
     )
 
     # Override random_select=False for deterministic demo selection (if applicable)
-    if hasattr(config2.data, 'random_select'):
+    if hasattr(config2.model, 'random_select'):
         config2 = dataclasses.replace(
             config2,
-            data=dataclasses.replace(config2.data, random_select=False)
+            model=dataclasses.replace(config2.model, random_select=False)
         )
 
-    if "custom_dataset" in config2_name:
+    if config2.use_custom_dataloader:
         loader2 = _data_loader.create_custom_incontext_data_loader(
             config2,
             skip_norm_stats=False,

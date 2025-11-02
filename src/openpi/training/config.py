@@ -562,6 +562,8 @@ class TrainConfig:
     # Number of workers to use for the data loader. Increasing this number will speed up data loading but
     # will increase memory and CPU usage.
     num_workers: int = 2
+    # If true, will use create_custom_incontext_data_loader instead of create_incontext_data_loader.
+    use_custom_dataloader: bool = False
     # Number of train steps (batches) to run.
     num_train_steps: int = 30_000
 

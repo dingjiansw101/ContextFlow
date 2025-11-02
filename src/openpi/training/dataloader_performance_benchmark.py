@@ -134,7 +134,7 @@ def benchmark_loader(
             )
 
     # Determine which create function to use
-    if "custom_dataset" in config_name:
+    if config.use_custom_dataloader:
         data_loader = _data_loader.create_custom_incontext_data_loader(
             config,
             skip_norm_stats=skip_norm_stats,
