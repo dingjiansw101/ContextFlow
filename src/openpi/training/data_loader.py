@@ -207,6 +207,7 @@ def create_custom_datasetv2(
     data_config: _config.DataConfig,
     model_config: _model.BaseModelConfig,
     data_config_factory: _config.DataConfigFactory | None = None,
+    seed: int | None = None,
 ) -> Dataset:
     """Create a custom dataset for training, using CustomLeRobotDatasetv2.
 
@@ -215,6 +216,7 @@ def create_custom_datasetv2(
         model_config: The model configuration.
         data_config_factory: The factory that created data_config. Used to access
             custom fields like random_select, sample_frames, etc.
+        seed: Random seed for reproducibility. If None, RNG is unseeded.
     """
 
     repo_id = data_config.repo_id
@@ -256,6 +258,7 @@ def create_custom_datasetv2(
         task_to_episode_path=task_to_episode_path,
         random_select=random_select,
         current_frame_sample_mode=current_frame_sample_mode,
+        seed=seed,
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)
     if data_config.prompt_from_task:
@@ -486,6 +489,7 @@ def create_incontext_data_loader(
                 episode_to_indexes_file=config.data.episode_to_indexes_file,  # 你已有的 json
                 n_frames=config.model.frame_sequence_length,
                 train_episode_index_list=getattr(data_config, "train_episode", None),
+                seed_base=config.seed,
             )
         ])
         
@@ -598,7 +602,7 @@ def create_custom_incontext_data_loaderv2(
             execute in the main process.
     """
     data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_custom_datasetv2(data_config, config.model, config.data)
+    dataset = create_custom_datasetv2(data_config, config.model, config.data, seed=config.seed)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases)
 
     data_loader = TorchDataLoader(

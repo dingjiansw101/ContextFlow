@@ -315,7 +315,7 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
                 )
 
             inputs["current_images_seq"] = curr_images_processed
-            inputs["current_images_seq_mask"] = curr_image_mask
+            inputs["current_image_masks_seq"] = curr_image_mask
 
         # current_state_seq: [num_current_frames, state_dim]
         if "current_state_seq" in data:

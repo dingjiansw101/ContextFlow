@@ -240,6 +240,7 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
         random_select: bool = True,
         current_frame_sample_mode: str = "random",
+        seed: int | None = None,
     ):
         """
         CustomLeRobotDataset extends LeRobotDataset to load both sequences and in-context demonstrations.
@@ -252,6 +253,7 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
             num_sample_actions (int): Number of actions for in-context demonstration.
             task_to_episode_path (str): Path to task_to_episode.json mapping file.
             random_select (bool): If True, randomly select demo episodes; if False, use deterministic selection (first episode).
+            seed (int | None): Random seed for reproducibility. If None, RNG is unseeded (default behavior).
         """
 
         # Initialize parent - all LeRobotDataset code, including file loading and indexing
@@ -273,7 +275,7 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         )
         self.current_frame_sample_mode = current_frame_sample_mode
         # Initialize RNG for random frame sampling
-        self._rng = np.random.default_rng()
+        self._rng = np.random.default_rng(seed)
 
     def _pick_indices_random(
         self, n_total: int, anchor_local_idx: int | None, rng: np.random.Generator
