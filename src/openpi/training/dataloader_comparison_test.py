@@ -199,6 +199,28 @@ def compare_observations(
     return all_match, messages
 
 
+def filter_messages(messages: list[str]) -> list[str]:
+    """Filter messages to show summary for matches and details for mismatches."""
+    matched = []
+    mismatched = []
+
+    for msg in messages:
+        if msg.strip().startswith('✓'):
+            matched.append(msg)
+        elif msg.strip().startswith('✗') or msg.strip().startswith('?'):
+            mismatched.append(msg)
+        else:
+            # Header messages, keep them
+            mismatched.append(msg)
+
+    result = []
+    if matched:
+        result.append(f"  ✓ {len(matched)} keys matched (types and values)")
+    result.extend(mismatched)
+
+    return result
+
+
 def compare_dataloaders(
     config1_name: str,
     config2_name: str,
@@ -306,7 +328,8 @@ def compare_dataloaders(
 
         # Compare observations
         match, messages = compare_observations(obs1, obs2, i)
-        for msg in messages:
+        filtered_messages = filter_messages(messages)
+        for msg in filtered_messages:
             print(msg)
         all_batches_match = all_batches_match and match
 

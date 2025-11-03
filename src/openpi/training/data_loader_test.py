@@ -109,9 +109,13 @@ def test_libero_incontext_dataset():
 
 def test_custom_lerobot_dataset():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
-    config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
+    config = _config.get_config("pi0mini_incontext_libero_custom_dataset_debug")
+    config = dataclasses.replace(
+        config,
+        data=dataclasses.replace(config.data, frame_sequence_length=6)
+    )
     data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_custom_dataset(data_config, config.model)
+    dataset = create_custom_dataset(data_config, config.model, config.data)
     for i in range(len(dataset)):
         print(dataset[i].keys())
 
@@ -224,5 +228,5 @@ if __name__ == "__main__":
     # test_libero_incontext_dataset()
     # test_libero_incontext_data_loader()
     # test_AddImagePromptTransform()
-    # test_custom_lerobot_dataset()
-    test_create_custom_incontext_data_loader()
+    test_custom_lerobot_dataset()
+    # test_create_custom_incontext_data_loader()

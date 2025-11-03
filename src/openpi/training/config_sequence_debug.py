@@ -16,7 +16,6 @@ from typing_extensions import override
 
 # 如果这个 child 只在这里用到某些 policy/模块，可以直接在这里 import
 import openpi.policies.libero_incontext_policy as libero_incontext_policy
-import openpi.policies.libero_policy as libero_policy
 
 
 def build(api) -> list["api.TrainConfig"]:
@@ -2376,6 +2375,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=8,
+        # num_workers=0,
         batch_size=32,
     ), 
     api.TrainConfig(

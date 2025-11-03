@@ -167,6 +167,8 @@ def build(api) -> list["api.TrainConfig"]:
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
         task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+        states_cache_path: str = "metadata/libero/episode_states_cache.json"
+        actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
         random_select: bool = True  # If True, randomly select demo episodes; if False, use deterministic selection
         norm_stats_aliases: dict[str, str] | None = dataclasses.field(default_factory=lambda: {
             "dem_prompt_all_states": "state",
@@ -3269,20 +3271,18 @@ def build(api) -> list["api.TrainConfig"]:
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
             sample_frames=2, sample_actions=32, random_select=True,
         ),
-        data=CustomLeRobotLiberoIncontextDataConfig(
+        data=LeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=api.DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            frame_sequence_length=1,
-            sample_frames=2,
-            sample_actions=32,
-            task_to_episode_path="metadata/libero/task_to_episode.json",
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-            random_select=True,
+            libero_input_refactor=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
