@@ -17,7 +17,7 @@ import openpi.models.model as _model
 import openpi.training.config as _config
 import openpi.transforms as _transforms
 
-from openpi.training.custom_dataset import CustomLeRobotDataset
+from openpi.training.custom_dataset import CustomLeRobotDataset, CustomLeRobotDatasetv2
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -201,6 +201,66 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
 
     return dataset
 
+
+
+def create_custom_datasetv2(
+    data_config: _config.DataConfig,
+    model_config: _model.BaseModelConfig,
+    data_config_factory: _config.DataConfigFactory | None = None,
+) -> Dataset:
+    """Create a custom dataset for training, using CustomLeRobotDatasetv2.
+
+    Args:
+        data_config: The data configuration created by the factory.
+        model_config: The model configuration.
+        data_config_factory: The factory that created data_config. Used to access
+            custom fields like random_select, sample_frames, etc.
+    """
+
+    repo_id = data_config.repo_id
+    if repo_id is None:
+        raise ValueError("Repo ID is not set. Cannot create dataset.")
+    if repo_id == "fake":
+        return FakeDataset(model_config, num_samples=1024)
+    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, local_files_only=data_config.local_files_only)
+
+    # Get CustomLeRobotDataset-specific parameters from factory (if provided) or use defaults
+    if data_config_factory is not None:
+        num_current_frames = getattr(data_config_factory, 'frame_sequence_length', 1)
+        num_sample_frames = getattr(data_config_factory, 'sample_frames', 2)
+        num_sample_actions = getattr(data_config_factory, 'sample_actions', 32)
+        task_to_episode_path = getattr(data_config_factory, 'task_to_episode_path', "metadata/libero/task_to_episode.json")
+        random_select = getattr(data_config_factory, 'random_select', True)
+        current_frame_sample_mode = getattr(data_config_factory, 'current_frame_sample_mode', "random")
+    else:
+        # Fallback to defaults if no factory provided
+        num_current_frames = 1
+        num_sample_frames = 2
+        num_sample_actions = 32
+        task_to_episode_path = "metadata/libero/task_to_episode.json"
+        random_select = True
+        current_frame_sample_mode = "random"
+    # Build delta_timestamps for each action sequence key (for compatibility)
+    dataset = CustomLeRobotDatasetv2(
+        data_config.repo_id,
+        episodes=data_config.train_episode if not is_effective_none(data_config.train_episode) else None,
+        delta_timestamps = {
+            key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
+            for key in data_config.action_sequence_keys
+        },
+        local_files_only=data_config.local_files_only,
+        # Pass CustomLeRobotDataset specific parameters from factory
+        num_current_frames=num_current_frames,
+        num_sample_frames=num_sample_frames,
+        num_sample_actions=num_sample_actions,
+        task_to_episode_path=task_to_episode_path,
+        random_select=random_select,
+        current_frame_sample_mode=current_frame_sample_mode,
+    )
+    # Optionally: Prompt transform for task if needed (as in regular dataset)
+    if data_config.prompt_from_task:
+        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
+    return dataset
 
 
 def create_custom_dataset(
@@ -488,6 +548,57 @@ def create_custom_incontext_data_loader(
     """
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_custom_dataset(data_config, config.model, config.data)
+    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases)
+
+    data_loader = TorchDataLoader(
+        dataset,
+        local_batch_size=config.batch_size // jax.process_count(),
+        sharding=sharding,
+        shuffle=shuffle,
+        num_batches=num_batches,
+        num_workers=num_workers,
+        seed=config.seed,
+    )
+
+    class DataLoaderImpl(DataLoader):
+        def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
+            self._data_config = data_config
+            self._data_loader = data_loader
+
+        def data_config(self) -> _config.DataConfig:
+            return self._data_config
+
+        def __iter__(self):
+            for batch in self._data_loader:
+                yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
+
+    return DataLoaderImpl(data_config, data_loader)
+
+def create_custom_incontext_data_loaderv2(
+    config: _config.TrainConfig,
+    *,
+    sharding: jax.sharding.Sharding | None = None,
+    skip_norm_stats: bool = False,
+    shuffle: bool = False,
+    num_batches: int | None = None,
+    num_workers: int = 0,
+) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
+    """Create a data loader for training.
+
+    Args:
+        config: The training configuration.
+        sharding: The sharding to use for the data loader. If None, the data loader will
+            use a single device sharding.
+        skip_norm_stats: Whether to skip data normalization.
+        shuffle: Whether to shuffle the data.
+        num_batches: Determines the number of batches to return. If the number exceeds the
+            number of batches in the dataset, the data loader will loop over the dataset.
+            If not provided, will iterate over the dataset indefinitely.
+        num_workers: The number of worker processes to use. If zero, the data loader will
+            execute in the main process.
+    """
+    data_config = config.data.create(config.assets_dirs, config.model)
+    dataset = create_custom_datasetv2(data_config, config.model, config.data)
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases)
 
     data_loader = TorchDataLoader(

@@ -271,7 +271,44 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
             task_to_episode_path=task_to_episode_path,
             random_select=random_select,
         )
+        self.current_frame_sample_mode = current_frame_sample_mode
+        # Initialize RNG for random frame sampling
+        self._rng = np.random.default_rng()
 
+    def _pick_indices_random(
+        self, n_total: int, anchor_local_idx: int | None, rng: np.random.Generator
+    ) -> list[int]:
+        """Randomly sample frame indices from episode, optionally keeping anchor frame.
+
+        Adapted from AddCurrentFramesSequenceTransform._pick_indices_random in transforms.py.
+
+        Args:
+            n_total: Total number of frames in the episode
+            anchor_local_idx: Local index of the anchor (current) frame, or None
+            rng: Random number generator instance
+
+        Returns:
+            List of local frame indices (sorted in temporal order)
+        """
+        if self.num_current_frames > n_total:
+            raise ValueError(
+                f"num_current_frames={self.num_current_frames} > episode length n_total={n_total}"
+            )
+
+        # Always keep anchor when sampling randomly (matching keep_anchor_when_random=True)
+        if anchor_local_idx is not None and 0 <= anchor_local_idx < n_total:
+            # Fix anchor, then randomly sample (num_current_frames - 1) from remaining frames
+            rest = np.delete(np.arange(n_total), anchor_local_idx)
+            k = self.num_current_frames - 1
+            choose = rng.choice(rest, size=k, replace=False)
+            loc = np.concatenate([[anchor_local_idx], choose])
+        else:
+            # Fallback to simple random sampling
+            loc = rng.choice(n_total, size=self.num_current_frames, replace=False)
+
+        # Sort to maintain temporal order
+        loc = np.sort(loc)
+        return [int(i) for i in loc]
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
         """Get a single sample from the dataset with custom processing.
@@ -316,18 +353,57 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index)
         item.update(incontext_demo)
 
-        # TODO: load current frames sequence
-        # if self.num_current_frames > 1:
-        #     # TODO: merge the situation when there is only one frame in the current frames sequence
-        #     # pass
-        #     import ipdb; ipdb.set_trace()
-        # TODO: extract data with the following shape
-        # item['current_images_seq']['image']: (num_current_frames, 3, h, w)
-        # item['current_images_seq']['wrist_image']: (num_current_frames, 3, h, w)
-        # item['current_state_seq']: (num_current_frames, 8)
-        # item['actions_seq']: (num_current_frames, horizon, 7)
+        # Load current frames sequence (if num_current_frames > 1)
+        assert self.num_current_frames > 1, "num_current_frames must be greater than 1"
+        # Get episode frame boundaries
+        ep_start = self.episode_data_index["from"][current_ep_idx]
+        ep_end = self.episode_data_index["to"][current_ep_idx]
+
+        # Create frame list for episode (global indices)
+        frame_list = list(range(ep_start, ep_end))
+
+        # Sample frame indices based on current_frame_sample_mode
+        # TODO: simplify the pick_indices_random function. 
+        # (1) why not directly operate on global indices?
+        # (2) anchor idex may not be necessary
+        if self.current_frame_sample_mode == "random":
+            sampled_local_indices = self._pick_indices_random(
+                n_total=len(frame_list),
+                anchor_local_idx=item['frame_index'],
+                rng=self._rng
+            )
+        else:
+            # Default to uniform spacing
+            raise ValueError(f"Unsupported current_frame_sample_mode: {self.current_frame_sample_mode}")
+
+        # Convert local indices to global indices
+        sampled_global_indices = [frame_list[i] for i in sampled_local_indices]
+
+        # Fetch sampled frames using HuggingFace dataset API
+        sampled_items = self.hf_dataset.select(sampled_global_indices)
+
+        # Extract images, states, and actions for each sampled frame
+        # For each sampled frame, we need to get its action sequence using _get_query_indices
+        actions_list = []
+        actions_padding_list = []
+        for frame_idx in sampled_global_indices:
+            # Get action sequence for this frame (following lines 305-312)
+            assert self.delta_indices is not None, "delta_indices must be set"
+            frame_query_indices, frame_padding = self._get_query_indices(frame_idx, current_ep_idx)
+            frame_query_result = self._query_hf_dataset(frame_query_indices)
+            # Extract the actions from the query result
+            actions_list.append(frame_query_result['actions'])
+            actions_padding_list.append(frame_padding['actions_is_pad'])
+
+        # print("idx: ", idx)
         
-        # TODO: handle padding
+        item["current_images_seq"] = {}
+        item["current_images_seq"]["image"] = torch.stack(sampled_items["image"])
+        item["current_images_seq"]["wrist_image"] = torch.stack(sampled_items["wrist_image"])
+        item["current_state_seq"] = torch.stack(sampled_items["state"])
+        item["actions_seq"] = torch.stack(actions_list)
+        # item["actions_padding_seq"] = torch.stack(actions_padding_list)
         # import ipdb; ipdb.set_trace()
+
         return item
 

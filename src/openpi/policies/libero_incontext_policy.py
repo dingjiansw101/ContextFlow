@@ -281,6 +281,9 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             inputs["dem_prompt_all_actions"] = padded_actions
             inputs["dem_prompt_all_actions_mask"] = np.ones(len(padded_actions), dtype=bool)
 
+        # TODO: Process current frames sequence (NEW for CustomLeRobotDatasetv2)
+
+        
         # Pass through optional fields (same as LiberoIncontextInputs_refactor)
         if "actions" in data:
             actions = transforms.pad_to_dim(data["actions"], self.action_dim)
