@@ -14,6 +14,8 @@ import torch
 from tqdm import tqdm
 
 import openpi.models.model as _model
+from openpi.models import pi0_fast_incontext as _pi0_fast_incontext
+from openpi.models import tokenizer as _tokenizer
 import openpi.training.config as _config
 import openpi.transforms as _transforms
 
@@ -458,6 +460,16 @@ def create_incontext_data_loader(
             )
         ])
 
+
+    if isinstance(config.model, _pi0_fast_incontext.Pi0FASTIncontextConfig):
+        fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
+        dataset = TransformedDataset(
+            dataset,
+            _wrap_transforms_with_profiler(
+                [_transforms.TokenizeFASTIncontextInputs(fast_tokenizer)],
+                "model_tokenize_fast_incontext",
+            ),
+        )
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
         dataset,

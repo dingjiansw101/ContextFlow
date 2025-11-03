@@ -1424,6 +1424,102 @@ class TokenizeFASTInputs(DataTransformFn):
 
 
 @dataclasses.dataclass(frozen=True)
+class TokenizeFASTIncontextInputs(DataTransformFn):
+    tokenizer: _tokenizer.FASTTokenizer
+    max_incontext_steps: int = 4
+
+    def _encode_state_sequence(self, states: np.ndarray) -> np.ndarray:
+        discretized = np.digitize(np.asarray(states), bins=np.linspace(-1, 1, 256 + 1)[:-1]) - 1
+        base = self.tokenizer._paligemma_tokenizer.vocab_size() - 1 - self.tokenizer._fast_skip_tokens
+        return (base - discretized.astype(np.int32)).reshape(-1)
+
+    def _encode_action_sequence(self, actions: np.ndarray) -> np.ndarray:
+        fast_tokens = self.tokenizer._fast_tokenizer(np.asarray(actions)[None])[0]
+        return self.tokenizer._act_tokens_to_paligemma_tokens(fast_tokens).astype(np.int32)
+
+    def _pad_tokens(self, tokens: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        max_len = self.tokenizer._max_len
+        tokens = np.asarray(tokens, dtype=np.int32)
+        if tokens.size > max_len:
+            logging.warning(
+                "Incontext token length (%d) exceeds max length (%d); truncating.",
+                tokens.size,
+                max_len,
+            )
+            tokens = tokens[:max_len]
+        padded = np.zeros(max_len, dtype=np.int32)
+        mask = np.zeros(max_len, dtype=bool)
+        padded[: tokens.size] = tokens
+        mask[: tokens.size] = True
+        return padded, mask
+
+    def _concat_encoded_states(self, states: np.ndarray) -> np.ndarray:
+        states = np.asarray(states)
+        if states.ndim == 2:
+            chunks = [self._encode_state_sequence(states[: self.max_incontext_steps])]
+        elif states.ndim >= 3:
+            chunks = [
+                self._encode_state_sequence(ep[: self.max_incontext_steps])
+                for ep in states
+            ]
+        else:
+            raise ValueError("demonstration states must be at least 2-D")
+        if not chunks:
+            return np.zeros(0, dtype=np.int32)
+        return np.concatenate(chunks, axis=0)
+
+    def _concat_encoded_actions(self, actions: np.ndarray) -> np.ndarray:
+        actions = np.asarray(actions)
+        if actions.ndim == 2:
+            chunks = [self._encode_action_sequence(actions[: self.max_incontext_steps])]
+        elif actions.ndim >= 3:
+            chunks = [
+                self._encode_action_sequence(ep[: self.max_incontext_steps])
+                for ep in actions
+            ]
+        else:
+            raise ValueError("demonstration actions must be at least 2-D")
+        if not chunks:
+            return np.zeros(0, dtype=np.int32)
+        return np.concatenate(chunks, axis=0)
+
+    def __call__(self, data: DataDict) -> DataDict:
+        if (prompt := data.pop("prompt", None)) is None:
+            raise ValueError("TokenizeFASTIncontextInputs requires a 'prompt' field")
+
+        demo_states = data.get("dem_prompt_all_states")
+        demo_actions = data.get("dem_prompt_all_actions")
+        if demo_states is None or demo_actions is None:
+            raise ValueError("Incontext FAST tokenization requires demo states/actions")
+
+        state_tokens = self._concat_encoded_states(demo_states)
+        action_tokens = self._concat_encoded_actions(demo_actions)
+
+        padded_state_tokens, state_mask = self._pad_tokens(state_tokens)
+        padded_action_tokens, action_mask = self._pad_tokens(action_tokens)
+
+        data["tokenized_incontext_states"] = padded_state_tokens
+        data["tokenized_incontext_states_mask"] = state_mask
+        data["incontext_states_ar_mask"] = np.zeros_like(padded_state_tokens, dtype=np.int32)
+        data["incontext_states_loss_mask"] = np.zeros_like(padded_state_tokens, dtype=bool)
+
+        data["tokenized_incontext_actions"] = padded_action_tokens
+        data["tokenized_incontext_actions_mask"] = action_mask
+        data["incontext_actions_ar_mask"] = np.zeros_like(padded_action_tokens, dtype=np.int32)
+        data["incontext_actions_loss_mask"] = np.zeros_like(padded_action_tokens, dtype=bool)
+
+        state = data["state"]
+        actions = data.get("actions")
+        tokens, token_mask, ar_mask, loss_mask = self.tokenizer.tokenize(prompt, state, actions)
+        data["tokenized_prompt"] = tokens
+        data["tokenized_prompt_mask"] = token_mask
+        data["token_ar_mask"] = ar_mask
+        data["token_loss_mask"] = loss_mask
+
+        return data
+
+
+@dataclasses.dataclass(frozen=True)
 class ExtractFASTActions(DataTransformFn):
     tokenizer: _tokenizer.FASTTokenizer
     action_horizon: int

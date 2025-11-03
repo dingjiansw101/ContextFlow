@@ -22,6 +22,7 @@ import openpi.models.pi0_incontextv18 as pi0_incontextv18
 import openpi.models.pi0_light as pi0Light
 import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12
 import openpi.models.pi0_light_incontextv14 as pi0_light_incontextv14
+import openpi.models.pi0_fast_incontext as pi0_fast_incontext
 
 import openpi.models.tokenizer as _tokenizer
 
@@ -414,6 +415,21 @@ class ModelTransformFactory(GroupFactory):
                     outputs=[
                         _transforms.ExtractFASTActions(
                             _tokenizer.FASTTokenizer(model_config.max_token_len),
+                            action_horizon=model_config.action_horizon,
+                            action_dim=model_config.action_dim,
+                        )
+                    ],
+                )
+            case _model.ModelType.PI0_FAST_INCONTEXT:
+                fast_tokenizer = _tokenizer.FASTTokenizer(model_config.max_token_len)
+                return _transforms.Group(
+                    inputs=[
+                        _transforms.InjectDefaultPrompt(self.default_prompt),
+                        _transforms.ResizeImages(224, 224),
+                    ],
+                    outputs=[
+                        _transforms.ExtractFASTActions(
+                            fast_tokenizer,
                             action_horizon=model_config.action_horizon,
                             action_dim=model_config.action_dim,
                         )
