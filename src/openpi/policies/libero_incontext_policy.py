@@ -281,9 +281,69 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             inputs["dem_prompt_all_actions"] = padded_actions
             inputs["dem_prompt_all_actions_mask"] = np.ones(len(padded_actions), dtype=bool)
 
-        # TODO: Process current frames sequence (NEW for CustomLeRobotDatasetv2)
+        # Process current frames sequence (NEW for CustomLeRobotDatasetv2)
+        # current_images_seq: dict with {"image": [N, H, W, 3], "wrist_image": [N, H, W, 3]}
+        if "current_images_seq" in data:
+            curr_images = data["current_images_seq"]
 
-        
+            # current_images is a dict: {"image": torch.Tensor, "wrist_image": torch.Tensor}
+            # Each tensor has shape [num_current_frames, H, W, 3] or [num_current_frames, C, H, W]
+            curr_images_processed = {}
+            curr_image_mask = {}
+
+            for key, tensor_stack in curr_images.items():
+                # Convert torch to numpy and parse entire batch at once (VECTORIZED)
+                numpy_stack = np.asarray(tensor_stack)
+                stacked = _parse_image_batch(numpy_stack)  # [num_current_frames, H, W, 3]
+
+                # Map dataset keys to model keys
+                if key == "image":
+                    curr_images_processed["base_0_rgb"] = stacked
+                    curr_image_mask["base_0_rgb"] = np.ones(len(stacked), dtype=bool)
+                elif key == "wrist_image":
+                    curr_images_processed["left_wrist_0_rgb"] = stacked
+                    curr_image_mask["left_wrist_0_rgb"] = np.ones(len(stacked), dtype=bool)
+
+            # Add right_wrist_0_rgb as zeros (similar to current observation)
+            if "base_0_rgb" in curr_images_processed:
+                sample_image = curr_images_processed["base_0_rgb"]
+                curr_images_processed["right_wrist_0_rgb"] = np.zeros_like(sample_image)
+                curr_image_mask["right_wrist_0_rgb"] = np.full(
+                    len(sample_image),
+                    fill_value=(not mask_padding),  # False if mask_padding, True otherwise
+                    dtype=bool
+                )
+
+            inputs["current_images_seq"] = curr_images_processed
+            inputs["current_images_seq_mask"] = curr_image_mask
+
+        # current_state_seq: [num_current_frames, state_dim]
+        if "current_state_seq" in data:
+            # current_state_seq: torch.Tensor [num_current_frames, D_s]
+            curr_states = np.asarray(data["current_state_seq"])
+
+            # Pad entire batch at once (VECTORIZED)
+            padded_states = transforms.pad_to_dim(curr_states, self.action_dim, axis=-1)
+
+            inputs["current_state_seq"] = padded_states
+            inputs["current_state_seq_mask"] = np.ones(len(padded_states), dtype=bool)
+
+        # actions_seq: [num_current_frames, action_horizon, action_dim]
+        if "actions_seq" in data:
+            # actions_seq: torch.Tensor [num_current_frames, H, D_a]
+            curr_actions = np.asarray(data["actions_seq"])
+
+            # Pad last dimension to action_dim (VECTORIZED)
+            # Shape: [num_current_frames, action_horizon, action_dim]
+            padded_actions = transforms.pad_to_dim(curr_actions, self.action_dim, axis=-1)
+
+            inputs["actions_seq"] = padded_actions
+
+        # actions_padding_seq: [num_current_frames, action_horizon] - boolean mask
+        if "actions_padding_seq" in data:
+            inputs["actions_padding_seq"] = np.asarray(data["actions_padding_seq"])
+
+
         # Pass through optional fields (same as LiberoIncontextInputs_refactor)
         if "actions" in data:
             actions = transforms.pad_to_dim(data["actions"], self.action_dim)

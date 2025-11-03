@@ -163,6 +163,7 @@ def build(api) -> list["api.TrainConfig"]:
         use_delta_joint_actions: bool = False
 
         # CustomLeRobotDataset specific parameters
+        custom_dataloader_version: str = "v1"  # Version of custom dataloader to use ("v1" or "v2")
         frame_sequence_length: int = 1  # Number of consecutive frames for main context
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
@@ -251,6 +252,7 @@ def build(api) -> list["api.TrainConfig"]:
         use_delta_joint_actions: bool = False
 
         # CustomLeRobotDataset specific parameters
+        custom_dataloader_version: str = "v2"  # Version of custom dataloader to use ("v1" or "v2")
         frame_sequence_length: int = 1  # Number of consecutive frames for main context
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
@@ -261,6 +263,8 @@ def build(api) -> list["api.TrainConfig"]:
         norm_stats_aliases: dict[str, str] | None = dataclasses.field(default_factory=lambda: {
             "dem_prompt_all_states": "state",
             "dem_prompt_all_actions": "actions",
+            "current_state_seq": "state",
+            "actions_seq": "actions",
         })
         current_frame_sample_mode: str = "random"
         @override
@@ -289,7 +293,12 @@ def build(api) -> list["api.TrainConfig"]:
                             "dem_prompt_states": "dem_prompt_states",
                             "dem_prompt_actions": "dem_prompt_actions",
                             "selected_episode": "selected_episode",
-                            "current_images_seq": "current_images_seq",
+                            # V2-specific: current frame sequence fields
+                            # current_images_seq is nested, so map the flattened keys
+                            "current_images_seq": {
+                                "image": "current_images_seq/image",
+                                "wrist_image": "current_images_seq/wrist_image"
+                            },
                             "current_state_seq": "current_state_seq",
                             "actions_seq": "actions_seq",
                         }

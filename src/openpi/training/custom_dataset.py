@@ -378,14 +378,14 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
 
         # Convert local indices to global indices
         sampled_global_indices = [frame_list[i] for i in sampled_local_indices]
-
+        print("sampled_global_indices: ", sampled_global_indices)
         # Fetch sampled frames using HuggingFace dataset API
         sampled_items = self.hf_dataset.select(sampled_global_indices)
 
         # Extract images, states, and actions for each sampled frame
         # For each sampled frame, we need to get its action sequence using _get_query_indices
         actions_list = []
-        actions_padding_list = []
+        # actions_padding_list = []
         for frame_idx in sampled_global_indices:
             # Get action sequence for this frame (following lines 305-312)
             assert self.delta_indices is not None, "delta_indices must be set"
@@ -393,7 +393,7 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
             frame_query_result = self._query_hf_dataset(frame_query_indices)
             # Extract the actions from the query result
             actions_list.append(frame_query_result['actions'])
-            actions_padding_list.append(frame_padding['actions_is_pad'])
+            # actions_padding_list.append(frame_padding['actions_is_pad'])
 
         # print("idx: ", idx)
         

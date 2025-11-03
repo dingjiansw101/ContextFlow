@@ -595,6 +595,7 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
             loc = self._pick_indices_around(n, anchor_local_idx)
         elif self.sampling == "random":
             loc = self._pick_indices_random(n, anchor_local_idx, rng)
+            print("loc: ", loc) 
         elif self.sampling == "random_stratified":
             loc = self._pick_indices_random_stratified(n, anchor_local_idx, rng)
         else:
@@ -1599,6 +1600,9 @@ class ResizeImages(DataTransformFn):
         # Resize demonstration prompt images if present (for CustomLeRobotDataset)
         if "dem_prompt_images" in data:
             data["dem_prompt_images"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["dem_prompt_images"].items()}
+        # V2-specific: resize current frames sequence images if present
+        if "current_images_seq" in data:
+            data["current_images_seq"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["current_images_seq"].items()}
         return data
 
 
