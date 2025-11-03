@@ -557,14 +557,14 @@ class Module(nn.Module):
     @at.typecheck
     def decode_with_cache(
         self,
-        embedded_suf: Sequence[at.Float[at.Array, "b t d"] | None],  # b is actually the BN dimension
+        embedded_suf: Sequence[at.Float[at.Array, "b _t _d"] | None],  # b is actually the BN dimension
         positions_suf: at.Int[at.Array, "b t"],
         mask_suf: at.Bool[at.Array, "b t s"],  # s = Tpm+Ts
         *,
         pm_cache: PMCache,
         ep_index: at.Int[at.Array,"b"] | None = None, 
         deterministic: bool = True,
-    ) -> Sequence[at.Float[at.Array, "b t d"] | None]:
+    ) -> Sequence[at.Float[at.Array, "b _t _d"] | None]:
         embedded_suf = jax.tree.map(lambda e: e.astype(self.embed_dtype) if e is not None else None, embedded_suf)
         mask_suf_b = jnp.asarray(mask_suf)[:, None, :, :]  # [BN,1,Ts,Tpm+Ts]
 
