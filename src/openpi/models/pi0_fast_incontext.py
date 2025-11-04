@@ -183,7 +183,7 @@ class Pi0FASTIncontext(_model.BaseModel):
 
     @at.typecheck
     def embed_inputs(
-        self, obs: _model.ObservationIncontext
+        self, obs: _model.ObservationFASTIncontext
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Int[at.Array, "b s"]]:
         input_mask = []
         ar_mask = []
@@ -191,18 +191,45 @@ class Pi0FASTIncontext(_model.BaseModel):
         
         # 1) in-context image tokens (demo prompts)
         if self.use_image_prompts and obs.incontext_images is not None:
-            for name in obs.incontext_images:
-                image_token_embeddings, _ = self.PaliGemma.img(obs.incontext_images[name], train=False)
-                token_embeddings.append(image_token_embeddings)
-                input_mask.append(
-                    einops.repeat(
-                        obs.incontext_image_masks[name],
-                        "b -> b s",
-                        s=image_token_embeddings.shape[1],
-                    )
-                )
-                # image tokens attend to each other --> AR mask = 0
-                ar_mask.append(0 * input_mask[-1])
+            for name, image_sequence in obs.incontext_images.items():
+                mask_sequence = None
+                if obs.incontext_image_masks is not None and name in obs.incontext_image_masks:
+                    mask_sequence = jnp.asarray(obs.incontext_image_masks[name], dtype=jnp.bool_)
+
+                if image_sequence.ndim == 5:
+                    batch_size, seq_len, height, width, channel = image_sequence.shape
+                    flat_images = image_sequence.reshape(batch_size * seq_len, height, width, channel)
+                    flat_tokens, _ = self.PaliGemma.img(flat_images, train=False)
+                    token_len = flat_tokens.shape[1]
+                    tokens = flat_tokens.reshape(batch_size, seq_len * token_len, flat_tokens.shape[-1])
+
+                    if mask_sequence is None:
+                        frame_mask = jnp.ones((batch_size, seq_len), dtype=jnp.bool_)
+                    else:
+                        frame_mask = mask_sequence.reshape(batch_size, seq_len)
+
+                    token_mask = einops.repeat(frame_mask, "b t -> b (t tok)", tok=token_len)
+
+                elif image_sequence.ndim == 6:
+                    batch_size, episodes, seq_len, height, width, channel = image_sequence.shape
+                    flat_images = image_sequence.reshape(batch_size * episodes * seq_len, height, width, channel)
+                    flat_tokens, _ = self.PaliGemma.img(flat_images, train=False)
+                    token_len = flat_tokens.shape[1]
+                    tokens = flat_tokens.reshape(batch_size, episodes * seq_len * token_len, flat_tokens.shape[-1])
+
+                    if mask_sequence is None:
+                        frame_mask = jnp.ones((batch_size, episodes * seq_len), dtype=jnp.bool_)
+                    else:
+                        frame_mask = mask_sequence.reshape(batch_size, episodes * seq_len)
+
+                    token_mask = einops.repeat(frame_mask, "b m -> b (m tok)", tok=token_len)
+
+                else:
+                    raise ValueError(f"incontext image tensor '{name}' must be 5-D or 6-D, got {image_sequence.ndim}-D")
+
+                token_embeddings.append(tokens)
+                input_mask.append(token_mask)
+                ar_mask.append(jnp.zeros(token_mask.shape, dtype=jnp.int32))
 
         # 2) in-context state tokens
         if obs.tokenized_incontext_states is None or obs.tokenized_incontext_states_mask is None:
@@ -257,7 +284,7 @@ class Pi0FASTIncontext(_model.BaseModel):
 
     @override
     def compute_loss(
-        self, rng: at.KeyArrayLike, observation: _model.ObservationIncontext, actions: _model.Actions, *, train: bool = False
+        self, rng: at.KeyArrayLike, observation: _model.ObservationFASTIncontext, actions: _model.Actions, *, train: bool = False
     ) -> at.Float[at.Array, "*b ah"]:
         observation = _model.preprocess_observation_incontext_fast(
             rng, observation, train=train, image_keys=list(observation.images.keys())
@@ -297,7 +324,7 @@ class Pi0FASTIncontext(_model.BaseModel):
     def sample_actions(
         self,
         rng: at.KeyArrayLike,
-        observation: _model.ObservationIncontext,
+        observation: _model.ObservationFASTIncontext,
         *,
         max_decoding_steps: int | at.Int[at.Array, ""] = 256,
         temperature: float = 0.0,

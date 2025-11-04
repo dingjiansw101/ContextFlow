@@ -133,14 +133,28 @@ class Observation(Generic[ArrayT]):
 @at.typecheck
 @struct.dataclass
 class ObservationIncontext(Generic[ArrayT]):
+    """Holds observations, i.e., inputs to the model.
+
+    See `Observation.from_dict` to see the expected dictionary form. This is the format
+    that should be produced by the data transforms.
+    """
+
+    # Images, in [-1, 1] float32.
     images: dict[str, at.Float[ArrayT, "*b h w c"]]
+    # Image masks, with same keys as images.
     image_masks: dict[str, at.Bool[ArrayT, "*b"]]
+    # Low-dimensional robot state.
     state: at.Float[ArrayT, "*b s"]
 
-    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]] | dict[str, at.Float[ArrayT, "*b e t h w c"]] | None = None
+    # In-context data.
+    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]] | dict[str, at.Float[ArrayT, "*b e t h w c"]] | None = (
+        None
+    )
     incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]] | dict[str, at.Bool[ArrayT, "*b e t"]] | None = None
+    # incontext states, q is the max_len of episode
     incontext_states: at.Float[ArrayT, "*b q s"] | at.Float[ArrayT, "*b e q s"] | None = None
     incontext_state_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
+    # incontext actions
     incontext_actions: at.Float[ArrayT, "*b q s"] | at.Float[ArrayT, "*b e q s"] | None = None
     incontext_action_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
     # selected episode for incontext prompt
@@ -148,10 +162,17 @@ class ObservationIncontext(Generic[ArrayT]):
 
     # Tokenized prompt.
     tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
+    # Tokenized prompt mask.
     tokenized_prompt_mask: at.Bool[ArrayT, "*b l"] | None = None
+
+    # pi0-fast model specific fields.
+
+    # Token auto-regressive mask (for FAST autoregressive model).
     token_ar_mask: at.Int[ArrayT, "*b l"] | None = None
+    # Token loss mask (for FAST autoregressive model).
     token_loss_mask: at.Bool[ArrayT, "*b l"] | None = None
 
+    # XJ: training sequence
     current_images_seq: dict[str, at.Float[ArrayT, "*b n h w c"]] | None = None
     current_image_masks_seq: dict[str, at.Bool[ArrayT, "*b n"]] | None = None
     current_state_seq: at.Float[ArrayT, "*b n s"] | None = None
@@ -166,18 +187,18 @@ class ObservationIncontext(Generic[ArrayT]):
         # Ensure that tokenized_prompt and tokenized_prompt_mask are provided together.
         if ("tokenized_prompt" in data) != ("tokenized_prompt_mask" in data):
             raise ValueError("tokenized_prompt and tokenized_prompt_mask must be provided together.")
-
+        # If images are uint8, convert them to [-1, 1] float32.
         for key in data["image"]:
             if data["image"][key].dtype == np.uint8:
                 data["image"][key] = data["image"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
 
-        if "dem_prompt_images" in data and data["dem_prompt_images"] is not None:
+        if "dem_prompt_images" in data:
             for key in data["dem_prompt_images"]:
                 if data["dem_prompt_images"][key].dtype == np.uint8:
                     data["dem_prompt_images"][key] = (
                         data["dem_prompt_images"][key].astype(np.float32) / 255.0 * 2.0 - 1.0
                     )
-
+        # XJ: training sequence
         cur_imgs_seq = None
         if "current_images_seq" in data and data["current_images_seq"] is not None:
             cur_imgs_seq = {}
@@ -204,6 +225,7 @@ class ObservationIncontext(Generic[ArrayT]):
             tokenized_prompt_mask=data.get("tokenized_prompt_mask"),
             token_ar_mask=data.get("token_ar_mask"),
             token_loss_mask=data.get("token_loss_mask"),
+            # XJ: training sequence
             current_images_seq=cur_imgs_seq,
             current_image_masks_seq=data.get("current_image_masks_seq"),
             current_state_seq=data.get("current_state_seq"),
@@ -214,6 +236,7 @@ class ObservationIncontext(Generic[ArrayT]):
         )
 
     def to_dict(self) -> at.PyTree[ArrayT]:
+        """Convert the Observation to a nested dict."""
         result = dataclasses.asdict(self)
         result["image"] = result.pop("images")
         result["image_mask"] = result.pop("image_masks")
@@ -225,6 +248,8 @@ class ObservationIncontext(Generic[ArrayT]):
         result["dem_prompt_all_actions_mask"] = result.pop("incontext_action_masks")
 
         result["selected_episode"] = result.pop("incontext_selected_episode")
+
+        # XJ: training sequence
         result["current_images_seq"] = result.pop("current_images_seq")
         result["current_image_masks_seq"] = result.pop("current_image_masks_seq")
         result["current_state_seq"] = result.pop("current_state_seq")
@@ -234,10 +259,28 @@ class ObservationIncontext(Generic[ArrayT]):
         result["future_states"] = result.pop("future_states")
         return result
 
-
 @at.typecheck
 @struct.dataclass
-class ObservationFASTIncontext(ObservationIncontext[ArrayT]):
+class ObservationFASTIncontext(Generic[ArrayT]):
+    images: dict[str, at.Float[ArrayT, "*b h w c"]]
+    image_masks: dict[str, at.Bool[ArrayT, "*b"]]
+    state: at.Float[ArrayT, "*b sf"]
+
+    incontext_images: dict[str, at.Float[ArrayT, "*b t h w c"]] | dict[str, at.Float[ArrayT, "*b e t h w c"]] | None = None
+    incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]] | dict[str, at.Bool[ArrayT, "*b e t"]] | None = None
+    incontext_states: at.Float[ArrayT, "*b q ds"] | at.Float[ArrayT, "*b e q ds"] | None = None
+    incontext_state_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
+    incontext_actions: at.Float[ArrayT, "*b q da"] | at.Float[ArrayT, "*b e q da"] | None = None
+    incontext_action_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
+    incontext_tracks: at.Float[ArrayT, "*b q st"] | at.Float[ArrayT, "*b e q st"] | None = None
+    incontext_track_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
+    incontext_selected_episode: at.Int[ArrayT, "*b e"] | None = None
+
+    tokenized_prompt: at.Int[ArrayT, "*b l"] | None = None
+    tokenized_prompt_mask: at.Bool[ArrayT, "*b l"] | None = None
+    token_ar_mask: at.Int[ArrayT, "*b l"] | None = None
+    token_loss_mask: at.Bool[ArrayT, "*b l"] | None = None
+
     tokenized_incontext_states: at.Int[ArrayT, "*b ls"] | None = None
     tokenized_incontext_states_mask: at.Bool[ArrayT, "*b ls"] | None = None
     incontext_states_ar_mask: at.Int[ArrayT, "*b ls"] | None = None
@@ -248,10 +291,80 @@ class ObservationFASTIncontext(ObservationIncontext[ArrayT]):
     incontext_actions_ar_mask: at.Int[ArrayT, "*b la"] | None = None
     incontext_actions_loss_mask: at.Bool[ArrayT, "*b la"] | None = None
 
+    current_images_seq: dict[str, at.Float[ArrayT, "*b n h w c"]] | None = None
+    current_image_masks_seq: dict[str, at.Bool[ArrayT, "*b n"]] | None = None
+    current_state_seq: at.Float[ArrayT, "*b n ss"] | None = None
+    actions_seq: at.Float[ArrayT, "*b n ah ad"] | None = None
+
+    @staticmethod
+    def _ensure_float_image(arr):
+        if arr.dtype == np.uint8:
+            arr = arr.astype(np.float32) / 255.0 * 2.0 - 1.0
+        return jnp.asarray(arr, dtype=jnp.float32)
+
     @classmethod
     def from_dict(cls, data: at.PyTree[ArrayT]) -> "ObservationFASTIncontext[ArrayT]":
-        base = ObservationIncontext.from_dict(data)
-        base_fields = {field.name: getattr(base, field.name) for field in dataclasses.fields(base)}
+        images = {k: cls._ensure_float_image(v) for k, v in data["image"].items()}
+        image_masks = {k: jnp.asarray(v, dtype=jnp.bool_) for k, v in data["image_mask"].items()}
+        state = jnp.asarray(data["state"], dtype=jnp.float32)
+
+        inctx_images = None
+        if data.get("dem_prompt_images") is not None:
+            inctx_images = {k: cls._ensure_float_image(v) for k, v in data["dem_prompt_images"].items()}
+        inctx_image_masks = None
+        if data.get("dem_prompt_images_mask") is not None:
+            inctx_image_masks = {k: jnp.asarray(v, dtype=jnp.bool_) for k, v in data["dem_prompt_images_mask"].items()}
+
+        inctx_states = None
+        if data.get("dem_prompt_all_states") is not None:
+            inctx_states = jnp.asarray(data["dem_prompt_all_states"], dtype=jnp.float32)
+        inctx_states_mask = None
+        if data.get("dem_prompt_all_states_mask") is not None:
+            inctx_states_mask = jnp.asarray(data["dem_prompt_all_states_mask"], dtype=jnp.bool_)
+
+        inctx_actions = None
+        if data.get("dem_prompt_all_actions") is not None:
+            inctx_actions = jnp.asarray(data["dem_prompt_all_actions"], dtype=jnp.float32)
+        inctx_actions_mask = None
+        if data.get("dem_prompt_all_actions_mask") is not None:
+            inctx_actions_mask = jnp.asarray(data["dem_prompt_all_actions_mask"], dtype=jnp.bool_)
+
+        inctx_tracks = None
+        if data.get("dem_prompt_tracks") is not None:
+            inctx_tracks = jnp.asarray(data["dem_prompt_tracks"], dtype=jnp.float32)
+        inctx_track_masks = None
+        if data.get("dem_prompt_tracks_mask") is not None:
+            inctx_track_masks = jnp.asarray(data["dem_prompt_tracks_mask"], dtype=jnp.bool_)
+
+        cur_images_seq = None
+        if data.get("current_images_seq") is not None:
+            cur_images_seq = {k: cls._ensure_float_image(v) for k, v in data["current_images_seq"].items()}
+        cur_image_masks_seq = None
+        if data.get("current_image_masks_seq") is not None:
+            cur_image_masks_seq = {k: jnp.asarray(v, dtype=jnp.bool_) for k, v in data["current_image_masks_seq"].items()}
+        cur_state_seq = None
+        if data.get("current_state_seq") is not None:
+            cur_state_seq = jnp.asarray(data["current_state_seq"], dtype=jnp.float32)
+        cur_actions_seq = None
+        if data.get("actions_seq") is not None:
+            cur_actions_seq = jnp.asarray(data["actions_seq"], dtype=jnp.float32)
+
+        tokenized_prompt = None
+        if data.get("tokenized_prompt") is not None:
+            tokenized_prompt = jnp.asarray(data["tokenized_prompt"], dtype=jnp.int32)
+        tokenized_prompt_mask = None
+        if data.get("tokenized_prompt_mask") is not None:
+            tokenized_prompt_mask = jnp.asarray(data["tokenized_prompt_mask"], dtype=jnp.bool_)
+        token_ar_mask = None
+        if data.get("token_ar_mask") is not None:
+            token_ar_mask = jnp.asarray(data["token_ar_mask"], dtype=jnp.int32)
+        token_loss_mask = None
+        if data.get("token_loss_mask") is not None:
+            token_loss_mask = jnp.asarray(data["token_loss_mask"], dtype=jnp.bool_)
+
+        selected_episode = None
+        if data.get("selected_episode") is not None:
+            selected_episode = jnp.asarray(data["selected_episode"], dtype=jnp.int32)
 
         tokenized_states = data.get("tokenized_incontext_states")
         if tokenized_states is not None:
@@ -280,7 +393,22 @@ class ObservationFASTIncontext(ObservationIncontext[ArrayT]):
             actions_loss_mask = jnp.asarray(actions_loss_mask, dtype=jnp.bool_)
 
         return cls(
-            **base_fields,
+            images=images,
+            image_masks=image_masks,
+            state=state,
+            incontext_images=inctx_images,
+            incontext_image_masks=inctx_image_masks,
+            incontext_states=inctx_states,
+            incontext_state_masks=inctx_states_mask,
+            incontext_actions=inctx_actions,
+            incontext_action_masks=inctx_actions_mask,
+            incontext_tracks=inctx_tracks,
+            incontext_track_masks=inctx_track_masks,
+            incontext_selected_episode=selected_episode,
+            tokenized_prompt=tokenized_prompt,
+            tokenized_prompt_mask=tokenized_prompt_mask,
+            token_ar_mask=token_ar_mask,
+            token_loss_mask=token_loss_mask,
             tokenized_incontext_states=tokenized_states,
             tokenized_incontext_states_mask=tokenized_states_mask,
             incontext_states_ar_mask=states_ar_mask,
@@ -289,24 +417,38 @@ class ObservationFASTIncontext(ObservationIncontext[ArrayT]):
             tokenized_incontext_actions_mask=tokenized_actions_mask,
             incontext_actions_ar_mask=actions_ar_mask,
             incontext_actions_loss_mask=actions_loss_mask,
+            current_images_seq=cur_images_seq,
+            current_image_masks_seq=cur_image_masks_seq,
+            current_state_seq=cur_state_seq,
+            actions_seq=cur_actions_seq,
         )
 
     def to_dict(self) -> at.PyTree[ArrayT]:
-        result = super().to_dict()
-        result["tokenized_incontext_states"] = self.tokenized_incontext_states
-        result["tokenized_incontext_states_mask"] = self.tokenized_incontext_states_mask
-        result["incontext_states_ar_mask"] = self.incontext_states_ar_mask
-        result["incontext_states_loss_mask"] = self.incontext_states_loss_mask
-        result["tokenized_incontext_actions"] = self.tokenized_incontext_actions
-        result["tokenized_incontext_actions_mask"] = self.tokenized_incontext_actions_mask
-        result["incontext_actions_ar_mask"] = self.incontext_actions_ar_mask
-        result["incontext_actions_loss_mask"] = self.incontext_actions_loss_mask
+        result = dataclasses.asdict(self)
+        result["image"] = result.pop("images")
+        result["image_mask"] = result.pop("image_masks")
+        result["dem_prompt_images"] = result.pop("incontext_images")
+        result["dem_prompt_images_mask"] = result.pop("incontext_image_masks")
+        result["dem_prompt_all_states"] = result.pop("incontext_states")
+        result["dem_prompt_all_states_mask"] = result.pop("incontext_state_masks")
+        result["dem_prompt_all_actions"] = result.pop("incontext_actions")
+        result["dem_prompt_all_actions_mask"] = result.pop("incontext_action_masks")
+        result["dem_prompt_tracks"] = result.pop("incontext_tracks")
+        result["dem_prompt_tracks_mask"] = result.pop("incontext_track_masks")
+        result["selected_episode"] = result.pop("incontext_selected_episode")
+        result["tokenized_incontext_states"] = result.pop("tokenized_incontext_states")
+        result["tokenized_incontext_states_mask"] = result.pop("tokenized_incontext_states_mask")
+        result["incontext_states_ar_mask"] = result.pop("incontext_states_ar_mask")
+        result["incontext_states_loss_mask"] = result.pop("incontext_states_loss_mask")
+        result["tokenized_incontext_actions"] = result.pop("tokenized_incontext_actions")
+        result["tokenized_incontext_actions_mask"] = result.pop("tokenized_incontext_actions_mask")
+        result["incontext_actions_ar_mask"] = result.pop("incontext_actions_ar_mask")
+        result["incontext_actions_loss_mask"] = result.pop("incontext_actions_loss_mask")
+        result["current_images_seq"] = result.pop("current_images_seq")
+        result["current_image_masks_seq"] = result.pop("current_image_masks_seq")
+        result["current_state_seq"] = result.pop("current_state_seq")
+        result["actions_seq"] = result.pop("actions_seq")
         return result
-
-
-# Defines the format of the actions. This field is included as "actions" inside the dictionary
-# produced by the data transforms.
-Actions = at.Float[ArrayT, "*b ah ad"]
 
 
 def preprocess_observation(
@@ -475,8 +617,10 @@ def preprocess_observation_incontext(
 
             def flatten(x):
                 return x.reshape(batch_size * length, height, width, channel)
+
             def unflatten(x):
                 return x.reshape(batch_size, length, height, width, channel)
+
             mask_shape = (batch_size, length)
 
         elif ndim == 6:
@@ -485,12 +629,14 @@ def preprocess_observation_incontext(
 
             def flatten(x):
                 return x.reshape(batch_size * episodes * length, height, width, channel)
+
             def unflatten(x):
                 return x.reshape(batch_size, episodes, length, height, width, channel)
+
             mask_shape = (batch_size, episodes, length)
 
         else:
-            raise ValueError(f"incontext_images must be 5‑D or 6‑D, got ndim={ndim}")
+            raise ValueError(f"incontext_images must be 5-D or 6-D, got ndim={ndim}")
 
         # flatten all views (create new dict to avoid mutation)
         flattened_incontext_images = {
@@ -533,39 +679,143 @@ def preprocess_observation_incontext(
     )
 
 
+
+Actions = at.Float[ArrayT, "*b ah ad"]
+
+@at.typecheck
 def preprocess_observation_incontext_fast(
     rng: at.KeyArrayLike | None,
-    observation: "ObservationFASTIncontext",
+    observation: ObservationFASTIncontext,
     *,
     train: bool = False,
     image_keys: Sequence[str] = IMAGE_KEYS,
     image_resolution: tuple[int, int] = IMAGE_RESOLUTION,
-) -> "ObservationFASTIncontext":
-    base_obs = preprocess_observation_incontext(
-        rng,
-        observation,
-        train=train,
-        image_keys=image_keys,
-        image_resolution=image_resolution,
-    )
-    base_fields = dataclasses.asdict(base_obs)
+) -> ObservationFASTIncontext:
+    """Preprocess FAST in-context observations while preserving token fields."""
 
-    def _maybe(arr, dtype):
-        if arr is None:
-            return None
-        return jnp.asarray(arr, dtype=dtype)
+    def process_images_dict(
+        images: dict[str, at.Array],
+        *,
+        train: bool,
+        rng: at.KeyArrayLike | None,
+    ) -> dict[str, at.Array]:
+        processed: dict[str, at.Array] = {}
+        for key in image_keys:
+            image = images[key]
+            if image.shape[1:3] != image_resolution:
+                logger.info(f"Resizing image {key} from {image.shape[1:3]} to {image_resolution}")
+                image = image_tools.resize_with_pad(image, *image_resolution)
+
+            if train:
+                image01 = image / 2.0 + 0.5
+                transforms = []
+                if "wrist" not in key:
+                    height, width = image01.shape[1:3]
+                    transforms += [
+                        augmax.RandomCrop(int(width * 0.95), int(height * 0.95)),
+                        augmax.Resize(width, height),
+                        augmax.Rotate((-5, 5)),
+                    ]
+                transforms += [
+                    augmax.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5),
+                ]
+                if rng is None:
+                    raise ValueError("rng must be provided when train=True")
+                sub_rngs = jax.random.split(rng, image01.shape[0])
+                image01 = jax.vmap(augmax.Chain(*transforms))(sub_rngs, image01)
+                image = image01 * 2.0 - 1.0
+
+            processed[key] = image
+        return processed
+
+    if not set(image_keys).issubset(observation.images):
+        raise ValueError(f"images dict missing keys: expected {image_keys}, got {list(observation.images)}")
+
+    batch_shape = observation.state.shape[:-1]
+    out_images = process_images_dict(observation.images, train=train, rng=rng)
+
+    out_masks: dict[str, at.Array] = {}
+    for key in image_keys:
+        if key not in observation.image_masks:
+            out_masks[key] = jnp.ones(batch_shape, dtype=jnp.bool_)
+        else:
+            out_masks[key] = jnp.asarray(observation.image_masks[key])
+
+    out_incontext_images: dict[str, at.Array] | None = None
+    out_incontext_masks: dict[str, at.Array] | None = None
+    if observation.incontext_images is not None:
+        # choose a reference key that is expected in both dicts
+        ref_key = next((k for k in image_keys if k in observation.incontext_images), None)
+        if ref_key is None:
+            raise ValueError(f"incontext_images missing expected keys from {image_keys}")
+
+        first = observation.incontext_images[ref_key]
+        ndim = first.ndim
+        if ndim == 5:
+            batch_size, length, height, width, channel = first.shape
+
+            def flatten(x):
+                return x.reshape(batch_size * length, height, width, channel)
+
+            def unflatten(x):
+                return x.reshape(batch_size, length, height, width, channel)
+
+            mask_shape = (batch_size, length)
+        elif ndim == 6:
+            batch_size, episodes, length, height, width, channel = first.shape
+
+            def flatten(x):
+                return x.reshape(batch_size * episodes * length, height, width, channel)
+
+            def unflatten(x):
+                return x.reshape(batch_size, episodes, length, height, width, channel)
+
+            mask_shape = (batch_size, episodes, length)
+        else:
+            raise ValueError(f"incontext_images must be 5-D or 6-D, got ndim={ndim}")
+
+        flattened_images = {key: flatten(observation.incontext_images[key]) for key in image_keys}
+        processed_flat = process_images_dict(flattened_images, train=train, rng=rng)
+        out_incontext_images = {key: unflatten(processed_flat[key]) for key in image_keys}
+
+        out_incontext_masks = {}
+        for key in image_keys:
+            if observation.incontext_image_masks is None or key not in observation.incontext_image_masks:
+                out_incontext_masks[key] = jnp.ones(mask_shape, dtype=jnp.bool_)
+            else:
+                out_incontext_masks[key] = jnp.asarray(observation.incontext_image_masks[key])
 
     return ObservationFASTIncontext(
-        **base_fields,
-        tokenized_incontext_states=_maybe(observation.tokenized_incontext_states, jnp.int32),
-        tokenized_incontext_states_mask=_maybe(observation.tokenized_incontext_states_mask, jnp.bool_),
-        incontext_states_ar_mask=_maybe(observation.incontext_states_ar_mask, jnp.int32),
-        incontext_states_loss_mask=_maybe(observation.incontext_states_loss_mask, jnp.bool_),
-        tokenized_incontext_actions=_maybe(observation.tokenized_incontext_actions, jnp.int32),
-        tokenized_incontext_actions_mask=_maybe(observation.tokenized_incontext_actions_mask, jnp.bool_),
-        incontext_actions_ar_mask=_maybe(observation.incontext_actions_ar_mask, jnp.int32),
-        incontext_actions_loss_mask=_maybe(observation.incontext_actions_loss_mask, jnp.bool_),
+        images=out_images,
+        image_masks=out_masks,
+        state=observation.state,
+        incontext_images=out_incontext_images,
+        incontext_image_masks=out_incontext_masks,
+        incontext_states=observation.incontext_states,
+        incontext_state_masks=observation.incontext_state_masks,
+        incontext_actions=observation.incontext_actions,
+        incontext_action_masks=observation.incontext_action_masks,
+        incontext_tracks=observation.incontext_tracks,
+        incontext_track_masks=observation.incontext_track_masks,
+        incontext_selected_episode=observation.incontext_selected_episode,
+        tokenized_prompt=observation.tokenized_prompt,
+        tokenized_prompt_mask=observation.tokenized_prompt_mask,
+        token_ar_mask=observation.token_ar_mask,
+        token_loss_mask=observation.token_loss_mask,
+        tokenized_incontext_states=observation.tokenized_incontext_states,
+        tokenized_incontext_states_mask=observation.tokenized_incontext_states_mask,
+        incontext_states_ar_mask=observation.incontext_states_ar_mask,
+        incontext_states_loss_mask=observation.incontext_states_loss_mask,
+        tokenized_incontext_actions=observation.tokenized_incontext_actions,
+        tokenized_incontext_actions_mask=observation.tokenized_incontext_actions_mask,
+        incontext_actions_ar_mask=observation.incontext_actions_ar_mask,
+        incontext_actions_loss_mask=observation.incontext_actions_loss_mask,
+        current_images_seq=observation.current_images_seq,
+        current_image_masks_seq=observation.current_image_masks_seq,
+        current_state_seq=observation.current_state_seq,
+        actions_seq=observation.actions_seq,
     )
+
 
 def preprocess_observation_incontext_fused(
     rng: at.KeyArrayLike | None,
@@ -589,10 +839,10 @@ def preprocess_observation_incontext_fused(
                 image01 = image / 2.0 + 0.5
                 transforms = []
                 if "wrist" not in key:
-                    H, W = image01.shape[1:3]
+                    h, w = image01.shape[1:3]
                     transforms += [
-                        augmax.RandomCrop(int(W * 0.95), int(H * 0.95)),
-                        augmax.Resize(W, H),
+                        augmax.RandomCrop(int(w * 0.95), int(h * 0.95)),
+                        augmax.Resize(w, h),
                         augmax.Rotate((-5, 5)),
                     ]
                 transforms += [augmax.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5)]
@@ -619,21 +869,21 @@ def preprocess_observation_incontext_fused(
 
     # In-context prompts: reuse existing logic (flatten → process → restore)
     out_inctx_images = None
-    out_inctx_masks  = None
+    out_inctx_masks = None
     if observation.incontext_images is not None:
         first = observation.incontext_images[image_keys[0]]
         if first.ndim not in (5, 6):
             raise ValueError(f"incontext_images must be 5-D or 6-D, got {first.ndim=}")
         if first.ndim == 5:  # [B,T,H,W,C]
-            B, T, H, W, C = first.shape
-            flat = lambda x: x.reshape(B * T, H, W, C)
-            unflat = lambda x: x.reshape(B, T, H, W, C)
-            mask_shape = (B, T)
-        else:                 # [B,E,T,H,W,C]
-            B, E, T, H, W, C = first.shape
-            flat = lambda x: x.reshape(B * E * T, H, W, C)
-            unflat = lambda x: x.reshape(B, E, T, H, W, C)
-            mask_shape = (B, E, T)
+            b, t, h, w, c = first.shape
+            flat = lambda x: x.reshape(b * t, h, w, c)
+            unflat = lambda x: x.reshape(b, t, h, w, c)
+            mask_shape = (b, t)
+        else:  # [B,E,T,H,W,C]
+            b, e, t, h, w, c = first.shape
+            flat = lambda x: x.reshape(b * e * t, h, w, c)
+            unflat = lambda x: x.reshape(b, e, t, h, w, c)
+            mask_shape = (b, e, t)
 
         work = {k: flat(v) for k, v in observation.incontext_images.items()}
         work = process_images_dict(work, h=image_resolution[0], w=image_resolution[1], train=train, rng=rng)
@@ -648,14 +898,14 @@ def preprocess_observation_incontext_fused(
 
     # New: N-frame sequence for the current sample (current_*_seq)
     out_cur_images_seq = None
-    out_cur_masks_seq  = None
+    out_cur_masks_seq = None
     if observation.current_images_seq is not None:
         first = observation.current_images_seq[image_keys[0]]
         if first.ndim != 5:
             raise ValueError(f"current_images_seq expects 5-D [B,N,H,W,C], got {first.ndim=}")
-        B, N, H, W, C = first.shape
-        flat = lambda x: x.reshape(B * N, H, W, C)
-        unflat = lambda x: x.reshape(B, N, H, W, C)
+        b, n, h, w, c = first.shape
+        flat = lambda x: x.reshape(b * n, h, w, c)
+        unflat = lambda x: x.reshape(b, n, h, w, c)
 
         work = {k: flat(v) for k, v in observation.current_images_seq.items()}
         work = process_images_dict(work, h=image_resolution[0], w=image_resolution[1], train=train, rng=rng)
@@ -664,7 +914,7 @@ def preprocess_observation_incontext_fused(
         out_cur_masks_seq = {}
         for k in out_cur_images_seq:
             if observation.current_image_masks_seq is None or k not in observation.current_image_masks_seq:
-                out_cur_masks_seq[k] = jnp.ones((B, N), dtype=jnp.bool_)
+                out_cur_masks_seq[k] = jnp.ones((b, n), dtype=jnp.bool_)
             else:
                 out_cur_masks_seq[k] = jnp.asarray(observation.current_image_masks_seq[k])
 
@@ -673,7 +923,6 @@ def preprocess_observation_incontext_fused(
         images=out_images,
         image_masks=out_masks,
         state=observation.state,
-
         incontext_images=out_inctx_images,
         incontext_image_masks=out_inctx_masks,
         incontext_states=observation.incontext_states,
@@ -681,7 +930,6 @@ def preprocess_observation_incontext_fused(
         incontext_actions=observation.incontext_actions,
         incontext_action_masks=observation.incontext_action_masks,
         incontext_selected_episode=observation.incontext_selected_episode,
-
         tokenized_prompt=observation.tokenized_prompt,
         tokenized_prompt_mask=observation.tokenized_prompt_mask,
         token_ar_mask=observation.token_ar_mask,

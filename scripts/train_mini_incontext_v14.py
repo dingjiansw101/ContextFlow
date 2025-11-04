@@ -307,7 +307,7 @@ def train_step(
     config: _config.TrainConfig,
     rng: at.KeyArrayLike,
     state: training_utils.TrainState,
-    batch: tuple[_model.ObservationIncontext, _model.Actions],  # restored to two-tuple (obs, actions)
+    batch: tuple[_model.ObservationIncontext | _model.ObservationFASTIncontext, _model.Actions],
 ) -> tuple[training_utils.TrainState, dict[str, at.Array]]:
     model = nnx.merge(state.model_def, state.params)
     model.train()
