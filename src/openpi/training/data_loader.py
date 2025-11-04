@@ -481,8 +481,18 @@ def create_incontext_data_loader(
         seed=config.seed,
     )
 
+    observation_cls = _model.ObservationIncontext
+    if config.model.model_type == _model.ModelType.PI0_FAST_INCONTEXT:
+        observation_cls = _model.ObservationFASTIncontext
+
     class DataLoaderImpl(DataLoader):
-        def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader, dataset: Dataset):
+        def __init__(
+            self,
+            data_config: _config.DataConfig,
+            data_loader: TorchDataLoader,
+            dataset: Dataset,
+            obs_cls,
+        ):
             self._data_config = data_config
             self._data_loader = data_loader
             self._dataset = dataset

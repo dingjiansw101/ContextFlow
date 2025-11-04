@@ -104,12 +104,12 @@ class Pi0FASTIncontextConfig(_model.BaseModelConfig):
         return Pi0FASTIncontext(self, rngs=nnx.Rngs(rng))
 
     @override
-    def inputs_spec(self, *, batch_size: int = 1) -> tuple[_model.ObservationIncontext, _model.Actions]:
+    def inputs_spec(self, *, batch_size: int = 1) -> tuple[_model.ObservationFASTIncontext, _model.Actions]:
         image_spec = jax.ShapeDtypeStruct([batch_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
         image_mask_spec = jax.ShapeDtypeStruct([batch_size], jnp.bool_)
 
         with at.disable_typechecking():
-            observation_spec = _model.ObservationIncontext(
+            observation_spec = _model.ObservationFASTIncontext(
                 images={
                     "base_0_rgb": image_spec,
                     "base_1_rgb": image_spec,
@@ -259,7 +259,7 @@ class Pi0FASTIncontext(_model.BaseModel):
     def compute_loss(
         self, rng: at.KeyArrayLike, observation: _model.ObservationIncontext, actions: _model.Actions, *, train: bool = False
     ) -> at.Float[at.Array, "*b ah"]:
-        observation = _model.preprocess_observation_incontext(
+        observation = _model.preprocess_observation_incontext_fast(
             rng, observation, train=train, image_keys=list(observation.images.keys())
         )
         # Compute inputs: one big forward pass of prefix + suffix at once
@@ -304,7 +304,7 @@ class Pi0FASTIncontext(_model.BaseModel):
     ) -> _model.Actions:
         # TODO: this is a hack to get the image keys.
         # import ipdb; ipdb.set_trace()
-        observation = _model.preprocess_observation_incontext(
+        observation = _model.preprocess_observation_incontext_fast(
             None, observation, train=False, image_keys=list(observation.images.keys())
         )  # shape of observation.state is the same as action_dim
 
