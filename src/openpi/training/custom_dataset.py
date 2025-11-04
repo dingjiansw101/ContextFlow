@@ -277,6 +277,30 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         # Initialize RNG for random frame sampling
         self._rng = np.random.default_rng(seed)
 
+        # Cache all actions in memory for fast access (avoids slow HF dataset queries)
+        print("[Cache] Loading actions into memory...")
+        self.cached_arrays = {
+            'actions': np.array(self.hf_dataset['actions'])
+        }
+        print(f"[Cache] Loaded {self.cached_arrays['actions'].shape[0]} actions "
+              f"({self.cached_arrays['actions'].nbytes / 1024 / 1024:.2f} MB)")
+
+    def _query_hf_dataset(self, query_indices: dict[str, list[int]]) -> dict:
+        """Override parent to use cached arrays for fast indexing.
+
+        Uses numpy array indexing for cached keys (much faster than HF dataset queries).
+        Falls back to parent's HF dataset query for non-cached keys.
+        """
+        result = {}
+        for key, q_idx in query_indices.items():
+            if key in self.cached_arrays:
+                # Use fast numpy indexing for cached arrays
+                result[key] = torch.tensor(self.cached_arrays[key][q_idx])
+            else:
+                # Fall back to parent's HF dataset query for non-cached keys
+                result[key] = torch.stack(self.hf_dataset.select(q_idx)[key])
+        return result
+
     def _pick_indices_random(
         self, n_total: int, anchor_local_idx: int | None, rng: np.random.Generator
     ) -> list[int]:
