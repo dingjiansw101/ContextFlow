@@ -380,7 +380,6 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
 
         # Convert local indices to global indices
         sampled_global_indices = [frame_list[i] for i in sampled_local_indices]
-        print("sampled_global_indices: ", sampled_global_indices)
         # Fetch sampled frames using HuggingFace dataset API
         sampled_items = self.hf_dataset.select(sampled_global_indices)
 

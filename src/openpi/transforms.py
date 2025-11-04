@@ -595,7 +595,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
             loc = self._pick_indices_around(n, anchor_local_idx)
         elif self.sampling == "random":
             loc = self._pick_indices_random(n, anchor_local_idx, rng)
-            print("loc: ", loc) 
         elif self.sampling == "random_stratified":
             loc = self._pick_indices_random_stratified(n, anchor_local_idx, rng)
         else:

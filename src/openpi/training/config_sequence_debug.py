@@ -2264,6 +2264,7 @@ def build(api) -> list["api.TrainConfig"]:
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            libero_input_refactor=True,
         ),
         vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
@@ -2307,6 +2308,7 @@ def build(api) -> list["api.TrainConfig"]:
             use_delta_joint_actions=False,
             states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            libero_input_refactor=True,
         ),
         vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
