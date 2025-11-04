@@ -219,13 +219,25 @@ def main(config: _config.TrainConfig):
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
 
+    # Determine which dataloader to use based on config
     if config.use_custom_dataloader:
-        data_loader = _data_loader.create_custom_incontext_data_loader(
-            config,
-            sharding=data_sharding,
-            num_workers=config.num_workers,
-            shuffle=True,
-        )
+        # Check custom dataloader version
+        version = getattr(config.data, 'custom_dataloader_version', 'v1')
+        if version == "v2":
+            # TODO: need to test if it can go into v2 branch
+            data_loader = _data_loader.create_custom_incontext_data_loaderv2(
+                config,
+                sharding=data_sharding,
+                num_workers=config.num_workers,
+                shuffle=True,
+            )
+        else:  # v1 or default
+            data_loader = _data_loader.create_custom_incontext_data_loader(
+                config,
+                sharding=data_sharding,
+                num_workers=config.num_workers,
+                shuffle=True,
+            )
     else:
         data_loader = _data_loader.create_incontext_data_loader(
             config,
