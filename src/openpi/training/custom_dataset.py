@@ -277,13 +277,17 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         # Initialize RNG for random frame sampling
         self._rng = np.random.default_rng(seed)
 
-        # Cache all actions in memory for fast access (avoids slow HF dataset queries)
-        print("[Cache] Loading actions into memory...")
+        # Cache actions and states in memory for fast access (avoids slow HF dataset queries)
+        print("[Cache] Loading actions and states into memory...")
         self.cached_arrays = {
-            'actions': np.array(self.hf_dataset['actions'])
+            'actions': np.array(self.hf_dataset['actions']),
+            'state': np.array(self.hf_dataset['state'])
         }
-        print(f"[Cache] Loaded {self.cached_arrays['actions'].shape[0]} actions "
-              f"({self.cached_arrays['actions'].nbytes / 1024 / 1024:.2f} MB)")
+        total_mb = sum(arr.nbytes for arr in self.cached_arrays.values()) / 1024 / 1024
+        print(f"[Cache] Loaded {self.cached_arrays['actions'].shape[0]} frames "
+              f"(actions: {self.cached_arrays['actions'].shape}, "
+              f"state: {self.cached_arrays['state'].shape}, "
+              f"total: {total_mb:.2f} MB)")
 
     def _query_hf_dataset(self, query_indices: dict[str, list[int]]) -> dict:
         """Override parent to use cached arrays for fast indexing.
