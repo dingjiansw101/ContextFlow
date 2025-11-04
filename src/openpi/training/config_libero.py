@@ -4731,6 +4731,7 @@ def build(api) -> list["api.TrainConfig"]:
             avg_current_img=True,
         ).get_freeze_filter(),
         ema_decay=None,
+        # num_workers=16,
         num_workers=8,
         batch_size=32,
         use_custom_dataloader=True,

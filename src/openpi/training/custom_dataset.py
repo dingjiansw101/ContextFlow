@@ -384,17 +384,37 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         sampled_items = self.hf_dataset.select(sampled_global_indices)
 
         # Extract images, states, and actions for each sampled frame
-        # For each sampled frame, we need to get its action sequence using _get_query_indices
-        actions_list = []
-        # actions_padding_list = []
+        # Optimized: Batch query all unique action indices to eliminate redundant queries
+        assert self.delta_indices is not None, "delta_indices must be set"
+
+        # Step 1: Collect all frame query info and unique action indices
+        frame_action_indices = []  # Store action indices for each frame
+        unique_action_indices = []  # Ordered list of unique action indices
+        action_idx_to_batch_pos = {}  # Maps action index -> position in unique list
+
         for frame_idx in sampled_global_indices:
-            # Get action sequence for this frame (following lines 305-312)
-            assert self.delta_indices is not None, "delta_indices must be set"
             frame_query_indices, frame_padding = self._get_query_indices(frame_idx, current_ep_idx)
-            frame_query_result = self._query_hf_dataset(frame_query_indices)
-            # Extract the actions from the query result
-            actions_list.append(frame_query_result['actions'])
-            # actions_padding_list.append(frame_padding['actions_is_pad'])
+            action_indices = frame_query_indices['actions']
+            frame_action_indices.append(action_indices)
+
+            # Collect unique indices
+            for idx in action_indices:
+                if idx not in action_idx_to_batch_pos:
+                    action_idx_to_batch_pos[idx] = len(unique_action_indices)
+                    unique_action_indices.append(idx)
+
+        # Step 2: Batch query all unique action indices at once
+        batch_query_result = self._query_hf_dataset({'actions': unique_action_indices})
+        all_actions_batch = batch_query_result['actions']
+
+        # Step 3: Map results back to each frame
+        actions_list = []
+        for action_indices in frame_action_indices:
+            # Get positions of this frame's actions in the batch result
+            positions = [action_idx_to_batch_pos[idx] for idx in action_indices]
+            # Index into batch result to get this frame's action sequence
+            frame_actions = all_actions_batch[positions]
+            actions_list.append(frame_actions)
 
         # print("idx: ", idx)
         
