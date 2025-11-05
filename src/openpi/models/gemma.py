@@ -511,9 +511,9 @@ def _name(name, i):
 
 def _namev2(name, i, expert_names=["paligemma", "action_expert"]):
     # we want the names of paligemma and action experts to be the same as pre-trained checkpoint names, so that they can be loaded
-    assert expert_names[i] in ["paligemma", "action_expert", "prompt_expert"]
+    assert expert_names[i] in ["paligemma", "action_expert", "prompt_expert", "state_expert"]
     if expert_names[i] == "paligemma":
         return name
     elif expert_names[i] == "action_expert":
-        return f"{name}_{1}"
+        return f"{name}_1"
     return f"{name}_{expert_names[i]}"

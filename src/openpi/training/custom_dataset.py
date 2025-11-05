@@ -91,29 +91,6 @@ class CustomLeRobotDataset(LeRobotDataset):
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
         """Get a single sample from the dataset with custom processing.
-        Return:
-        (1) num_current_frames consecutive frames from the dataset, each frame at time step t includes: 
-            (a) image, state, and action at time step t.
-            (b) state, and action in [t, t + h - 1], h is the action horizon.
-        make sure the num_current_frames + h time steps are consecutive in the same episode.
-        if t + h - 1 is greater than the episode length, how to handle the situation? 
-        Check the original implementation of __getitem__ method of LeRobotDataset.
-        (2) m subsampled frames as a in-context demonstration, it's from another episode but same task:
-            (a) each time step t includes image, state, and action at time step t.
-        m is the number of subsampled frames for an in-context demonstration episode.
-        n and m are hyperparameters, they are set in the initialization of class, you can set them in the config file.
-
-        To read multiple frames from the dataset, you can use huggingface's dataset API to read the dataset:
-        e.g, .select()  We want to use select function to read a sequence of frames at the same time.
-
-        TODO: check how is the LeRobotDataset used in create_incontext_data_loader of data_loader.py 
-        what are the transforms applied to the LeRobotDataset?
-
-        If we use the CustomLeRobotDataset, we will need to write a new create_data_loader_incontextv2 function in data_loader.py     
-        The transform AddImagePromptTransform, AddStatesActionsPromptTransform, AddCurrentFramesSequenceTransform are not needed anymore with CustomLeRobotDataset.
-        Make sure the CustomLeRobotDataset is compatible with the create_data_loader_incontextv2 function, and the other transforms.
-        Make sure we can get same data with: (1) CustomLeRobotDataset + create_data_loader_incontextv2, and (2) LeRobotDataset + create_incontext_data_loader.
-     
         """
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
@@ -132,19 +109,6 @@ class CustomLeRobotDataset(LeRobotDataset):
         incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index)
         item.update(incontext_demo)
 
-        # TODO: load current frames sequence
-        # if self.num_current_frames > 1:
-        #     # TODO: merge the situation when there is only one frame in the current frames sequence
-        #     # pass
-        #     import ipdb; ipdb.set_trace()
-        # TODO: extract data with the following shape
-        # item['current_images_seq']['image']: (num_current_frames, 3, h, w)
-        # item['current_images_seq']['wrist_image']: (num_current_frames, 3, h, w)
-        # item['current_state_seq']: (num_current_frames, 8)
-        # item['actions_seq']: (num_current_frames, horizon, 7)
-        
-        # TODO: handle padding
-        # import ipdb; ipdb.set_trace()
         return item
 
     def load_incontext_demonstration(self, current_ep_idx: int, task_index: int) -> Dict[str, Any]:
@@ -241,6 +205,9 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         random_select: bool = True,
         current_frame_sample_mode: str = "random",
         seed: int | None = None,
+        multiple_current_frames: bool = True,
+        future_state_downsample: int = 5,
+        use_future_states: bool = False,
     ):
         """
         CustomLeRobotDataset extends LeRobotDataset to load both sequences and in-context demonstrations.
@@ -274,9 +241,11 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
             random_select=random_select,
         )
         self.current_frame_sample_mode = current_frame_sample_mode
+        self.multiple_current_frames = multiple_current_frames
+        self.future_state_downsample = future_state_downsample
+        self.use_future_states = use_future_states
         # Initialize RNG for random frame sampling
         self._rng = np.random.default_rng(seed)
-
         # Cache actions and states in memory for fast access (avoids slow HF dataset queries)
         print("[Cache] Loading actions and states into memory...")
         self.cached_arrays = {
@@ -341,31 +310,7 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         return [int(i) for i in loc]
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
-        """Get a single sample from the dataset with custom processing.
-        Return:
-        (1) num_current_frames consecutive frames from the dataset, each frame at time step t includes: 
-            (a) image, state, and action at time step t.
-            (b) state, and action in [t, t + h - 1], h is the action horizon.
-        make sure the num_current_frames + h time steps are consecutive in the same episode.
-        if t + h - 1 is greater than the episode length, how to handle the situation? 
-        Check the original implementation of __getitem__ method of LeRobotDataset.
-        (2) m subsampled frames as a in-context demonstration, it's from another episode but same task:
-            (a) each time step t includes image, state, and action at time step t.
-        m is the number of subsampled frames for an in-context demonstration episode.
-        n and m are hyperparameters, they are set in the initialization of class, you can set them in the config file.
 
-        To read multiple frames from the dataset, you can use huggingface's dataset API to read the dataset:
-        e.g, .select()  We want to use select function to read a sequence of frames at the same time.
-
-        TODO: check how is the LeRobotDataset used in create_incontext_data_loader of data_loader.py 
-        what are the transforms applied to the LeRobotDataset?
-
-        If we use the CustomLeRobotDataset, we will need to write a new create_data_loader_incontextv2 function in data_loader.py     
-        The transform AddImagePromptTransform, AddStatesActionsPromptTransform, AddCurrentFramesSequenceTransform are not needed anymore with CustomLeRobotDataset.
-        Make sure the CustomLeRobotDataset is compatible with the create_data_loader_incontextv2 function, and the other transforms.
-        Make sure we can get same data with: (1) CustomLeRobotDataset + create_data_loader_incontextv2, and (2) LeRobotDataset + create_incontext_data_loader.
-     
-        """
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
         # import ipdb; ipdb.set_trace()
@@ -383,76 +328,92 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
         incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index)
         item.update(incontext_demo)
 
+
+        if self.use_future_states and self.multiple_current_frames:
+            raise NotImplementedError("use_future_states with multiple current frames is not implemented yet")
+       
         # Load current frames sequence (if num_current_frames > 1)
-        assert self.num_current_frames > 1, "num_current_frames must be greater than 1"
-        # Get episode frame boundaries
-        ep_start = self.episode_data_index["from"][current_ep_idx]
-        ep_end = self.episode_data_index["to"][current_ep_idx]
+        if self.multiple_current_frames:
+            assert self.num_current_frames > 1, "num_current_frames must be greater than 1"
+           # Get episode frame boundaries
+            ep_start = self.episode_data_index["from"][current_ep_idx]
+            ep_end = self.episode_data_index["to"][current_ep_idx]
 
-        # Create frame list for episode (global indices)
-        frame_list = list(range(ep_start, ep_end))
+            # Create frame list for episode (global indices)
+            frame_list = list(range(ep_start, ep_end))
 
-        # Sample frame indices based on current_frame_sample_mode
-        # TODO: simplify the pick_indices_random function. 
-        # (1) why not directly operate on global indices?
-        # (2) anchor idex may not be necessary
-        if self.current_frame_sample_mode == "random":
-            sampled_local_indices = self._pick_indices_random(
-                n_total=len(frame_list),
-                anchor_local_idx=item['frame_index'],
-                rng=self._rng
-            )
-        else:
-            # Default to uniform spacing
-            raise ValueError(f"Unsupported current_frame_sample_mode: {self.current_frame_sample_mode}")
+            # Sample frame indices based on current_frame_sample_mode
+            # TODO: simplify the pick_indices_random function. 
+            # (1) why not directly operate on global indices?
+            # (2) anchor idex may not be necessary
+            if self.current_frame_sample_mode == "random":
+                sampled_local_indices = self._pick_indices_random(
+                    n_total=len(frame_list),
+                    anchor_local_idx=item['frame_index'],
+                    rng=self._rng
+                )
+            else:
+                # Default to uniform spacing
+                raise ValueError(f"Unsupported current_frame_sample_mode: {self.current_frame_sample_mode}")
 
-        # Convert local indices to global indices
-        sampled_global_indices = [frame_list[i] for i in sampled_local_indices]
-        # Fetch sampled frames using HuggingFace dataset API
-        sampled_items = self.hf_dataset.select(sampled_global_indices)
+            # Convert local indices to global indices
+            sampled_global_indices = [frame_list[i] for i in sampled_local_indices]
+            # Fetch sampled frames using HuggingFace dataset API
+            sampled_items = self.hf_dataset.select(sampled_global_indices)
 
-        # Extract images, states, and actions for each sampled frame
-        # Optimized: Batch query all unique action indices to eliminate redundant queries
-        assert self.delta_indices is not None, "delta_indices must be set"
+            # Extract images, states, and actions for each sampled frame
+            # Optimized: Batch query all unique action indices to eliminate redundant queries
+            assert self.delta_indices is not None, "delta_indices must be set"
 
-        # Step 1: Collect all frame query info and unique action indices
-        frame_action_indices = []  # Store action indices for each frame
-        unique_action_indices = []  # Ordered list of unique action indices
-        action_idx_to_batch_pos = {}  # Maps action index -> position in unique list
+            # Step 1: Collect all frame query info and unique action indices
+            frame_action_indices = []  # Store action indices for each frame
+            unique_action_indices = []  # Ordered list of unique action indices
+            action_idx_to_batch_pos = {}  # Maps action index -> position in unique list
 
-        for frame_idx in sampled_global_indices:
-            frame_query_indices, frame_padding = self._get_query_indices(frame_idx, current_ep_idx)
-            action_indices = frame_query_indices['actions']
-            frame_action_indices.append(action_indices)
+            for frame_idx in sampled_global_indices:
+                frame_query_indices, frame_padding = self._get_query_indices(frame_idx, current_ep_idx)
+                action_indices = frame_query_indices['actions']
+                frame_action_indices.append(action_indices)
 
-            # Collect unique indices
-            for idx in action_indices:
-                if idx not in action_idx_to_batch_pos:
-                    action_idx_to_batch_pos[idx] = len(unique_action_indices)
-                    unique_action_indices.append(idx)
+                # Collect unique indices
+                for idx in action_indices:
+                    if idx not in action_idx_to_batch_pos:
+                        action_idx_to_batch_pos[idx] = len(unique_action_indices)
+                        unique_action_indices.append(idx)
 
-        # Step 2: Batch query all unique action indices at once
-        batch_query_result = self._query_hf_dataset({'actions': unique_action_indices})
-        all_actions_batch = batch_query_result['actions']
+            # Step 2: Batch query all unique action indices at once
+            batch_query_result = self._query_hf_dataset({'actions': unique_action_indices})
+            all_actions_batch = batch_query_result['actions']
 
-        # Step 3: Map results back to each frame
-        actions_list = []
-        for action_indices in frame_action_indices:
-            # Get positions of this frame's actions in the batch result
-            positions = [action_idx_to_batch_pos[idx] for idx in action_indices]
-            # Index into batch result to get this frame's action sequence
-            frame_actions = all_actions_batch[positions]
-            actions_list.append(frame_actions)
+            # Step 3: Map results back to each frame
+            actions_list = []
+            for action_indices in frame_action_indices:
+                # Get positions of this frame's actions in the batch result
+                positions = [action_idx_to_batch_pos[idx] for idx in action_indices]
+                # Index into batch result to get this frame's action sequence
+                frame_actions = all_actions_batch[positions]
+                actions_list.append(frame_actions)
 
-        # print("idx: ", idx)
-        
-        item["current_images_seq"] = {}
-        item["current_images_seq"]["image"] = torch.stack(sampled_items["image"])
-        item["current_images_seq"]["wrist_image"] = torch.stack(sampled_items["wrist_image"])
-        item["current_state_seq"] = torch.stack(sampled_items["state"])
-        item["actions_seq"] = torch.stack(actions_list)
-        # item["actions_padding_seq"] = torch.stack(actions_padding_list)
-        # import ipdb; ipdb.set_trace()
+            # print("idx: ", idx)
+            
+            item["current_images_seq"] = {}
+            item["current_images_seq"]["image"] = torch.stack(sampled_items["image"])
+            item["current_images_seq"]["wrist_image"] = torch.stack(sampled_items["wrist_image"])
+            item["current_state_seq"] = torch.stack(sampled_items["state"])
+            item["actions_seq"] = torch.stack(actions_list)
+
+        if self.use_future_states:
+            # Get the indices of future states by downsampling action indices
+            # Action indices represent future timesteps from the current frame
+            assert query_indices is not None and 'actions' in query_indices, \
+                "Future states require action indices from delta_indices"
+
+            action_indices = query_indices['actions']
+            # Downsample: take every Nth action index as a state checkpoint
+            future_state_indices = action_indices[::self.future_state_downsample]
+
+            # Query future states from the dataset using cached arrays for fast access
+            future_states_result = self._query_hf_dataset({'state': future_state_indices})
+            item['future_states'] = future_states_result['state']
 
         return item
-

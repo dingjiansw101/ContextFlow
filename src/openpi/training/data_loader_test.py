@@ -8,8 +8,11 @@ from openpi.models import pi0
 import openpi.models.model as _model
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
-from openpi.training.data_loader import create_dataset, create_custom_dataset, create_custom_datasetv2
-from openpi.training.data_loader import transform_dataset, TransformedDataset
+from openpi.training.data_loader import TransformedDataset
+from openpi.training.data_loader import create_custom_dataset
+from openpi.training.data_loader import create_custom_datasetv2
+from openpi.training.data_loader import create_dataset
+from openpi.training.data_loader import transform_dataset
 import openpi.transforms as _transforms
 
 
@@ -133,7 +136,7 @@ def test_libero_incontext_data_loader():
     config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
     data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=False, num_batches=2)
     data_iter = iter(data_loader)
-    batch = next(data_iter)
+    next(data_iter)
     # import ipdb
     # ipdb.set_trace()
 
@@ -156,17 +159,17 @@ def test_create_custom_incontext_data_loader():
 
     # Verify types
     assert isinstance(obs, _model.ObservationIncontext), "Observation should be ObservationIncontext"
-    assert isinstance(actions, (np.ndarray, jnp.ndarray)), "Actions should be numpy/jax array"
+    assert isinstance(actions, np.ndarray | jnp.ndarray), "Actions should be numpy/jax array"
 
     # Verify standard observation fields exist
-    assert hasattr(obs, 'images'), "Should have images field"
-    assert hasattr(obs, 'image_masks'), "Should have image_masks field"
-    assert hasattr(obs, 'state'), "Should have state field"
+    assert hasattr(obs, "images"), "Should have images field"
+    assert hasattr(obs, "image_masks"), "Should have image_masks field"
+    assert hasattr(obs, "state"), "Should have state field"
 
     # Verify required camera keys
-    assert 'base_0_rgb' in obs.images, "Should have base_0_rgb camera"
-    assert 'left_wrist_0_rgb' in obs.images, "Should have left_wrist_0_rgb camera"
-    assert 'right_wrist_0_rgb' in obs.images, "Should have right_wrist_0_rgb camera"
+    assert "base_0_rgb" in obs.images, "Should have base_0_rgb camera"
+    assert "left_wrist_0_rgb" in obs.images, "Should have left_wrist_0_rgb camera"
+    assert "right_wrist_0_rgb" in obs.images, "Should have right_wrist_0_rgb camera"
 
     # Verify batch dimensions
     batch_size = config.batch_size
@@ -229,17 +232,17 @@ def test_custom_lerobot_datasetv2_data_loader():
 
     # Verify types
     assert isinstance(obs, _model.ObservationIncontext), "Observation should be ObservationIncontext"
-    assert isinstance(actions, (np.ndarray, jnp.ndarray)), "Actions should be numpy/jax array"
+    assert isinstance(actions, np.ndarray | jnp.ndarray), "Actions should be numpy/jax array"
 
     # Verify standard observation fields exist
-    assert hasattr(obs, 'images'), "Should have images field"
-    assert hasattr(obs, 'image_masks'), "Should have image_masks field"
-    assert hasattr(obs, 'state'), "Should have state field"
+    assert hasattr(obs, "images"), "Should have images field"
+    assert hasattr(obs, "image_masks"), "Should have image_masks field"
+    assert hasattr(obs, "state"), "Should have state field"
 
     # Verify required camera keys
-    assert 'base_0_rgb' in obs.images, "Should have base_0_rgb camera"
-    assert 'left_wrist_0_rgb' in obs.images, "Should have left_wrist_0_rgb camera"
-    assert 'right_wrist_0_rgb' in obs.images, "Should have right_wrist_0_rgb camera"
+    assert "base_0_rgb" in obs.images, "Should have base_0_rgb camera"
+    assert "left_wrist_0_rgb" in obs.images, "Should have left_wrist_0_rgb camera"
+    assert "right_wrist_0_rgb" in obs.images, "Should have right_wrist_0_rgb camera"
 
     # Verify batch dimensions
     batch_size = config.batch_size
@@ -270,15 +273,15 @@ def test_custom_lerobot_datasetv2_data_loader():
     assert obs.incontext_action_masks.shape[0] == batch_size, "Action masks batch size mismatch"
 
     # V2-SPECIFIC: Verify current frame sequence fields exist
-    assert hasattr(obs, 'current_images_seq'), "Should have current_images_seq field"
-    assert hasattr(obs, 'current_state_seq'), "Should have current_state_seq field"
-    assert hasattr(obs, 'actions_seq'), "Should have actions_seq field"
+    assert hasattr(obs, "current_images_seq"), "Should have current_images_seq field"
+    assert hasattr(obs, "current_state_seq"), "Should have current_state_seq field"
+    assert hasattr(obs, "actions_seq"), "Should have actions_seq field"
     # assert hasattr(obs, 'actions_padding_seq'), "Should have actions_padding_seq field"
 
     # V2-SPECIFIC: Verify current_images_seq camera keys (transformed to model format)
-    assert 'base_0_rgb' in obs.current_images_seq, "current_images_seq should have 'base_0_rgb' key"
-    assert 'left_wrist_0_rgb' in obs.current_images_seq, "current_images_seq should have 'left_wrist_0_rgb' key"
-    assert 'right_wrist_0_rgb' in obs.current_images_seq, "current_images_seq should have 'right_wrist_0_rgb' key"
+    assert "base_0_rgb" in obs.current_images_seq, "current_images_seq should have 'base_0_rgb' key"
+    assert "left_wrist_0_rgb" in obs.current_images_seq, "current_images_seq should have 'left_wrist_0_rgb' key"
+    assert "right_wrist_0_rgb" in obs.current_images_seq, "current_images_seq should have 'right_wrist_0_rgb' key"
 
     # V2-SPECIFIC: Verify frame sequence dimensions
     # Config has frame_sequence_length (num_current_frames in dataset)
@@ -330,6 +333,81 @@ def test_custom_lerobot_datasetv2_data_loader():
         assert img_seq.dtype in [np.float32, jnp.float32], f"current_images_seq[{key}] should be float32"
         assert np.all(img_seq >= -1.0) and np.all(img_seq <= 1.0), f"current_images_seq[{key}] should be in [-1, 1] range"
 
+def test_custom_lerobot_datasetv2_future_states():
+    """Test future_states functionality in CustomLeRobotDatasetv2."""
+    # Setup: Get config with use_future_states enabled
+    config = _config.get_config("pi0mini_incontext_libero_custom_dataset_v2_future_states_debug")
+
+    # Create data loader using CustomLeRobotDatasetv2 with future_states
+    data_loader = _data_loader.create_custom_incontext_data_loaderv2(
+        config,
+        skip_norm_stats=False,
+        num_batches=1
+    )
+
+    # Get one batch
+    data_iter = iter(data_loader)
+    obs, actions = next(data_iter)
+
+    # Verify types
+    assert isinstance(obs, _model.ObservationIncontext), "Observation should be ObservationIncontext"
+    assert isinstance(actions, np.ndarray | jnp.ndarray), "Actions should be numpy/jax array"
+
+    # Verify batch dimensions
+    batch_size = config.batch_size
+    assert obs.state.shape[0] == batch_size, f"State batch size should be {batch_size}"
+    assert actions.shape[0] == batch_size, f"Actions batch size should be {batch_size}"
+
+    # FUTURE_STATES-SPECIFIC: Verify future_states field exists
+    assert hasattr(obs, "future_states"), "Should have future_states field"
+    assert obs.future_states is not None, "future_states should not be None"
+
+    # FUTURE_STATES-SPECIFIC: Verify future_states shape
+    # Expected: [batch_size, future_state_horizon, state_dim]
+    action_horizon = config.model.action_horizon
+    future_state_downsample = config.data.future_state_downsample
+    expected_future_state_horizon = action_horizon // future_state_downsample
+    state_dim = obs.state.shape[-1]  # Get state dimension from current state
+
+    assert obs.future_states.shape[0] == batch_size, f"future_states batch size should be {batch_size}"
+    assert obs.future_states.shape[1] == expected_future_state_horizon, \
+        f"future_states should have {expected_future_state_horizon} timesteps (action_horizon={action_horizon} / downsample={future_state_downsample})"
+    assert obs.future_states.shape[2] == state_dim, \
+        f"future_states should have state_dim={state_dim}"
+    assert len(obs.future_states.shape) == 3, "future_states should be 3D [batch, future_horizon, state_dim]"
+
+    # FUTURE_STATES-SPECIFIC: Verify data type
+    assert obs.future_states.dtype in [np.float32, jnp.float32], "future_states should be float32"
+
+    # FUTURE_STATES-SPECIFIC: Verify normalization (should be in similar range to current state)
+    # After normalization, values should typically be in a reasonable range (e.g., [-10, 10] for z-score)
+    assert np.all(np.isfinite(obs.future_states)), "future_states should not contain inf/nan"
+    future_states_mean = np.abs(np.mean(obs.future_states))
+    future_states_std = np.std(obs.future_states)
+    print(f"future_states stats: mean={future_states_mean:.4f}, std={future_states_std:.4f}")
+    # Normalized values should have reasonable statistics (not too extreme)
+    assert future_states_mean < 10.0, "future_states mean should be reasonable after normalization"
+    assert future_states_std > 0.0, "future_states should have non-zero variance"
+
+    # Test with different downsample factor
+    # Modify config to use different downsample and verify the relationship holds
+    config_ds10 = dataclasses.replace(
+        config,
+        data=dataclasses.replace(config.data, future_state_downsample=10)
+    )
+    data_loader_ds10 = _data_loader.create_custom_incontext_data_loaderv2(
+        config_ds10,
+        skip_norm_stats=False,
+        num_batches=1
+    )
+    obs_ds10, _ = next(iter(data_loader_ds10))
+    expected_horizon_ds10 = action_horizon // 10
+    assert obs_ds10.future_states.shape[1] == expected_horizon_ds10, \
+        f"With downsample=10, future_state_horizon should be {expected_horizon_ds10}"
+
+    print(f"✓ future_states test passed: shape={obs.future_states.shape}, "
+          f"future_state_horizon={expected_future_state_horizon}, downsample={future_state_downsample}")
+
 def test_AddImagePromptTransform():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
     config = _config.get_config("vitb_95m_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1")
@@ -357,5 +435,6 @@ if __name__ == "__main__":
     # test_AddImagePromptTransform()
     # test_custom_lerobot_dataset()
     # test_custom_lerobot_datasetv2()
-    test_custom_lerobot_datasetv2_data_loader()
+    # test_custom_lerobot_datasetv2_data_loader()
     # test_create_custom_incontext_data_loader()
+    test_custom_lerobot_datasetv2_future_states()

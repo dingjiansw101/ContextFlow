@@ -234,6 +234,9 @@ def create_custom_datasetv2(
         task_to_episode_path = getattr(data_config_factory, 'task_to_episode_path', "metadata/libero/task_to_episode.json")
         random_select = getattr(data_config_factory, 'random_select', True)
         current_frame_sample_mode = getattr(data_config_factory, 'current_frame_sample_mode', "random")
+        use_future_states = getattr(data_config_factory, 'use_future_states', True)
+        future_state_downsample = getattr(data_config_factory, 'future_state_downsample', 5)
+        multiple_current_frames = getattr(data_config_factory, 'multiple_current_frames', True)
     else:
         # Fallback to defaults if no factory provided
         num_current_frames = 1
@@ -242,6 +245,9 @@ def create_custom_datasetv2(
         task_to_episode_path = "metadata/libero/task_to_episode.json"
         random_select = True
         current_frame_sample_mode = "random"
+        use_future_states = True
+        future_state_downsample = 5
+        multiple_current_frames = True
     # Build delta_timestamps for each action sequence key (for compatibility)
     dataset = CustomLeRobotDatasetv2(
         data_config.repo_id,
@@ -259,6 +265,9 @@ def create_custom_datasetv2(
         random_select=random_select,
         current_frame_sample_mode=current_frame_sample_mode,
         seed=seed,
+        use_future_states=use_future_states,
+        future_state_downsample=future_state_downsample,
+        multiple_current_frames=multiple_current_frames,
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)
     if data_config.prompt_from_task:

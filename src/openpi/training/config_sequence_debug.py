@@ -2289,7 +2289,7 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=32,
     ), 
     api.TrainConfig(
-        name="vitb_6_sequence_avg_pi0mini_libero_incontextv14_inference",
+        name="vitb_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1_inference",
         assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
         model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
