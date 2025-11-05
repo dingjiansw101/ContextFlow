@@ -95,8 +95,17 @@ class Pi0IncontextConfigv17(_model.BaseModelConfig):
     max_token_len: int = 48
 
     # Future state prediction configuration
-    future_state_horizon: int = 10  # Number of future states expected from dataloader
+    future_state_downsample: int = 5  # Downsample factor for future states (action_horizon // future_state_downsample)
     state_loss_weight: float = 0.5  # Weight for future state prediction loss
+
+    @property
+    def future_state_horizon(self) -> int:
+        """Compute future_state_horizon from action_horizon and downsample factor.
+
+        Returns:
+            Number of future states = action_horizon // future_state_downsample
+        """
+        return self.action_horizon // self.future_state_downsample
 
     # In-context learning params
     sample_frames: int = 16

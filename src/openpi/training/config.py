@@ -28,6 +28,7 @@ import openpi.models.pi0_incontextv9 as pi0_incontextv9
 import openpi.models.pi0_incontextv10 as pi0_incontextv10
 import openpi.models.pi0_incontextv11 as pi0_incontextv11
 import openpi.models.pi0_incontextv12 as pi0_incontextv12
+import openpi.models.pi0_incontextv17 as pi0_incontextv17
 import openpi.models.pi0_light as pi0Light
 import openpi.models.deprecated_pi0light_incontextv12 as deprecated_pi0light_incontextv12
 import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12

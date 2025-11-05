@@ -4697,10 +4697,16 @@ def build(api) -> list["api.TrainConfig"]:
 
     api.TrainConfig(
         name="pi0mini_incontext_libero_custom_dataset_v2_future_states_debug",
-        model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
-            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-            sample_frames=2, sample_actions=32, random_select=True,
-            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
+        model=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_300m_lora",  # NEW: 3rd expert for future state prediction
+            action_expert_variant="gemma_300m_lora",
+            future_state_downsample=5,  # Downsample factor (horizon computed automatically)
+            state_loss_weight=0.5,
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ),
         data=Customv2LeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=api.DataConfig(
@@ -4717,28 +4723,23 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
             current_frame_sample_mode="random",
             use_future_states=True,  # Enable future states
-            future_state_downsample=5,  # Downsample factor
+            future_state_downsample=5,  # Must match model's future_state_downsample
             multiple_current_frames=False,  # Disable to avoid conflict with use_future_states
         ),
-        vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-            npz_path="gs://vit_models/augreg/S_16-i21k-300ep-lr_0.001-aug_light1-wd_0.03-do_0.0-sd_0.0.npz",  # S/16
-        ),
-        weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        lr_schedule=api._optimizer.CosineDecaySchedule(
-            warmup_steps=1_000,
-            peak_lr=2.5e-5,
-            decay_steps=20_000,
-            decay_lr=2.5e-6),
-        num_train_steps=20_000,  # Reduced for debugging
-        freeze_filter=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
-            prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-            sample_frames=2, sample_actions=32, random_select=True,
-            freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16",
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_300m_lora",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=2,  # Reduced for debugging
         batch_size=2,  # Reduced for debugging
-        use_custom_dataloader=True, # TODO: refactor this later
+        use_custom_dataloader=True,
     ),
 
     api.TrainConfig(
