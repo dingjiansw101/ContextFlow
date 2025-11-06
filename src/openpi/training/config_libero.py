@@ -4799,7 +4799,7 @@ def build(api) -> list["api.TrainConfig"]:
     ),
 
     api.TrainConfig(
-        name="pi0mini_incontext_libero_custom_dataset_v2_future_states_debug",
+        name="pi0mini_incontextv17_libero_custom_dataset_v2",
         assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
         model=api.pi0_incontextv17.Pi0IncontextConfigv17(
             prompt_expert_variant="gemma_300m_v2",
@@ -4841,7 +4841,7 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=2,  # Reduced for debugging
+        num_workers=4,  # Reduced for debugging
         batch_size=32,  # Reduced for debugging
         use_custom_dataloader=True,
     ),
