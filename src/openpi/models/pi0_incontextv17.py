@@ -902,8 +902,10 @@ class Pi0Incontextv17(_model.BaseModel):
         midfix_attn_mask_repeat_action = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_action_tokens.shape[1])
         full_attn_mask_action = jnp.concatenate([midfix_attn_mask_repeat_action, suffix_action_attn_mask], axis=-1)
 
-        # Positions continue from where midfix ends
-        positions_action = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_action_mask, axis=-1) - 1
+        # Positions continue from where midfix AND state suffix end (to match fused call)
+        state_len = jnp.sum(suffix_state_mask, axis=-1)[:, None]  # = 1 + future_state_horizon
+        positions_action = (jnp.sum(midfix_mask, axis=-1)[:, None] + state_len 
+                            + jnp.cumsum(suffix_action_mask, axis=-1) - 1 )
 
         # Forward through action expert with KV cache
         (_, _, action_out), _ = self.PaliGemma.llm(
@@ -1030,7 +1032,15 @@ class Pi0Incontextv17(_model.BaseModel):
             suffix_attn_mask = make_attn_mask(suffix_mask, suffix_ar_mask)
             midfix_attn_mask_repeat = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_tokens.shape[1])
             full_attn_mask = jnp.concatenate([midfix_attn_mask_repeat, suffix_attn_mask], axis=-1)
-            positions = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_mask, axis=-1) - 1
+            # positions = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_mask, axis=-1) - 1
+            # Offset by both prompt and state suffix to keep absolute indexing aligned
+            state_len = (1 + self.config.future_state_horizon)
+            positions = (
+                jnp.sum(midfix_mask, axis=-1)[:, None]
+                + state_len
+                + jnp.cumsum(suffix_mask, axis=-1)
+                - 1
+            )
 
             # Forward pass with KV cache
             (_, _, action_out), _ = self.PaliGemma.llm(
