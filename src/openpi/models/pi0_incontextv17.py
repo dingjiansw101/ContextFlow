@@ -166,10 +166,10 @@ class Pi0IncontextConfigv17(_model.BaseModelConfig):
         max_len: int = 512,
     ) -> tuple[_model.ObservationIncontext, _model.Actions]:
         # TODO: rewrite this part
-        image_spec = jax.ShapeDtypeStruct([batch_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
+        image_spec = jax.ShapeDtypeStruct([batch_size, _model.IMAGE_RESOLUTION[0], _model.IMAGE_RESOLUTION[1], 3], jnp.float32)
         image_mask_spec = jax.ShapeDtypeStruct([batch_size], jnp.bool_)
 
-        prompt_image_spec = jax.ShapeDtypeStruct([batch_size, keyframe_size, *_model.IMAGE_RESOLUTION, 3], jnp.float32)
+        prompt_image_spec = jax.ShapeDtypeStruct([batch_size, keyframe_size, _model.IMAGE_RESOLUTION[0], _model.IMAGE_RESOLUTION[1], 3], jnp.float32)
         prompt_mask_spec = jax.ShapeDtypeStruct([batch_size, keyframe_size], jnp.bool_)
         with at.disable_typechecking():
             observation_spec = _model.ObservationIncontext(
@@ -720,6 +720,12 @@ class Pi0Incontextv17(_model.BaseModel):
         """
         # Split RNG
         preprocess_rng, noise_rng_state, noise_rng_action, time_rng_state, time_rng_action = jax.random.split(rng, 5)
+
+        # Make a shallow copy of incontext_images dict to avoid mutation issues
+        # (preprocess_observation_incontext mutates the dict in-place)
+        if observation.incontext_images is not None:
+            # Create new dict to prevent mutation of original
+            observation.incontext_images = dict(observation.incontext_images)
 
         # Preprocess observation
         observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)

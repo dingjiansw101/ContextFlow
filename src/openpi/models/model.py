@@ -432,7 +432,6 @@ def preprocess_observation_incontext(
     out_incontext_images = None
     out_incontext_masks = None
     if observation.incontext_images is not None:
-        # look at the first view to infer dims
         first = observation.incontext_images[image_keys[0]]
         ndim = first.ndim
         if ndim == 5:

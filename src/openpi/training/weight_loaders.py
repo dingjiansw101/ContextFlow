@@ -73,10 +73,42 @@ class CheckpointWeightLoaderIncontext(WeightLoader):
         # Add all missing LoRA weights.
         # return _merge_params(loaded_params, params, missing_regex=".*")
         fallback_pattern = r".*(?:lora|llm.*_prompt_expert|demo_action_proj|demo_state_proj|img_proj|demo_track_proj|text_proj).*"
-        # print(loaded_params['PaliGemma']['llm'].keys()) 
-        # dict_keys(['embedder', 'final_norm', 'final_norm_1', 'layers']) 
+        # print(loaded_params['PaliGemma']['llm'].keys())
+        # dict_keys(['embedder', 'final_norm', 'final_norm_1', 'layers'])
         # print(params['PaliGemma']['llm'].keys())
         # dict_keys(['embedder', 'final_norm', 'final_norm_1', 'final_norm_prompt_expert', 'layers'])
+        return _merge_params(loaded_params, params, missing_regex=fallback_pattern)
+
+
+@dataclasses.dataclass(frozen=True)
+class CheckpointWeightLoaderIncontextV17(WeightLoader):
+    """Loads weights from a checkpoint for v17 in-context models with future state prediction.
+
+    This loader extends CheckpointWeightLoaderIncontext to support v17 models that include
+    additional future state prediction layers. When loading from older checkpoints (e.g., pi0_base)
+    that don't have these layers, they will be randomly initialized.
+
+    New v17 layers that can be missing from checkpoint:
+      - future_state_in_proj
+      - state_time_mlp_in
+      - state_time_mlp_out
+      - future_state_out_proj
+      - future_state_conditioning_proj
+
+    Compatible with:
+      trained checkpoints:
+        example: "./checkpoints/<config>/<exp>/<step>/params"
+      released checkpoints:
+        example: "s3://openpi-assets/checkpoints/<model>/params"
+    """
+
+    params_path: str
+
+    def load(self, params: at.Params) -> at.Params:
+        # We are loading np.ndarray and relying on the training code to properly convert and shard the params.
+        loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
+        # Extended fallback pattern to include v17 future state prediction layers
+        fallback_pattern = r".*(?:lora|llm.*_prompt_expert|demo_action_proj|demo_state_proj|img_proj|demo_track_proj|text_proj|future_state.*|state_time_mlp.*).*"
         return _merge_params(loaded_params, params, missing_regex=fallback_pattern)
 
 

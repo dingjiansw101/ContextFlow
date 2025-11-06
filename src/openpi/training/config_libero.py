@@ -4830,7 +4830,7 @@ def build(api) -> list["api.TrainConfig"]:
             future_state_downsample=5,  # Must match model's future_state_downsample
             multiple_current_frames=False,  # Must be False for future_states
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontextV17("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
         freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
             prompt_expert_variant="gemma_300m_v2",
