@@ -98,6 +98,11 @@ class Pi0IncontextConfigv17(_model.BaseModelConfig):
     future_state_downsample: int = 5  # Downsample factor for future states (action_horizon // future_state_downsample)
     state_loss_weight: float = 0.5  # Weight for future state prediction loss
 
+    # Future state masking configuration
+    future_states_seq_mask_prob: float = 0.0  # Probability to block attention from action to future states
+    future_states_frame_mask_prob: float = 0.0  # Probability to apply noise mixture to future states
+    future_states_mask_noise_scale: float = 1.0  # Scale of noise in frame-level masking
+
     def __post_init__(self):
         """Validate config parameters."""
         if self.action_horizon % self.future_state_downsample != 0:
@@ -620,6 +625,26 @@ class Pi0Incontextv17(_model.BaseModel):
         # Read future_states from observation (already downsampled by dataloader)
         future_states = observation.future_states  # [B, future_state_horizon, state_dim]
 
+        # Frame-level masking: create masked version for action conditioning
+        if self.config.future_states_frame_mask_prob > 0:
+            rng, frame_mask_rng, alpha_rng, noise_rng = jax.random.split(rng, 4)
+
+            batch_size = future_states.shape[0]
+            # [B] - per-sample mask
+            frame_mask = jax.random.uniform(frame_mask_rng, (batch_size,)) < self.config.future_states_frame_mask_prob
+            alpha = jax.random.uniform(alpha_rng, (batch_size,))  # [B] random mixing per sample
+            noise = jax.random.normal(noise_rng, future_states.shape) * self.config.future_states_mask_noise_scale
+
+            # Mixture: masked = alpha * noise + (1 - alpha) * future_states
+            alpha_expanded = alpha[:, None, None]  # [B, 1, 1]
+            future_states_mixed = alpha_expanded * noise + (1 - alpha_expanded) * future_states
+
+            # Apply only to masked samples
+            frame_mask_expanded = frame_mask[:, None, None]  # [B, 1, 1]
+            future_states_for_conditioning = jnp.where(frame_mask_expanded, future_states_mixed, future_states)
+        else:
+            future_states_for_conditioning = future_states
+
         # Sample noise and time for state expert
         batch_shape = future_states.shape[:-2]
         noise_state = jax.random.normal(noise_rng_state, future_states.shape)
@@ -651,9 +676,9 @@ class Pi0Incontextv17(_model.BaseModel):
             observation, x_t_state, time_state
         )
 
-        # Embed suffix for action expert (conditioned on GT future states)
+        # Embed suffix for action expert (conditioned on potentially masked future states)
         suffix_action_tokens, suffix_action_mask, suffix_action_ar_mask = self.embed_suffix_action(
-            observation, future_states, x_t_action, time_action
+            observation, future_states_for_conditioning, x_t_action, time_action
         )
 
         # Concatenate all masks
@@ -675,6 +700,30 @@ class Pi0Incontextv17(_model.BaseModel):
         # Shape: [B, T, S] - for all action tokens (dim 1), block state tokens (dim 2)
         attn_mask = attn_mask.at[:, action_start:, state_start:state_end].set(False)
 
+        # === Sequence-level masking: block action tokens from attending to future state conditioning ===
+        if self.config.future_states_seq_mask_prob > 0:
+            rng, seq_mask_rng = jax.random.split(rng, 2)
+            batch_size = future_states.shape[0]
+            seq_mask = jax.random.uniform(seq_mask_rng, (batch_size,)) < self.config.future_states_seq_mask_prob
+
+            # Future states in action suffix: [current_state | future_states | actions]
+            # Positions relative to start of full sequence
+            future_state_start_in_full = action_start + 1  # Skip current state token
+            future_state_end_in_full = action_start + 1 + self.config.future_state_horizon
+            action_token_start_in_full = future_state_end_in_full
+
+            # Block action tokens from attending to future state tokens for masked samples
+            # Expand seq_mask to 3D for broadcasting: [B] -> [B, 1, 1]
+            seq_mask_3d = seq_mask[:, None, None]
+
+            # Create position mask indicating which tokens to block
+            position_mask = jnp.zeros_like(attn_mask, dtype=jnp.bool_)
+            position_mask = position_mask.at[
+                :, action_token_start_in_full:, future_state_start_in_full:future_state_end_in_full
+            ].set(True)
+
+            # Apply masking: where (seq_mask AND position) = True, set to False
+            attn_mask = jnp.where(seq_mask_3d & position_mask, False, attn_mask)
 
         positions = jnp.cumsum(input_mask, axis=1) - 1
 

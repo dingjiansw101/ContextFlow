@@ -4847,6 +4847,245 @@ def build(api) -> list["api.TrainConfig"]:
     ),
 
     api.TrainConfig(
+        name="pi0_incontextv17_libero_custom_dataset_v2_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",  # NEW: 3rd expert for future state prediction
+            action_expert_variant="gemma_300m_lora",
+            future_state_downsample=5,  # Downsample factor (horizon computed automatically)
+            state_loss_weight=0.5,
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            libero_input_refactor=True,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontextV17("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,  # Reduced for debugging
+        batch_size=32,  # Reduced for debugging
+        use_custom_dataloader=True,
+    ),
+
+
+    api.TrainConfig(
+        name="pi0_incontextv17_libero_custom_dataset_v2_seq_mask",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",  # NEW: 3rd expert for future state prediction
+            action_expert_variant="gemma_300m_lora",
+            future_state_downsample=5,  # Downsample factor (horizon computed automatically)
+            state_loss_weight=0.5,
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+        ),
+        data=Customv2FutureStatesLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            frame_sequence_length=1,  # Required for future_states
+            sample_frames=2,
+            sample_actions=32,
+            task_to_episode_path="metadata/libero/task_to_episode.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            random_select=True,
+            current_frame_sample_mode="random",
+            use_future_states=True,  # Enabled by default in this config
+            future_state_downsample=5,  # Must match model's future_state_downsample
+            multiple_current_frames=False,  # Must be False for future_states
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontextV17("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=20,  # Reduced for debugging
+        batch_size=32,  # Reduced for debugging
+        use_custom_dataloader=True,
+    ),
+
+    api.TrainConfig(
+        name="pi0_incontextv17_libero_custom_dataset_v2_seq_mask_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",  # NEW: 3rd expert for future state prediction
+            action_expert_variant="gemma_300m_lora",
+            future_state_downsample=5,  # Downsample factor (horizon computed automatically)
+            state_loss_weight=0.5,
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            libero_input_refactor=True,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontextV17("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=2,  # Reduced for debugging
+        batch_size=32,  # Reduced for debugging
+        use_custom_dataloader=True,
+    ),
+
+    api.TrainConfig(
+        name="pi0_incontextv17_libero_custom_dataset_v2_seq_frame_mask",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",  # NEW: 3rd expert for future state prediction
+            action_expert_variant="gemma_300m_lora",
+            future_state_downsample=5,  # Downsample factor (horizon computed automatically)
+            state_loss_weight=0.5,
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+            future_states_frame_mask_prob=0.2,
+            future_states_mask_noise_scale=0.5
+        ),
+        data=Customv2FutureStatesLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            frame_sequence_length=1,  # Required for future_states
+            sample_frames=2,
+            sample_actions=32,
+            task_to_episode_path="metadata/libero/task_to_episode.json",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            random_select=True,
+            current_frame_sample_mode="random",
+            use_future_states=True,  # Enabled by default in this config
+            future_state_downsample=5,  # Must match model's future_state_downsample
+            multiple_current_frames=False,  # Must be False for future_states
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontextV17("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+            future_states_frame_mask_prob=0.2,
+            future_states_mask_noise_scale=0.5
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=20,  # Reduced for debugging
+        batch_size=32,  # Reduced for debugging
+        use_custom_dataloader=True,
+    ),
+
+    api.TrainConfig(
+        name="pi0_incontextv17_libero_custom_dataset_v2_seq_frame_mask_inference",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
+        model=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",  # NEW: 3rd expert for future state prediction
+            action_expert_variant="gemma_300m_lora",
+            future_state_downsample=5,  # Downsample factor (horizon computed automatically)
+            state_loss_weight=0.5,
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+            future_states_frame_mask_prob=0.2,
+            future_states_mask_noise_scale=0.5
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            libero_input_refactor=True,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontextV17("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
+            prompt_expert_variant="gemma_300m_v2",
+            state_expert_variant="gemma_100m",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+            future_states_seq_mask_prob=0.5,
+            future_states_frame_mask_prob=0.2,
+            future_states_mask_noise_scale=0.5
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=2,  # Reduced for debugging
+        batch_size=32,  # Reduced for debugging
+        use_custom_dataloader=True,
+    ),
+
+    api.TrainConfig(
         name="vitb_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1_dataset_refactor",
         assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
         model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
