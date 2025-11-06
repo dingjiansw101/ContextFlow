@@ -4799,7 +4799,7 @@ def build(api) -> list["api.TrainConfig"]:
     ),
 
     api.TrainConfig(
-        name="pi0mini_incontextv17_libero_custom_dataset_v2",
+        name="pi0_incontextv17_libero_custom_dataset_v2",
         assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
         model=api.pi0_incontextv17.Pi0IncontextConfigv17(
             prompt_expert_variant="gemma_300m_v2",
