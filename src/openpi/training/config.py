@@ -15,6 +15,7 @@ from typing_extensions import override
 import tyro
 
 import openpi.models.model as _model
+import openpi.models.pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.pi0_incontextv12 as pi0_incontextv12
@@ -422,11 +423,14 @@ class ModelTransformFactory(GroupFactory):
                 )
             case _model.ModelType.PI0_FAST_INCONTEXT:
                 fast_tokenizer = _tokenizer.FASTTokenizer(model_config.max_token_len)
+                input_transforms = [
+                    _transforms.InjectDefaultPrompt(self.default_prompt),
+                    _transforms.ResizeImages(224, 224),
+                ]
+                if isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+                    input_transforms.append(_transforms.TokenizeFASTInputs(fast_tokenizer))
                 return _transforms.Group(
-                    inputs=[
-                        _transforms.InjectDefaultPrompt(self.default_prompt),
-                        _transforms.ResizeImages(224, 224),
-                    ],
+                    inputs=input_transforms,
                     outputs=[
                         _transforms.ExtractFASTActions(
                             fast_tokenizer,

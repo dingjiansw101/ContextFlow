@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 import openpi.models.model as _model
 from openpi.models import pi0_fast_incontext as _pi0_fast_incontext
+from openpi.models import pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 from openpi.models import tokenizer as _tokenizer
 import openpi.training.config as _config
 import openpi.transforms as _transforms

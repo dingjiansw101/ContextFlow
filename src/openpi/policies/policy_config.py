@@ -10,7 +10,9 @@ import openpi.models.model as _model
 import openpi.policies.policy as _policy
 import openpi.policies.policy_incontext as _policy_incontext
 from openpi.policies.policy_incontext import PolicyFASTIncontext
+from openpi.models.pi0_fast_incontext import Pi0FASTIncontextConfig
 from openpi.models import tokenizer as _tokenizer
+from openpi.models import pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 import openpi.shared.download as download
 from openpi.training import checkpoints as _checkpoints
 from openpi.training import config as _config
@@ -260,12 +262,19 @@ def _build_fast_incontext_transforms(
         max_len=getattr(model_config, "max_token_len", 256),
         fast_tokenizer_path=_maybe_fast_tokenizer_path(model_config),
     )
-    inputs_layers.append(
-        transforms.TokenizeFASTIncontextInputs(
-            tokenizer=fast_tokenizer,
-            max_incontext_steps=getattr(model_config, "sample_actions", 4),
+    if isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+        inputs_layers.append(
+            transforms.TokenizeFASTInputs(
+                fast_tokenizer,
+            )
         )
-    )
+    else:
+        inputs_layers.append(
+            transforms.TokenizeFASTIncontextInputs(
+                tokenizer=fast_tokenizer,
+                max_incontext_steps=getattr(model_config, "sample_actions", 4),
+            )
+        )
 
     outputs_layers = [
         *data_config.model_transforms.outputs,
@@ -286,8 +295,12 @@ def create_trained_policy_fast_incontext(
     default_prompt: str | None = None,
     norm_stats: dict[str, transforms.NormStats] | None = None,
 ) -> PolicyFASTIncontext:
-    if not isinstance(train_config.model, Pi0FASTIncontextConfig):
-        raise TypeError("create_trained_policy_fast_incontext requires a Pi0FASTIncontextConfig model.")
+    if not isinstance(
+        train_config.model, (Pi0FASTIncontextConfig, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig)
+    ):
+        raise TypeError(
+            "create_trained_policy_fast_incontext requires a Pi0FASTIncontextConfig or Pi0FASTIncontextSeqConfig model."
+        )
 
     repack_transforms = repack_transforms or transforms.Group()
     checkpoint_dir = download.maybe_download(str(checkpoint_dir))

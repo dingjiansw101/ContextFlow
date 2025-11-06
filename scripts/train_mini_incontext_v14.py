@@ -31,6 +31,47 @@ import json
 import flax
 from typing import Any
 from flax.nnx import filterlib
+from flax.core import frozen_dict
+
+_ALLOWED_MISSING_WEIGHT_PREFIXES: tuple[str, ...] = (
+    "image_proj_promtp_expert",
+    "img_pool_action_expert",
+    "image_proj_action_expert",
+    "img_pool_prompt_expert",
+    "demo_state_proj",
+    "demo_action_proj",
+)
+
+
+def _ensure_allowed_missing_subtrees(
+    params: at.Params, template: at.Params
+) -> tuple[at.Params, list[str]]:
+    """Insert template subtrees for known-missing prefixes before validation."""
+    was_frozen = isinstance(params, frozen_dict.FrozenDict)
+    mutable_params = frozen_dict.unfreeze(params) if was_frozen else params
+    mutable_template = (
+        frozen_dict.unfreeze(template) if isinstance(template, frozen_dict.FrozenDict) else template
+    )
+
+    inserted: list[str] = []
+    for prefix in _ALLOWED_MISSING_WEIGHT_PREFIXES:
+        if prefix in mutable_params:
+            continue
+        template_subtree = mutable_template.get(prefix)
+        if template_subtree is None:
+            continue
+        mutable_params[prefix] = copy.deepcopy(template_subtree)
+        inserted.append(prefix)
+
+    if not inserted:
+        return params, inserted
+
+    logging.warning(
+        "[_load_weights_and_validate] Filled missing weight prefixes with template structure: %s",
+        inserted,
+    )
+
+    return (frozen_dict.freeze(mutable_params) if was_frozen else mutable_params), inserted
 
 def summarize_nnx_model(
     model: nnx.Module,
@@ -161,6 +202,7 @@ def _load_weights_and_validate(
 
     # Step 1: Load base weights
     loaded_params = loader.load(params_shape)
+    loaded_params, _ = _ensure_allowed_missing_subtrees(loaded_params, params_shape)
 
     if vision_encoder_loader is None:
         at.check_pytree_equality(expected=params_shape, got=loaded_params, check_shapes=True, check_dtypes=True)
