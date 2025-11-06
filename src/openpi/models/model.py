@@ -180,6 +180,9 @@ class ObservationIncontext(Generic[ArrayT]):
     current_state_seq: at.Float[ArrayT, "*b n s"] | None = None
     actions_seq: at.Float[ArrayT, "*b n ah ad"] | None = None
 
+    # Future states for state expert (v17)
+    future_states: at.Float[ArrayT, "*b fh s"] | None = None
+
     @classmethod
     def from_dict(cls, data: at.PyTree[ArrayT]) -> "ObservationIncontext[ArrayT]":
         """This method defines the mapping between unstructured data (i.e., nested dict) to the structured Observation format."""
@@ -234,6 +237,9 @@ class ObservationIncontext(Generic[ArrayT]):
             current_image_masks_seq=data.get("current_image_masks_seq"),
             current_state_seq=data.get("current_state_seq"),
             actions_seq=data.get("actions_seq"),
+
+            # Future states for state expert (v17)
+            future_states=data.get("future_states"),
         )
 
     def to_dict(self) -> at.PyTree[ArrayT]:
@@ -257,6 +263,9 @@ class ObservationIncontext(Generic[ArrayT]):
         result["current_image_masks_seq"] = result.pop("current_image_masks_seq")
         result["current_state_seq"] = result.pop("current_state_seq")
         result["actions_seq"] = result.pop("actions_seq")
+
+        # Future states for state expert (v17)
+        result["future_states"] = result.pop("future_states")
         return result
 
 
@@ -486,6 +495,7 @@ def preprocess_observation_incontext(
         tokenized_prompt_mask=observation.tokenized_prompt_mask,
         token_ar_mask=observation.token_ar_mask,
         token_loss_mask=observation.token_loss_mask,
+        future_states=observation.future_states,
     )
 
 def preprocess_observation_incontext_fused(
@@ -615,6 +625,9 @@ def preprocess_observation_incontext_fused(
         current_image_masks_seq=out_cur_masks_seq,
         current_state_seq=observation.current_state_seq,
         actions_seq=observation.actions_seq,
+
+        # TODO: Implement future_states preprocessing when needed
+        future_states=observation.future_states,
     )
 
 

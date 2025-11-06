@@ -11,6 +11,107 @@ from openpi.models import pi0_incontextv12
 from openpi.models import pi0_fast
 from openpi.shared import download
 from openpi.shared import nnx_utils
+from openpi.training import config as train_config
+
+
+def print_freeze_report(config, *, max_items: int = 20) -> None:
+    """Utility to print frozen vs. trainable parameter paths for a given config.
+
+    Args:
+        config: Either a model config, a TrainConfig, or the string name of a TrainConfig.
+        max_items: Number of entries to show for each set before truncating the output.
+    """
+    if isinstance(config, str):
+        cfg = train_config.get_config(config)
+        model_cfg = cfg.model
+        label = config
+    elif hasattr(config, "model") and hasattr(config, "freeze_filter"):
+        cfg = config
+        model_cfg = cfg.model
+        label = getattr(cfg, "name", cfg.__class__.__name__)
+    else:
+        cfg = None
+        model_cfg = config
+        label = model_cfg.__class__.__name__
+
+    freeze_filter = model_cfg.get_freeze_filter()
+    abstract_model = nnx.eval_shape(model_cfg.create, jax.random.key(0))
+
+    frozen = nnx.state(abstract_model, nnx.All(nnx.Param, freeze_filter)).flat_state()
+    trainable = nnx.state(abstract_model, nnx.All(nnx.Param, nnx.Not(freeze_filter))).flat_state()
+
+    def summarize(paths: dict, title: str) -> None:
+        print(f"{title} ({len(paths)}):")
+        for path in list(paths)[:max_items]:
+            print("  ", "/".join(str(part) for part in path))
+        if len(paths) > max_items:
+            print(f"  ... ({len(paths) - max_items} more)")
+
+    print(f"=== Freeze report for {label} ===")
+    print(f"Filter type: {type(freeze_filter)}")
+    summarize(frozen, "Frozen params")
+    summarize(trainable, "Trainable params")
+    print()
+
+
+def compare_future_vs_lowmem_params(max_items: int = 100) -> None:
+    """Compare trainable/frozen parameters for two hard-coded Libero configs."""
+
+    cfg_future = train_config.get_config("pi0mini_incontext_libero_custom_dataset_v2_future_states_debug")
+    cfg_lowmem = train_config.get_config(
+        "pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
+    )
+
+    def collect(cfg) -> tuple[list[str], list[str]]:
+        model_cfg = cfg.model
+        abstract_model = nnx.eval_shape(model_cfg.create, jax.random.key(0))
+        freeze_filter = model_cfg.get_freeze_filter()
+        frozen = nnx.state(abstract_model, nnx.All(nnx.Param, freeze_filter)).flat_state()
+        trainable = nnx.state(abstract_model, nnx.All(nnx.Param, nnx.Not(freeze_filter))).flat_state()
+        frozen_paths = ["/".join(str(part) for part in path) for path in frozen]
+        trainable_paths = ["/".join(str(part) for part in path) for path in trainable]
+        return frozen_paths, trainable_paths
+
+    frozen_future, trainable_future = collect(cfg_future)
+    frozen_lowmem, trainable_lowmem = collect(cfg_lowmem)
+
+    def summarize(title: str, items: list[str]):
+        print(f"{title} ({len(items)}):")
+        for path in items[:max_items]:
+            print("  ", path)
+        if len(items) > max_items:
+            print(f"  ... ({len(items) - max_items} more)")
+
+    print()
+    print("=== Trainable params ===")
+    summarize(
+        "Shared trainable",
+        sorted(set(trainable_future).intersection(trainable_lowmem)),
+    )
+    summarize(
+        "Only in future_states_debug",
+        sorted(set(trainable_future) - set(trainable_lowmem)),
+    )
+    summarize(
+        "Only in low_mem_finetune",
+        sorted(set(trainable_lowmem) - set(trainable_future)),
+    )
+
+    print()
+    print("=== Frozen params ===")
+    summarize(
+        "Shared frozen",
+        sorted(set(frozen_future).intersection(frozen_lowmem)),
+    )
+    summarize(
+        "Only frozen in future_states_debug",
+        sorted(set(frozen_future) - set(frozen_lowmem)),
+    )
+    summarize(
+        "Only frozen in low_mem_finetune",
+        sorted(set(frozen_lowmem) - set(frozen_future)),
+    )
+
 
 
 def test_pi0_model():
@@ -510,7 +611,8 @@ if __name__ == "__main__":
     # test_pi0_lora_model_v7_num_params()
     # test_pi0_lora_model_v7_4_params()
     # test_pi0_lora_model_v12_num_params()
-    test_pi0_lora_model_v9_num_params()
+    # test_pi0_lora_model_v9_num_params()
     # test_pi0_lora_model_num_params()
 
     # test_compare_v12_v9_trainable_params()
+    compare_future_vs_lowmem_params()

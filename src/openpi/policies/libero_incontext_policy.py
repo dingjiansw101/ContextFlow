@@ -343,6 +343,12 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
         if "actions_padding_seq" in data:
             inputs["actions_padding_seq"] = np.asarray(data["actions_padding_seq"])
 
+        # future_states: [future_state_horizon, state_dim] - for v17 state expert
+        if "future_states" in data:
+            future_states = np.asarray(data["future_states"])
+            # Pad to action_dim to match state dimension
+            padded_future_states = transforms.pad_to_dim(future_states, self.action_dim, axis=-1)
+            inputs["future_states"] = padded_future_states
 
         # Pass through optional fields (same as LiberoIncontextInputs_refactor)
         if "actions" in data:

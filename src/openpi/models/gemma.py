@@ -56,7 +56,7 @@ class Config:
     expert_name: str | None = None     
 
 
-Variant = Literal["dummy", "gemma_300m", "gemma_2b", "gemma_2b_lora"]
+Variant = Literal["dummy", "gemma_100m", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_300m_v2", "gemma_300m_lora"]
 
 
 def get_config(variant: Variant, expert_name: str | None = None) -> Config:
@@ -69,6 +69,17 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
             num_heads=8,
             num_kv_heads=1,
             head_dim=16,
+            expert_name=expert_name,
+        )
+    if variant == "gemma_100m":
+        # ~100M params
+        return Config(
+            width=640,
+            depth=18,
+            mlp_dim=2560,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=80,
             expert_name=expert_name,
         )
     if variant == "gemma_300m":

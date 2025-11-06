@@ -98,14 +98,48 @@ class Pi0IncontextConfigv17(_model.BaseModelConfig):
     future_state_downsample: int = 5  # Downsample factor for future states (action_horizon // future_state_downsample)
     state_loss_weight: float = 0.5  # Weight for future state prediction loss
 
+    def __post_init__(self):
+        """Validate config parameters."""
+        if self.action_horizon % self.future_state_downsample != 0:
+            raise ValueError(
+                f"action_horizon ({self.action_horizon}) must be divisible by "
+                f"future_state_downsample ({self.future_state_downsample})"
+            )
+
     @property
     def future_state_horizon(self) -> int:
         """Compute future_state_horizon from action_horizon and downsample factor.
 
         Returns:
             Number of future states = action_horizon // future_state_downsample
+
+        Note:
+            Divisibility is validated in __post_init__.
         """
         return self.action_horizon // self.future_state_downsample
+
+    @property
+    def state_expert_width(self) -> int:
+        """Hidden dimension of the state expert."""
+        return _gemma.get_config(self.state_expert_variant).width
+
+    @property
+    def action_expert_width(self) -> int:
+        """Hidden dimension of the action expert."""
+        return _gemma.get_config(self.action_expert_variant).width
+
+    def fake_obs(self, batch_size: int = 1) -> _model.ObservationIncontext:
+        """Create fake observation with correct incontext dimensions.
+
+        Overrides BaseModelConfig.fake_obs to ensure incontext_images and other
+        incontext fields are created with proper 5-D/6-D shapes.
+        """
+        observation_spec, _ = self.inputs_spec(
+            batch_size=batch_size,
+            keyframe_size=self.sample_frames,
+            max_len=64  # Default max sequence length for incontext states/actions
+        )
+        return jax.tree.map(lambda x: jnp.ones(x.shape, x.dtype), observation_spec)
 
     # In-context learning params
     sample_frames: int = 16
@@ -167,6 +201,7 @@ class Pi0IncontextConfigv17(_model.BaseModelConfig):
                 incontext_action_masks=jax.ShapeDtypeStruct([batch_size, max_len], jnp.bool_),
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),
+                future_states=jax.ShapeDtypeStruct([batch_size, self.future_state_horizon, self.state_dim], jnp.float32),
             )
         action_spec = jax.ShapeDtypeStruct([batch_size, self.action_horizon, self.action_dim], jnp.float32)
 
@@ -206,13 +241,19 @@ class Pi0IncontextConfigv17(_model.BaseModelConfig):
 
         # Case 2+: At least one expert uses LoRA
 
-        # Freeze base weights of LoRA experts
+        # Freeze base weights of LoRA experts (union of selected experts)
+        base_filters = []
         if prompt_has_lora:
-            filters.append(prompt_expert_filter)
+            base_filters.append(prompt_expert_filter)
         if state_has_lora:
-            filters.append(state_expert_filter)
+            base_filters.append(state_expert_filter)
         if action_has_lora:
-            filters.append(action_expert_filter)
+            base_filters.append(action_expert_filter)
+
+        if len(base_filters) == 1:
+            filters.append(base_filters[0])
+        else:
+            filters.append(nnx.Any(*base_filters))
 
         # Unfreeze LoRA adapters (they should be trainable)
         filters.append(nnx.Not(lora_filter))
@@ -559,16 +600,14 @@ class Pi0Incontextv17(_model.BaseModel):
         rng: at.KeyArrayLike,
         observation: _model.ObservationIncontext,
         actions: _model.Actions,  # [B, action_horizon, action_dim]
-        future_states: at.Float[at.Array, "b future_state_horizon state_dim"],  # Pre-downsampled by dataloader
         *,
         train: bool = False,
     ) -> at.Float[at.Array, "*b"]:
         """Compute loss for both state prediction and action generation experts.
 
-        Args:
-            future_states: Pre-downsampled future states from dataloader.
-                          Shape: [B, future_state_horizon, state_dim] (NOT action_horizon!)
-                          Dataloader is responsible for downsampling.
+        The future_states are read from observation.future_states.
+        Shape: [B, future_state_horizon, state_dim] (NOT action_horizon!)
+        Dataloader is responsible for downsampling.
         """
         # Split RNG
         preprocess_rng, noise_rng_state, noise_rng_action, time_rng_state, time_rng_action = jax.random.split(rng, 5)
@@ -578,7 +617,8 @@ class Pi0Incontextv17(_model.BaseModel):
 
         # === STAGE 1: Future State Prediction ===
 
-        # future_states is already downsampled by dataloader: [B, future_state_horizon, state_dim]
+        # Read future_states from observation (already downsampled by dataloader)
+        future_states = observation.future_states  # [B, future_state_horizon, state_dim]
 
         # Sample noise and time for state expert
         batch_shape = future_states.shape[:-2]
@@ -655,8 +695,118 @@ class Pi0Incontextv17(_model.BaseModel):
         v_t_action = self.action_out_proj(action_out[:, -self.action_horizon :])
         loss_action = jnp.mean(jnp.square(v_t_action - u_t_action), axis=-1)
 
+        # Average over temporal dimension to get per-sample losses
+        loss_state_per_sample = jnp.mean(loss_state, axis=-1)  # [B, future_state_horizon] -> [B]
+        loss_action_per_sample = jnp.mean(loss_action, axis=-1)  # [B, action_horizon] -> [B]
+
         # Weighted combination
-        return self.config.state_loss_weight * loss_state + loss_action
+        return self.config.state_loss_weight * loss_state_per_sample + loss_action_per_sample
+
+    def compute_loss_sequential(
+        self,
+        rng: at.KeyArrayLike,
+        observation: _model.ObservationIncontext,
+        actions: _model.Actions,
+        *,
+        train: bool = False,
+    ) -> at.Float[at.Array, "*b"]:
+        """Sequential computation of state and action losses (for testing equivalence).
+
+        This method implements the same computation as compute_loss but runs state and action
+        experts sequentially rather than in a fused manner. It should produce identical results
+        due to attention masking in the fused version.
+
+        Returns identical loss shape as compute_loss: [B]
+        """
+        # Split RNG
+        preprocess_rng, noise_rng_state, noise_rng_action, time_rng_state, time_rng_action = jax.random.split(rng, 5)
+
+        # Preprocess observation
+        observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
+
+        # === STAGE 1: Future State Prediction ===
+
+        # Read future_states from observation
+        future_states = observation.future_states  # [B, future_state_horizon, state_dim]
+
+        # Sample noise and time for state expert
+        batch_shape = future_states.shape[:-2]
+        noise_state = jax.random.normal(noise_rng_state, future_states.shape)
+        time_state = jax.random.beta(time_rng_state, 1.5, 1, batch_shape) * 0.999 + 0.001
+        time_state_expanded = time_state[..., None, None]
+
+        # Flow matching: x_t = t * noise + (1-t) * data
+        x_t_state = time_state_expanded * noise_state + (1 - time_state_expanded) * future_states
+        u_t_state = noise_state - future_states  # Target velocity
+
+        # === STAGE 2: Action Prediction ===
+
+        # Sample noise and time for action expert
+        noise_action = jax.random.normal(noise_rng_action, actions.shape)
+        time_action = jax.random.beta(time_rng_action, 1.5, 1, batch_shape) * 0.999 + 0.001
+        time_action_expanded = time_action[..., None, None]
+
+        # Flow matching for actions
+        x_t_action = time_action_expanded * noise_action + (1 - time_action_expanded) * actions
+        u_t_action = noise_action - actions  # Target velocity
+
+        # === SEQUENTIAL FORWARD PASS ===
+
+        # Embed midfix once (shared by both experts)
+        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
+
+        # --- Step 1: State Expert ---
+        suffix_state_tokens, suffix_state_mask, suffix_state_ar_mask = self.embed_suffix_state(
+            observation, x_t_state, time_state
+        )
+
+        # Concatenate midfix + state suffix
+        input_mask_state = jnp.concatenate([midfix_mask, suffix_state_mask], axis=1)
+        ar_mask_state = jnp.concatenate([midfix_ar_mask, suffix_state_ar_mask], axis=0)
+        attn_mask_state = make_attn_mask(input_mask_state, ar_mask_state)
+        positions_state = jnp.cumsum(input_mask_state, axis=1) - 1
+
+        # Forward through prompt and state experts only
+        (midfix_out_state, state_out, _), _ = self.PaliGemma.llm(
+            [midfix_tokens, suffix_state_tokens, None],  # None for action expert
+            mask=attn_mask_state,
+            positions=positions_state,
+        )
+
+        # --- Step 2: Action Expert ---
+        suffix_action_tokens, suffix_action_mask, suffix_action_ar_mask = self.embed_suffix_action(
+            observation, future_states, x_t_action, time_action
+        )
+
+        # Concatenate midfix + action suffix
+        input_mask_action = jnp.concatenate([midfix_mask, suffix_action_mask], axis=1)
+        ar_mask_action = jnp.concatenate([midfix_ar_mask, suffix_action_ar_mask], axis=0)
+        attn_mask_action = make_attn_mask(input_mask_action, ar_mask_action)
+        positions_action = jnp.cumsum(input_mask_action, axis=1) - 1
+
+        # Forward through prompt and action experts only
+        (midfix_out_action, _, action_out), _ = self.PaliGemma.llm(
+            [midfix_tokens, None, suffix_action_tokens],  # None for state expert
+            mask=attn_mask_action,
+            positions=positions_action,
+        )
+
+        # === COMPUTE LOSSES ===
+
+        # Future state prediction loss
+        v_t_state = self.future_state_out_proj(state_out[:, -self.config.future_state_horizon :])
+        loss_state = jnp.mean(jnp.square(v_t_state - u_t_state), axis=-1)
+
+        # Action prediction loss
+        v_t_action = self.action_out_proj(action_out[:, -self.action_horizon :])
+        loss_action = jnp.mean(jnp.square(v_t_action - u_t_action), axis=-1)
+
+        # Average over temporal dimension to get per-sample losses
+        loss_state_per_sample = jnp.mean(loss_state, axis=-1)  # [B, future_state_horizon] -> [B]
+        loss_action_per_sample = jnp.mean(loss_action, axis=-1)  # [B, action_horizon] -> [B]
+
+        # Weighted combination
+        return self.config.state_loss_weight * loss_state_per_sample + loss_action_per_sample
 
     @override
     def sample_actions(

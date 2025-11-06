@@ -354,6 +354,109 @@ def build(api) -> list["api.TrainConfig"]:
 
 
     @dataclasses.dataclass(frozen=True)
+    class Customv2FutureStatesLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
+        """Config for CustomLeRobotDatasetv2 with future_states support.
+
+        Unlike Customv2LeRobotLiberoIncontextDataConfig which supports frame sequences,
+        this variant is optimized for future state prediction without multiple current frames.
+        """
+        use_delta_joint_actions: bool = False
+
+        # CustomLeRobotDataset specific parameters
+        custom_dataloader_version: str = "v2"
+        frame_sequence_length: int = 1  # Must be 1 for future_states
+        sample_frames: int = 2
+        sample_actions: int = 32
+        task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+        states_cache_path: str = "metadata/libero/episode_states_cache.json"
+        actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
+        random_select: bool = True
+        norm_stats_aliases: dict[str, str] | None = dataclasses.field(default_factory=lambda: {
+            "dem_prompt_all_states": "state",
+            "dem_prompt_all_actions": "actions",
+            "future_states": "state",  # Future states use same normalization as current states
+        })
+        current_frame_sample_mode: str = "random"
+        use_future_states: bool = True  # Enable by default
+        future_state_downsample: int = 5
+        multiple_current_frames: bool = False  # Must be False for future_states
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
+            # Validate constraints
+            if self.use_future_states and self.multiple_current_frames:
+                raise ValueError(
+                    "Cannot use both use_future_states=True and multiple_current_frames=True. "
+                    "These features are currently incompatible. Please set one of them to False."
+                )
+            if self.frame_sequence_length != 1:
+                raise ValueError(
+                    "frame_sequence_length must be 1 when use_future_states=True (got {self.frame_sequence_length})"
+                )
+
+            # Simplified RepackTransform WITHOUT frame sequence fields
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "observation/image": "image",
+                            "observation/wrist_image": "wrist_image",
+                            "observation/state": "state",
+                            "actions": "actions",
+                            "prompt": "prompt",
+                            "episode_index": "episode_index",
+                            "frame_index": "frame_index",
+                            "index": "index",
+                            "task_index": "task_index",
+                            # Pass through dem_prompt_* keys from CustomLeRobotDataset
+                            "dem_prompt_images": {
+                                "image": "dem_prompt_images/image",
+                                "wrist_image": "dem_prompt_images/wrist_image"
+                            },
+                            "dem_prompt_states": "dem_prompt_states",
+                            "dem_prompt_actions": "dem_prompt_actions",
+                            "selected_episode": "selected_episode",
+                            # V2-specific: Only future_states, NO frame sequence fields
+                            "future_states": "future_states",
+                        }
+                    )
+                ]
+            )
+
+            # Calculate training episode indices
+            train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+
+            # Prepare data for policy training
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+
+            # Use delta actions (not for gripper)
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            # Model transforms include things like tokenizing the prompt and action targets
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                train_episode=train_epi,
+            )
+
+
+    @dataclasses.dataclass(frozen=True)
     class LeRobotLiberoStageIncontextDataConfig(api.DataConfigFactory):
         use_delta_joint_actions: bool = True
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
@@ -4697,9 +4800,10 @@ def build(api) -> list["api.TrainConfig"]:
 
     api.TrainConfig(
         name="pi0mini_incontext_libero_custom_dataset_v2_future_states_debug",
+        assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
         model=api.pi0_incontextv17.Pi0IncontextConfigv17(
             prompt_expert_variant="gemma_300m_v2",
-            state_expert_variant="gemma_300m_lora",  # NEW: 3rd expert for future state prediction
+            state_expert_variant="gemma_100m",  # NEW: 3rd expert for future state prediction
             action_expert_variant="gemma_300m_lora",
             future_state_downsample=5,  # Downsample factor (horizon computed automatically)
             state_loss_weight=0.5,
@@ -4707,14 +4811,14 @@ def build(api) -> list["api.TrainConfig"]:
             sample_actions=32,
             random_select=True,
         ),
-        data=Customv2LeRobotLiberoIncontextDataConfig(
+        data=Customv2FutureStatesLeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=api.DataConfig(
                 local_files_only=False,
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            frame_sequence_length=1,  # Set to 1 to avoid NotImplementedError with use_future_states
+            frame_sequence_length=1,  # Required for future_states
             sample_frames=2,
             sample_actions=32,
             task_to_episode_path="metadata/libero/task_to_episode.json",
@@ -4722,15 +4826,15 @@ def build(api) -> list["api.TrainConfig"]:
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             random_select=True,
             current_frame_sample_mode="random",
-            use_future_states=True,  # Enable future states
+            use_future_states=True,  # Enabled by default in this config
             future_state_downsample=5,  # Must match model's future_state_downsample
-            multiple_current_frames=False,  # Disable to avoid conflict with use_future_states
+            multiple_current_frames=False,  # Must be False for future_states
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
         freeze_filter=api.pi0_incontextv17.Pi0IncontextConfigv17(
             prompt_expert_variant="gemma_300m_v2",
-            state_expert_variant="gemma_300m_lora",
+            state_expert_variant="gemma_100m",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
             sample_actions=32,

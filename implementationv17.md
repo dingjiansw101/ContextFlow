@@ -1261,6 +1261,9 @@ Start with **Solution 1 (add noise)** because it's simplest and has minimal over
 
 ---
 
+## TODO list
+- [ ] implement a small gemma model for state_expert
+
 ## Future Extensions
 
 1. **Learnable state interpolation**: Add a learned module to upsample/interpolate future states to full action_horizon resolution
