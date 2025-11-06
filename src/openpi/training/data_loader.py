@@ -466,7 +466,10 @@ def create_incontext_data_loader(
         dataset = TransformedDataset(
             dataset,
             _wrap_transforms_with_profiler(
-                [_transforms.TokenizeFASTIncontextInputs(fast_tokenizer)],
+                [_transforms.TokenizeFASTIncontextInputs(
+                    tokenizer=fast_tokenizer,
+                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
+                    )],
                 "model_tokenize_fast_incontext",
             ),
         )
