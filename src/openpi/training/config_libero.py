@@ -268,7 +268,7 @@ def build(api) -> list["api.TrainConfig"]:
             "future_states": "state",  # Future states use same normalization as current states
         })
         current_frame_sample_mode: str = "random"
-        use_future_states: bool = True  # Enable loading future states for supervision
+        use_future_states: bool = False  # Enable loading future states for supervision
         future_state_downsample: int = 5  # Downsample factor for future states (e.g., 5 means every 5th action timestep)
         multiple_current_frames: bool = True  # Enable loading multiple current frames as a sequence
         @override
