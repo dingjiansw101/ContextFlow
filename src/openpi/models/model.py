@@ -457,12 +457,14 @@ def preprocess_observation_incontext(
         else:
             raise ValueError(f"incontext_images must be 5‑D or 6‑D, got ndim={ndim}")
 
-        # flatten all views
-        for key in observation.incontext_images:
-            observation.incontext_images[key] = flatten(observation.incontext_images[key])
+        # flatten all views (create new dict to avoid mutation)
+        flattened_incontext_images = {
+            key: flatten(observation.incontext_images[key])
+            for key in observation.incontext_images
+        }
 
         out_incontext_images = process_images(
-            observation.incontext_images, image_keys, image_resolution, train=train, rng=rng
+            flattened_incontext_images, image_keys, image_resolution, train=train, rng=rng
         )
 
         # reshape back

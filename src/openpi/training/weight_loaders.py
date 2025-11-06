@@ -107,8 +107,8 @@ class CheckpointWeightLoaderIncontextV17(WeightLoader):
     def load(self, params: at.Params) -> at.Params:
         # We are loading np.ndarray and relying on the training code to properly convert and shard the params.
         loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
-        # Extended fallback pattern to include v17 future state prediction layers
-        fallback_pattern = r".*(?:lora|llm.*_prompt_expert|demo_action_proj|demo_state_proj|img_proj|demo_track_proj|text_proj|future_state.*|state_time_mlp.*).*"
+        # Extended fallback pattern to include v17 future state prediction layers and state expert LLM layers
+        fallback_pattern = r".*(?:lora|llm.*_prompt_expert|llm.*_state_expert|demo_action_proj|demo_state_proj|img_proj|demo_track_proj|text_proj|future_state.*|state_time_mlp.*).*"
         return _merge_params(loaded_params, params, missing_regex=fallback_pattern)
 
 

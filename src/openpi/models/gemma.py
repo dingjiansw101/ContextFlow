@@ -74,9 +74,9 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
     if variant == "gemma_100m":
         # ~100M params
         return Config(
-            width=640,
+            width=1024,
             depth=18,
-            mlp_dim=4096,
+            mlp_dim=2048,
             num_heads=8,
             num_kv_heads=1,
             head_dim=256,

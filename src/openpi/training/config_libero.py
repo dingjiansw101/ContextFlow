@@ -4842,7 +4842,7 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=2,  # Reduced for debugging
-        batch_size=2,  # Reduced for debugging
+        batch_size=32,  # Reduced for debugging
         use_custom_dataloader=True,
     ),
 

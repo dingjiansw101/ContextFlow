@@ -721,12 +721,6 @@ class Pi0Incontextv17(_model.BaseModel):
         # Split RNG
         preprocess_rng, noise_rng_state, noise_rng_action, time_rng_state, time_rng_action = jax.random.split(rng, 5)
 
-        # Make a shallow copy of incontext_images dict to avoid mutation issues
-        # (preprocess_observation_incontext mutates the dict in-place)
-        if observation.incontext_images is not None:
-            # Create new dict to prevent mutation of original
-            observation.incontext_images = dict(observation.incontext_images)
-
         # Preprocess observation
         observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
 
@@ -795,6 +789,128 @@ class Pi0Incontextv17(_model.BaseModel):
             [midfix_tokens, None, suffix_action_tokens],  # None for state expert
             mask=attn_mask_action,
             positions=positions_action,
+        )
+
+        # === COMPUTE LOSSES ===
+
+        # Future state prediction loss
+        v_t_state = self.future_state_out_proj(state_out[:, -self.config.future_state_horizon :])
+        loss_state = jnp.mean(jnp.square(v_t_state - u_t_state), axis=-1)
+
+        # Action prediction loss
+        v_t_action = self.action_out_proj(action_out[:, -self.action_horizon :])
+        loss_action = jnp.mean(jnp.square(v_t_action - u_t_action), axis=-1)
+
+        # Average over temporal dimension to get per-sample losses
+        loss_state_per_sample = jnp.mean(loss_state, axis=-1)  # [B, future_state_horizon] -> [B]
+        loss_action_per_sample = jnp.mean(loss_action, axis=-1)  # [B, action_horizon] -> [B]
+
+        # Weighted combination
+        return self.config.state_loss_weight * loss_state_per_sample + loss_action_per_sample
+
+    def compute_loss_sequentialv2(
+        self,
+        rng: at.KeyArrayLike,
+        observation: _model.ObservationIncontext,
+        actions: _model.Actions,
+        *,
+        train: bool = False,
+    ) -> at.Float[at.Array, "*b"]:
+        """Sequential computation with KV caching (following sample_actions pattern).
+
+        This method implements the same computation as compute_loss but uses KV caching
+        for the midfix (prompt expert) to ensure consistent position encodings and
+        computational graph with the fused version.
+
+        Returns identical loss shape as compute_loss: [B]
+        """
+        # Split RNG
+        preprocess_rng, noise_rng_state, noise_rng_action, time_rng_state, time_rng_action = jax.random.split(rng, 5)
+
+        # Preprocess observation
+        observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
+
+        # === STAGE 1: Future State Prediction ===
+
+        # Read future_states from observation
+        future_states = observation.future_states  # [B, future_state_horizon, state_dim]
+
+        # Sample noise and time for state expert
+        batch_shape = future_states.shape[:-2]
+        noise_state = jax.random.normal(noise_rng_state, future_states.shape)
+        time_state = jax.random.beta(time_rng_state, 1.5, 1, batch_shape) * 0.999 + 0.001
+        time_state_expanded = time_state[..., None, None]
+
+        # Flow matching: x_t = t * noise + (1-t) * data
+        x_t_state = time_state_expanded * noise_state + (1 - time_state_expanded) * future_states
+        u_t_state = noise_state - future_states  # Target velocity
+
+        # === STAGE 2: Action Prediction ===
+
+        # Sample noise and time for action expert
+        noise_action = jax.random.normal(noise_rng_action, actions.shape)
+        time_action = jax.random.beta(time_rng_action, 1.5, 1, batch_shape) * 0.999 + 0.001
+        time_action_expanded = time_action[..., None, None]
+
+        # Flow matching for actions
+        x_t_action = time_action_expanded * noise_action + (1 - time_action_expanded) * actions
+        u_t_action = noise_action - actions  # Target velocity
+
+        # === SEQUENTIAL FORWARD PASS WITH KV CACHING ===
+
+        # Step 0: Compute midfix once and create KV cache (reused by both experts)
+        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
+
+        midfix_attn_mask = make_attn_mask(midfix_mask, midfix_ar_mask)
+        positions_midfix = jnp.cumsum(midfix_mask, axis=1) - 1
+
+        # Pre-compute KV cache for midfix (reused in both state and action passes)
+        _, kv_cache = self.PaliGemma.llm(
+            [midfix_tokens, None, None],  # Only compute prompt expert
+            mask=midfix_attn_mask,
+            positions=positions_midfix,
+        )
+
+        # --- Step 1: State Expert (using KV cache) ---
+        suffix_state_tokens, suffix_state_mask, suffix_state_ar_mask = self.embed_suffix_state(
+            observation, x_t_state, time_state
+        )
+
+        # Build attention mask for suffix only
+        suffix_state_attn_mask = make_attn_mask(suffix_state_mask, suffix_state_ar_mask)
+        midfix_attn_mask_repeat_state = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_state_tokens.shape[1])
+        full_attn_mask_state = jnp.concatenate([midfix_attn_mask_repeat_state, suffix_state_attn_mask], axis=-1)
+
+        # Positions continue from where midfix ends
+        positions_state = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_state_mask, axis=-1) - 1
+
+        # Forward through state expert with KV cache
+        (_, state_out, _), _ = self.PaliGemma.llm(
+            [None, suffix_state_tokens, None],  # Only compute state expert
+            mask=full_attn_mask_state,
+            positions=positions_state,
+            kv_cache=kv_cache,
+        )
+
+        # --- Step 2: Action Expert (using same KV cache) ---
+        suffix_action_tokens, suffix_action_mask, suffix_action_ar_mask = self.embed_suffix_action(
+            observation, future_states, x_t_action, time_action
+        )
+
+        # Build attention mask for suffix only
+        suffix_action_attn_mask = make_attn_mask(suffix_action_mask, suffix_action_ar_mask)
+        midfix_attn_mask_repeat_action = einops.repeat(midfix_mask, "b p -> b s p", s=suffix_action_tokens.shape[1])
+        full_attn_mask_action = jnp.concatenate([midfix_attn_mask_repeat_action, suffix_action_attn_mask], axis=-1)
+
+        # Positions continue from where midfix ends
+        positions_action = jnp.sum(midfix_mask, axis=-1)[:, None] + jnp.cumsum(suffix_action_mask, axis=-1) - 1
+
+        # Forward through action expert with KV cache
+        (_, _, action_out), _ = self.PaliGemma.llm(
+            [None, None, suffix_action_tokens],  # Only compute action expert
+            mask=full_attn_mask_action,
+            positions=positions_action,
+            kv_cache=kv_cache,
         )
 
         # === COMPUTE LOSSES ===
