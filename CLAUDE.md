@@ -431,3 +431,4 @@ For bugs or questions not covered in docs, see [CONTRIBUTING.md](CONTRIBUTING.md
 ## TODO list
 - [ ] test examples/libero/main_incontext_unseen.py
 - [ ] row-gating issue of v17
+- [ ] remove the third masked images from dataloader
