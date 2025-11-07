@@ -88,6 +88,9 @@ class Pi0IncontextConfigv18(_model.BaseModelConfig):
     num_state_queries: int = 32      # compress state sequences to 32 tokens
     num_action_queries: int = 32     # compress action sequences to 32 tokens
     num_attn_heads: int = 8          # multi-head attention heads
+    num_image_compressor_layers: int = 4   # number of cross/self-attention layers for image compressor
+    num_state_compressor_layers: int = 2   # number of cross/self-attention layers for state compressor
+    num_action_compressor_layers: int = 2  # number of cross/self-attention layers for action compressor
 
     @property
     @override
@@ -180,48 +183,132 @@ class Pi0IncontextConfigv18(_model.BaseModelConfig):
 
 
 class PerceiverCompressor(nnx.Module):
-    """Compresses variable-length sequences to fixed number of tokens using cross-attention."""
+    """Compresses variable-length sequences to fixed number of tokens using multi-layer cross-attention."""
 
-    def __init__(self, num_queries: int, embed_dim: int, num_heads: int, rngs: nnx.Rngs):
+    def __init__(self, num_queries: int, embed_dim: int, num_heads: int, num_layers: int, rngs: nnx.Rngs):
+        """
+        Args:
+            num_queries: Number of learnable query tokens
+            embed_dim: Embedding dimension
+            num_heads: Number of attention heads
+            num_layers: Total number of attention layers (interleaved cross/self)
+            rngs: Random number generators
+        """
+        self.num_queries = num_queries
+        self.embed_dim = embed_dim
+        self.num_layers = num_layers
+
         # Learnable query tokens
         self.queries = nnx.Param(nnx.initializers.normal(stddev=0.02)(
             rngs.params(), (num_queries, embed_dim)
         ))
 
-        # LayerNorms
-        self.query_norm = nnx.LayerNorm(embed_dim, rngs=rngs)
-        self.kv_norm = nnx.LayerNorm(embed_dim, rngs=rngs)
+        # Create layers: interleaved cross-attention and self-attention
+        self.cross_attn_layers = []
+        self.self_attn_layers = []
+        self.query_norm_cross_layers = []
+        self.query_norm_self_layers = []
+        self.kv_norm_layers = []
+        self.ffn_layers = []
+        self.ffn_norm_layers = []
 
-        # Multi-head cross-attention
-        self.cross_attn = nnx.MultiHeadAttention(
-            num_heads=num_heads,
-            in_features=embed_dim,
-            qkv_features=embed_dim,
-            out_features=embed_dim,
-            decode=False,
-            rngs=rngs
-        )
+        for i in range(num_layers):
+            if i % 2 == 0:  # Even layers (0, 2, 4...): Cross-attention
+                self.cross_attn_layers.append(
+                    nnx.MultiHeadAttention(
+                        num_heads=num_heads,
+                        in_features=embed_dim,
+                        qkv_features=embed_dim,
+                        out_features=embed_dim,
+                        decode=False,
+                        rngs=rngs
+                    )
+                )
+                self.query_norm_cross_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
+                self.kv_norm_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
+            else:  # Odd layers (1, 3, 5...): Self-attention
+                self.self_attn_layers.append(
+                    nnx.MultiHeadAttention(
+                        num_heads=num_heads,
+                        in_features=embed_dim,
+                        qkv_features=embed_dim,
+                        out_features=embed_dim,
+                        decode=False,
+                        rngs=rngs
+                    )
+                )
+                self.query_norm_self_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
+
+                # Add FFN for self-attention layers
+                self.ffn_norm_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
+                self.ffn_layers.append([
+                    nnx.Linear(embed_dim, embed_dim * 4, rngs=rngs),
+                    nnx.Linear(embed_dim * 4, embed_dim, rngs=rngs)
+                ])
 
     def __call__(self, tokens, mask=None):
-        # tokens: (B, S, D), mask: (B, S)
+        """
+        Args:
+            tokens: Input tokens (B, S, D)
+            mask: Boolean mask for valid tokens (B, S)
+
+        Returns:
+            Compressed representation (B, num_queries, D)
+        """
         batch_size = tokens.shape[0]
 
-        # Add positional encoding to input
+        # Add positional encoding to input tokens (only once)
         positions = jnp.arange(tokens.shape[1])
         pos_emb = posemb_sincos(positions, tokens.shape[-1], min_period=1.0, max_period=10000.0)
         tokens = tokens + pos_emb[None, :, :]
 
-        # Normalize
-        queries = self.query_norm(self.queries)
-        kv = self.kv_norm(tokens)
+        # Initialize output with learnable query tokens
+        queries = einops.repeat(self.queries.value, "q d -> b q d", b=batch_size)
 
-        # Broadcast queries for batch
-        queries = einops.repeat(queries, "q d -> b q d", b=batch_size)
+        # Prepare mask for cross-attention if provided
+        cross_attn_mask = None
+        if mask is not None:
+            # Input mask shape: (B, S) where S = seq_len
+            # For cross-attention: queries (B, num_queries, D) attend to kv (B, S, D)
+            # MultiHeadAttention expects mask shape: (B, num_heads, num_queries, S)
+            # Expand: (B, S) -> (B, 1, num_queries, S) where 1 broadcasts to all heads
+            cross_attn_mask = einops.repeat(mask, "b s -> b 1 q s", q=self.num_queries)
 
-        # Cross-attention: queries attend to kv
-        out = self.cross_attn(queries, kv, mask=mask)  # (B, num_queries, D)
+        # Apply layers sequentially with interleaved cross/self attention
+        cross_idx = 0
+        self_idx = 0
 
-        return out
+        for i in range(self.num_layers):
+            if i % 2 == 0:  # Cross-attention layer
+                # Pre-norm + residual pattern
+                norm_queries = self.query_norm_cross_layers[cross_idx](queries)
+                norm_kv = self.kv_norm_layers[cross_idx](tokens)
+
+                # Cross-attention: queries attend to input tokens
+                attn_out = self.cross_attn_layers[cross_idx](norm_queries, norm_kv, mask=cross_attn_mask)
+
+                # Residual connection
+                queries = queries + attn_out
+                cross_idx += 1
+
+            else:  # Self-attention layer
+                # Pre-norm + residual for self-attention
+                norm_queries = self.query_norm_self_layers[self_idx](queries)
+
+                # Self-attention: queries attend to themselves
+                attn_out = self.self_attn_layers[self_idx](norm_queries)
+                queries = queries + attn_out
+
+                # Pre-norm + residual for FFN
+                norm_queries = self.ffn_norm_layers[self_idx](queries)
+                ffn_out = self.ffn_layers[self_idx][0](norm_queries)
+                ffn_out = nnx.gelu(ffn_out)
+                ffn_out = self.ffn_layers[self_idx][1](ffn_out)
+                queries = queries + ffn_out
+
+                self_idx += 1
+
+        return queries
 
 
 class Pi0Incontextv18(_model.BaseModel):
@@ -279,6 +366,7 @@ class Pi0Incontextv18(_model.BaseModel):
                 num_queries=config.num_image_queries,
                 embed_dim=prompt_expert_config.width,
                 num_heads=config.num_attn_heads,
+                num_layers=config.num_image_compressor_layers,
                 rngs=rngs
             )
 
@@ -287,12 +375,14 @@ class Pi0Incontextv18(_model.BaseModel):
                 num_queries=config.num_state_queries,
                 embed_dim=prompt_expert_config.width,
                 num_heads=config.num_attn_heads,
+                num_layers=config.num_state_compressor_layers,
                 rngs=rngs
             )
             self.action_compressor = PerceiverCompressor(
                 num_queries=config.num_action_queries,
                 embed_dim=prompt_expert_config.width,
                 num_heads=config.num_attn_heads,
+                num_layers=config.num_action_compressor_layers,
                 rngs=rngs
             )
 
@@ -363,7 +453,7 @@ class Pi0Incontextv18(_model.BaseModel):
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
                     )
-
+                assert len(image_sqeuence_tokens.shape) == 4
                 # Flatten spatiotemporal: (B, seq_len, 256, D) → (B, seq_len*256, D)
                 batch_size, seq_len, n_patches, embed_dim = image_sqeuence_tokens.shape
                 flattened = image_sqeuence_tokens.reshape(batch_size, seq_len * n_patches, embed_dim)

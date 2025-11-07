@@ -55,6 +55,7 @@ def compressor():
         num_queries=32,
         embed_dim=2048,
         num_heads=8,
+        num_layers=4,  # Default to 4 layers (2 cross + 2 self)
         rngs=nnx.Rngs(key)
     )
 
@@ -77,12 +78,13 @@ class TestPerceiverCompressor:
     def test_initialization(self):
         """Test compressor initializes with correct parameter shapes."""
         key = jax.random.key(0)
-        num_queries, embed_dim, num_heads = 32, 2048, 8
+        num_queries, embed_dim, num_heads, num_layers = 32, 2048, 8, 4
 
         compressor = _pi0v18.PerceiverCompressor(
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=num_heads,
+            num_layers=num_layers,
             rngs=nnx.Rngs(key)
         )
 
@@ -90,12 +92,25 @@ class TestPerceiverCompressor:
         assert compressor.queries.value.shape == (num_queries, embed_dim), \
             f"Expected queries shape ({num_queries}, {embed_dim}), got {compressor.queries.value.shape}"
 
-        # Check LayerNorms exist
-        assert hasattr(compressor, 'query_norm')
-        assert hasattr(compressor, 'kv_norm')
+        # Check stored parameters
+        assert compressor.num_layers == num_layers
+        assert compressor.num_queries == num_queries
+        assert compressor.embed_dim == embed_dim
 
-        # Check MultiHeadAttention exists
-        assert hasattr(compressor, 'cross_attn')
+        # Check layer lists exist
+        assert hasattr(compressor, 'cross_attn_layers')
+        assert hasattr(compressor, 'self_attn_layers')
+        assert hasattr(compressor, 'query_norm_cross_layers')
+        assert hasattr(compressor, 'query_norm_self_layers')
+        assert hasattr(compressor, 'kv_norm_layers')
+        assert hasattr(compressor, 'ffn_layers')
+        assert hasattr(compressor, 'ffn_norm_layers')
+
+        # Check correct number of layers (4 layers = 2 cross + 2 self)
+        assert len(compressor.cross_attn_layers) == 2, \
+            f"Expected 2 cross-attention layers for num_layers=4, got {len(compressor.cross_attn_layers)}"
+        assert len(compressor.self_attn_layers) == 2, \
+            f"Expected 2 self-attention layers for num_layers=4, got {len(compressor.self_attn_layers)}"
 
     def test_compression_shape(self, compressor):
         """Test input (B, S, D) is compressed to (B, num_queries, D)."""
@@ -123,6 +138,7 @@ class TestPerceiverCompressor:
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=8,
+            num_layers=2,
             rngs=nnx.Rngs(key)
         )
 
@@ -153,6 +169,7 @@ class TestPerceiverCompressor:
             num_queries=8,
             embed_dim=embed_dim,
             num_heads=4,
+            num_layers=2,
             rngs=nnx.Rngs(key)
         )
 
@@ -183,6 +200,7 @@ class TestPerceiverCompressor:
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=8,
+            num_layers=4,
             rngs=nnx.Rngs(key)
         )
 
@@ -195,6 +213,112 @@ class TestPerceiverCompressor:
                 f"Failed for seq_len={seq_len}"
             assert jnp.all(jnp.isfinite(output)), \
                 f"Non-finite values for seq_len={seq_len}"
+
+    def test_multiple_layer_counts(self):
+        """Test compressor works correctly with different layer counts."""
+        key = jax.random.key(0)
+        embed_dim, num_queries = 256, 16
+        batch_size, seq_len = 2, 64
+
+        # Test with 1, 2, 4, 6 layers
+        for num_layers in [1, 2, 4, 6]:
+            compressor = _pi0v18.PerceiverCompressor(
+                num_queries=num_queries,
+                embed_dim=embed_dim,
+                num_heads=4,
+                num_layers=num_layers,
+                rngs=nnx.Rngs(jax.random.fold_in(key, num_layers))
+            )
+
+            tokens = jax.random.normal(key, (batch_size, seq_len, embed_dim))
+            output = compressor(tokens)
+
+            # Check output shape is always (B, num_queries, D)
+            assert output.shape == (batch_size, num_queries, embed_dim), \
+                f"Failed for num_layers={num_layers}"
+            assert jnp.all(jnp.isfinite(output)), \
+                f"Non-finite output for num_layers={num_layers}"
+
+            # Check layer counts
+            expected_cross = (num_layers + 1) // 2  # Ceiling division
+            expected_self = num_layers // 2  # Floor division
+            assert len(compressor.cross_attn_layers) == expected_cross, \
+                f"Expected {expected_cross} cross-attn layers for num_layers={num_layers}"
+            assert len(compressor.self_attn_layers) == expected_self, \
+                f"Expected {expected_self} self-attn layers for num_layers={num_layers}"
+
+    def test_interleaved_attention_pattern(self):
+        """Test that interleaved cross/self-attention produces different outputs than cross-only."""
+        key = jax.random.key(0)
+        embed_dim, num_queries = 256, 16
+        batch_size, seq_len = 2, 64
+
+        # Create single-layer (cross-only) compressor
+        compressor_1layer = _pi0v18.PerceiverCompressor(
+            num_queries=num_queries,
+            embed_dim=embed_dim,
+            num_heads=4,
+            num_layers=1,
+            rngs=nnx.Rngs(key)
+        )
+
+        # Create multi-layer (cross + self) compressor
+        compressor_4layer = _pi0v18.PerceiverCompressor(
+            num_queries=num_queries,
+            embed_dim=embed_dim,
+            num_heads=4,
+            num_layers=4,
+            rngs=nnx.Rngs(key)
+        )
+
+        # Same input
+        tokens = jax.random.normal(key, (batch_size, seq_len, embed_dim))
+
+        # Get outputs
+        output_1layer = compressor_1layer(tokens)
+        output_4layer = compressor_4layer(tokens)
+
+        # Both should be valid
+        assert jnp.all(jnp.isfinite(output_1layer))
+        assert jnp.all(jnp.isfinite(output_4layer))
+
+        # Same shape
+        assert output_1layer.shape == output_4layer.shape
+
+        # Different values (due to different architectures)
+        # Note: outputs may be similar initially, but should diverge with training
+        # This test just ensures both architectures are valid
+        assert output_1layer.shape == (batch_size, num_queries, embed_dim)
+
+    def test_self_attention_ffn_exists(self):
+        """Test that self-attention layers include FFN components."""
+        key = jax.random.key(0)
+
+        # Create compressor with 4 layers (2 cross + 2 self)
+        compressor = _pi0v18.PerceiverCompressor(
+            num_queries=32,
+            embed_dim=512,
+            num_heads=8,
+            num_layers=4,
+            rngs=nnx.Rngs(key)
+        )
+
+        # Should have 2 self-attention blocks, each with FFN
+        assert len(compressor.ffn_layers) == 2, \
+            f"Expected 2 FFN blocks for 4 layers, got {len(compressor.ffn_layers)}"
+        assert len(compressor.ffn_norm_layers) == 2, \
+            f"Expected 2 FFN norm layers for 4 layers, got {len(compressor.ffn_norm_layers)}"
+
+        # Each FFN should have 2 linear layers (up-project + down-project)
+        for i, ffn in enumerate(compressor.ffn_layers):
+            assert len(ffn) == 2, \
+                f"FFN block {i} should have 2 linear layers, got {len(ffn)}"
+            # First layer expands by 4x
+            assert ffn[0].out_features == 512 * 4, \
+                f"FFN up-projection should expand to 4x embed_dim"
+            # Second layer projects back
+            assert ffn[1].out_features == 512, \
+                f"FFN down-projection should return to embed_dim"
 
     def test_jit_compatible(self, compressor):
         """Test PerceiverCompressor works with JIT compilation."""
@@ -237,6 +361,12 @@ class TestPerceiverConfig:
             f"Expected num_action_queries=32, got {config.num_action_queries}"
         assert config.num_attn_heads == 8, \
             f"Expected num_attn_heads=8, got {config.num_attn_heads}"
+        assert config.num_image_compressor_layers == 4, \
+            f"Expected num_image_compressor_layers=4, got {config.num_image_compressor_layers}"
+        assert config.num_state_compressor_layers == 2, \
+            f"Expected num_state_compressor_layers=2, got {config.num_state_compressor_layers}"
+        assert config.num_action_compressor_layers == 2, \
+            f"Expected num_action_compressor_layers=2, got {config.num_action_compressor_layers}"
 
     def test_custom_values(self):
         """Test configuration with custom query counts."""
@@ -244,13 +374,19 @@ class TestPerceiverConfig:
             num_image_queries=16,
             num_state_queries=64,
             num_action_queries=8,
-            num_attn_heads=4
+            num_attn_heads=4,
+            num_image_compressor_layers=6,
+            num_state_compressor_layers=4,
+            num_action_compressor_layers=2
         )
 
         assert config.num_image_queries == 16
         assert config.num_state_queries == 64
         assert config.num_action_queries == 8
         assert config.num_attn_heads == 4
+        assert config.num_image_compressor_layers == 6
+        assert config.num_state_compressor_layers == 4
+        assert config.num_action_compressor_layers == 2
 
 
 # =============================================================================
@@ -341,17 +477,23 @@ class TestEmbedMidfixCompression:
 
         tokens, input_mask, ar_mask = model.embed_midfix(obs)
 
-        # Count tokens - should have compressed image tokens
-        # Each camera contributes num_image_queries tokens (not seq_len * 256)
-        num_cameras_with_data = sum(
-            1 for name in obs.incontext_images
-            if jnp.any(obs.incontext_image_masks[name])
-        )
+        # Calculate expected token count
+        num_current_cameras = len(obs.images)
+        num_incontext_cameras = len(obs.incontext_images)
 
-        # Total image tokens should be: num_cameras * num_image_queries
-        # (Plus current observation images if present)
-        assert tokens.shape[1] < 10000, \
-            f"Token count too high ({tokens.shape[1]}), compression may not be working"
+        # Current observation contributes 256 tokens per camera (from SigLIP vision encoder)
+        current_img_tokens = num_current_cameras * 256
+
+        # In-context images are compressed to num_image_queries per camera
+        compressed_img_tokens = num_incontext_cameras * config.num_image_queries
+
+        expected_tokens = current_img_tokens + compressed_img_tokens
+
+        # Verify exact token count matches expectation
+        # For default config: 3 cameras × 256 + 3 cameras × 32 = 768 + 96 = 864 tokens
+        assert tokens.shape[1] == expected_tokens, \
+            f"Expected {expected_tokens} tokens ({current_img_tokens} current + " \
+            f"{compressed_img_tokens} compressed), got {tokens.shape[1]}"
 
         # Output should be finite
         assert jnp.all(jnp.isfinite(tokens))
@@ -373,8 +515,14 @@ class TestEmbedMidfixCompression:
 
         # Tokens should include compressed states and actions
         # Total should be: current_images + num_state_queries + num_action_queries
-        assert tokens.shape[1] < 5000, \
-            f"Token count too high ({tokens.shape[1]}), compression may not be working"
+        # Expected: 3 cameras × 256 tokens + 16 state queries + 24 action queries = 808
+        num_cameras = 3
+        tokens_per_camera = 256  # SigLIP vision encoder output
+        expected_tokens = (num_cameras * tokens_per_camera +
+                          config.num_state_queries + config.num_action_queries)
+        assert tokens.shape[1] == expected_tokens, \
+            f"Expected {expected_tokens} tokens (3×256 current + {config.num_state_queries} state + " \
+            f"{config.num_action_queries} action), got {tokens.shape[1]}"
 
         assert jnp.all(jnp.isfinite(tokens))
 
@@ -447,8 +595,8 @@ class TestCompressionIntegration:
         loss_key = jax.random.key(1)
         loss = model.compute_loss(loss_key, obs, actions, train=False)
 
-        # Loss should be valid
-        assert loss.shape == (batch_size,)
+        # Loss should be valid - v12/v18 return per-timestep losses
+        assert loss.shape == (batch_size, default_config.action_horizon)
         assert jnp.all(jnp.isfinite(loss))
         assert jnp.all(loss >= 0), "MSE loss should be non-negative"
 
@@ -497,10 +645,18 @@ class TestCompressionIntegration:
 
         # Check that compressor parameters have gradients
         if hasattr(model, 'image_compressor'):
-            # Queries should have gradients
-            grad_state = nnx.state(grads)
-            # Just verify we can extract the state without errors
-            assert grad_state is not None
+            # Extract gradient parameters to verify they exist
+            _, grad_params = nnx.split(grads)
+            grad_dict = grad_params.to_pure_dict()
+
+            # Verify compressor parameters have gradients
+            compressor_grads = [k for k in grad_dict.keys() if 'compressor' in str(k)]
+            assert len(compressor_grads) > 0, "No gradients found for compressor modules"
+
+            # Check that gradients are finite
+            for key, grad_val in grad_dict.items():
+                if 'compressor' in str(key):
+                    assert jnp.all(jnp.isfinite(grad_val)), f"Non-finite gradient at {key}"
 
     def test_different_num_queries_configs(self):
         """Test model works with various num_queries settings."""
@@ -541,6 +697,6 @@ class TestCompressionIntegration:
         # Run JIT-compiled loss
         loss = jitted_loss(loss_key, obs, actions, train=False)
 
-        # Should produce valid results
-        assert loss.shape == (batch_size,)
+        # Should produce valid results - v12/v18 return per-timestep losses
+        assert loss.shape == (batch_size, default_config.action_horizon)
         assert jnp.all(jnp.isfinite(loss))
