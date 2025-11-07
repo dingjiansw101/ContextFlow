@@ -57,7 +57,7 @@ def print_freeze_report(config, *, max_items: int = 20) -> None:
 def compare_future_vs_lowmem_params(max_items: int = 100) -> None:
     """Compare trainable/frozen parameters for two hard-coded Libero configs."""
 
-    cfg_future = train_config.get_config("pi0mini_incontext_libero_custom_dataset_v2_future_states_debug")
+    cfg_future = train_config.get_config("pi0_incontextv17_libero_custom_dataset_v2")
     cfg_lowmem = train_config.get_config(
         "pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
     )
