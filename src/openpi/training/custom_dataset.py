@@ -156,12 +156,22 @@ class CustomLeRobotDataset(LeRobotDataset):
         data["dem_prompt_images"]["image"] = torch.stack(sampled_frames["image"])
         data["dem_prompt_images"]["wrist_image"] = torch.stack(sampled_frames["wrist_image"])
 
-        assert self.num_sample_actions <= num_frames, f"num_sample_actions ({self.num_sample_actions}) must be less than or equal to num_frames ({num_frames})"
-        positions_actions = np.linspace(0, num_frames - 1, num=self.num_sample_actions, dtype=int)
+        num_actions_to_sample = min(self.num_sample_actions, num_frames)
+        positions_actions = np.linspace(0, num_frames - 1, num=num_actions_to_sample, dtype=int)
         sampled_indices_actions = [frame_indices[p] for p in positions_actions]
         sampled_frames_actions = self.hf_dataset.select(sampled_indices_actions)
-        data["dem_prompt_states"] = torch.stack(sampled_frames_actions["state"])
-        data["dem_prompt_actions"] = torch.stack(sampled_frames_actions["actions"])
+        dem_prompt_states = torch.stack(sampled_frames_actions["state"])
+        dem_prompt_actions = torch.stack(sampled_frames_actions["actions"])
+        # TODO: review the implementation of padding
+        if num_actions_to_sample < self.num_sample_actions:
+            pad = self.num_sample_actions - num_actions_to_sample
+            repeat_shape = (pad,) + (1,) * (dem_prompt_states.dim() - 1)
+            states_pad = dem_prompt_states[-1:].repeat(repeat_shape)
+            actions_pad = dem_prompt_actions[-1:].repeat(repeat_shape)
+            dem_prompt_states = torch.cat([dem_prompt_states, states_pad], dim=0)
+            dem_prompt_actions = torch.cat([dem_prompt_actions, actions_pad], dim=0)
+        data["dem_prompt_states"] = dem_prompt_states
+        data["dem_prompt_actions"] = dem_prompt_actions
 
         # Add selected_episode for compatibility with ObservationIncontext
         data["selected_episode"] = np.array([selected_ep_idx], dtype=np.int32)

@@ -204,47 +204,51 @@ class PerceiverCompressor(nnx.Module):
         ))
 
         # Create layers: interleaved cross-attention and self-attention
-        self.cross_attn_layers = []
-        self.self_attn_layers = []
-        self.query_norm_cross_layers = []
-        self.query_norm_self_layers = []
-        self.kv_norm_layers = []
-        self.ffn_layers = []
-        self.ffn_norm_layers = []
+        # Use dicts with string keys instead of lists to avoid integer keys in parameter tree
+        self.cross_attn_layers = {}
+        self.self_attn_layers = {}
+        self.query_norm_cross_layers = {}
+        self.query_norm_self_layers = {}
+        self.kv_norm_layers = {}
+        self.ffn_layers = {}
+        self.ffn_norm_layers = {}
 
+        cross_idx = 0
+        self_idx = 0
         for i in range(num_layers):
             if i % 2 == 0:  # Even layers (0, 2, 4...): Cross-attention
-                self.cross_attn_layers.append(
-                    nnx.MultiHeadAttention(
-                        num_heads=num_heads,
-                        in_features=embed_dim,
-                        qkv_features=embed_dim,
-                        out_features=embed_dim,
-                        decode=False,
-                        rngs=rngs
-                    )
+                layer_key = f'layer_{cross_idx}'
+                self.cross_attn_layers[layer_key] = nnx.MultiHeadAttention(
+                    num_heads=num_heads,
+                    in_features=embed_dim,
+                    qkv_features=embed_dim,
+                    out_features=embed_dim,
+                    decode=False,
+                    rngs=rngs
                 )
-                self.query_norm_cross_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
-                self.kv_norm_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
+                self.query_norm_cross_layers[layer_key] = nnx.LayerNorm(embed_dim, rngs=rngs)
+                self.kv_norm_layers[layer_key] = nnx.LayerNorm(embed_dim, rngs=rngs)
+                cross_idx += 1
             else:  # Odd layers (1, 3, 5...): Self-attention
-                self.self_attn_layers.append(
-                    nnx.MultiHeadAttention(
-                        num_heads=num_heads,
-                        in_features=embed_dim,
-                        qkv_features=embed_dim,
-                        out_features=embed_dim,
-                        decode=False,
-                        rngs=rngs
-                    )
+                layer_key = f'layer_{self_idx}'
+                self.self_attn_layers[layer_key] = nnx.MultiHeadAttention(
+                    num_heads=num_heads,
+                    in_features=embed_dim,
+                    qkv_features=embed_dim,
+                    out_features=embed_dim,
+                    decode=False,
+                    rngs=rngs
                 )
-                self.query_norm_self_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
+                self.query_norm_self_layers[layer_key] = nnx.LayerNorm(embed_dim, rngs=rngs)
 
                 # Add FFN for self-attention layers
-                self.ffn_norm_layers.append(nnx.LayerNorm(embed_dim, rngs=rngs))
-                self.ffn_layers.append([
-                    nnx.Linear(embed_dim, embed_dim * 4, rngs=rngs),
-                    nnx.Linear(embed_dim * 4, embed_dim, rngs=rngs)
-                ])
+                self.ffn_norm_layers[layer_key] = nnx.LayerNorm(embed_dim, rngs=rngs)
+                # FFN is a list of 2 linear layers - keep as dict to avoid nesting issues
+                self.ffn_layers[layer_key] = {
+                    'up_proj': nnx.Linear(embed_dim, embed_dim * 4, rngs=rngs),
+                    'down_proj': nnx.Linear(embed_dim * 4, embed_dim, rngs=rngs)
+                }
+                self_idx += 1
 
     def __call__(self, tokens, mask=None):
         """
@@ -280,30 +284,32 @@ class PerceiverCompressor(nnx.Module):
 
         for i in range(self.num_layers):
             if i % 2 == 0:  # Cross-attention layer
+                layer_key = f'layer_{cross_idx}'
                 # Pre-norm + residual pattern
-                norm_queries = self.query_norm_cross_layers[cross_idx](queries)
-                norm_kv = self.kv_norm_layers[cross_idx](tokens)
+                norm_queries = self.query_norm_cross_layers[layer_key](queries)
+                norm_kv = self.kv_norm_layers[layer_key](tokens)
 
                 # Cross-attention: queries attend to input tokens
-                attn_out = self.cross_attn_layers[cross_idx](norm_queries, norm_kv, mask=cross_attn_mask)
+                attn_out = self.cross_attn_layers[layer_key](norm_queries, norm_kv, mask=cross_attn_mask)
 
                 # Residual connection
                 queries = queries + attn_out
                 cross_idx += 1
 
             else:  # Self-attention layer
+                layer_key = f'layer_{self_idx}'
                 # Pre-norm + residual for self-attention
-                norm_queries = self.query_norm_self_layers[self_idx](queries)
+                norm_queries = self.query_norm_self_layers[layer_key](queries)
 
                 # Self-attention: queries attend to themselves
-                attn_out = self.self_attn_layers[self_idx](norm_queries)
+                attn_out = self.self_attn_layers[layer_key](norm_queries)
                 queries = queries + attn_out
 
                 # Pre-norm + residual for FFN
-                norm_queries = self.ffn_norm_layers[self_idx](queries)
-                ffn_out = self.ffn_layers[self_idx][0](norm_queries)
+                norm_queries = self.ffn_norm_layers[layer_key](queries)
+                ffn_out = self.ffn_layers[layer_key]['up_proj'](norm_queries)
                 ffn_out = nnx.gelu(ffn_out)
-                ffn_out = self.ffn_layers[self_idx][1](ffn_out)
+                ffn_out = self.ffn_layers[layer_key]['down_proj'](ffn_out)
                 queries = queries + ffn_out
 
                 self_idx += 1

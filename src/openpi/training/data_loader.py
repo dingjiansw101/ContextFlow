@@ -245,7 +245,7 @@ def create_custom_datasetv2(
         task_to_episode_path = "metadata/libero/task_to_episode.json"
         random_select = True
         current_frame_sample_mode = "random"
-        use_future_states = True
+        use_future_states = False
         future_state_downsample = 5
         multiple_current_frames = True
     # Build delta_timestamps for each action sequence key (for compatibility)
