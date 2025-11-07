@@ -426,3 +426,8 @@ See the [Troubleshooting section in README.md](README.md#troubleshooting) for co
 - Dataset download failures
 
 For bugs or questions not covered in docs, see [CONTRIBUTING.md](CONTRIBUTING.md) for how to file issues or submit PRs.
+
+
+## TODO list
+- [ ] test examples/libero/main_incontext_unseen.py
+- [ ] row-gating issue of v17

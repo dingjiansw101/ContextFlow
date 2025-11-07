@@ -17,13 +17,6 @@ import json
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 
-LIBERO_TEST_TASK_DICT = {
-    "libero_spatial": [3,8],
-    "libero_object":[5,7],
-    "libero_goal": [1,8],
-    "libero_10": [0,6],
-}
-
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
     with file_path.open('r', encoding='utf-8') as file:
@@ -37,6 +30,26 @@ def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
             if task_description is not None and task_index is not None:
                 mapping[task_description] = task_index
     return mapping
+
+def load_task_splits(task_splits_dir: str, split: str):
+    """Load seen and unseen task lists from JSON files.
+
+    Returns:
+        tuple: (seen_tasks_set, unseen_tasks_set) - sets of task descriptions with spaces
+    """
+    split_path = pathlib.Path(task_splits_dir) / split
+
+    with open(split_path / "seen_tasks.json", "r") as f:
+        seen_tasks = json.load(f)
+
+    with open(split_path / "unseen_tasks.json", "r") as f:
+        unseen_tasks = json.load(f)
+
+    # Normalize task names: replace underscores with spaces to match task_description format
+    seen_tasks_set = {task.replace("_", " ") for task in seen_tasks}
+    unseen_tasks_set = {task.replace("_", " ") for task in unseen_tasks}
+
+    return seen_tasks_set, unseen_tasks_set
 
 @dataclasses.dataclass
 class Args:
@@ -61,6 +74,8 @@ class Args:
     # Utils
     #################################################################################################################
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
+    task_split: str = "split0"  # Task split to use for seen/unseen tasks
+    task_splits_dir: str = "libero_task_splits"  # Directory containing task split definitions
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -79,6 +94,22 @@ def eval_libero(args: Args) -> None:
     task_description2index = get_task_to_index_mapping(filename)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
+    # Load seen and unseen task splits
+    seen_tasks, unseen_tasks = load_task_splits(args.task_splits_dir, args.task_split)
+    logging.info(f"Loaded task split: {args.task_split}")
+    logging.info(f"  Seen tasks: {len(seen_tasks)}")
+    logging.info(f"  Unseen tasks: {len(unseen_tasks)}")
+
+    # Map unseen task names to task IDs
+    unseen_task_ids = []
+    for task_id in range(num_tasks_in_suite):
+        task = task_suite.get_task(task_id)
+        task_description = task.language
+        if task_description in unseen_tasks:
+            unseen_task_ids.append(task_id)
+
+    logging.info(f"Found {len(unseen_task_ids)} unseen tasks in suite: {unseen_task_ids}")
+
     if args.task_suite_name == "libero_spatial":
         max_steps = 220  # longest training demo has 193 steps
     elif args.task_suite_name == "libero_object":
@@ -94,13 +125,9 @@ def eval_libero(args: Args) -> None:
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
 
-    # Xianjie: get the test task list based on the task suite name
-    assigned_task_list = LIBERO_TEST_TASK_DICT[args.task_suite_name]
-
     # Start evaluation
     total_episodes, total_successes = 0, 0
-    # for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
-    for task_id in assigned_task_list:
+    for task_id in unseen_task_ids:
 
         # TODO: select tasks for testing here
         # Get task
