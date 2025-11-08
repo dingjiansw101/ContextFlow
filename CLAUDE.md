@@ -427,6 +427,13 @@ See the [Troubleshooting section in README.md](README.md#troubleshooting) for co
 
 For bugs or questions not covered in docs, see [CONTRIBUTING.md](CONTRIBUTING.md) for how to file issues or submit PRs.
 
+## Issue about q-former inference precision.
+
+```
+export JAX_DEFAULT_MATMUL_PRECISION=float32
+uv run scripts/serve_policy_incontext.py --port $PORT policy:checkpoint --policy.inference_dtype=float32 --policy.config=${Name}_inference --policy.dir=checkpoints/$Name/${Name}/19999 &
+
+```
 
 ## TODO list
 - [ ] test examples/libero/main_incontext_unseen.py
