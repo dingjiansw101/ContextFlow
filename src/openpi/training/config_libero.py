@@ -3659,7 +3659,7 @@ def build(api) -> list["api.TrainConfig"]:
         assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
-            sample_frames=4, sample_actions=128, random_select=True, 
+            sample_frames=1, sample_actions=128, random_select=True, 
             use_image_prompts=False,
         ),
         data=CustomLeRobotLiberoIncontextDataConfig(
@@ -3681,12 +3681,12 @@ def build(api) -> list["api.TrainConfig"]:
         num_train_steps=20_000,
         freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
-            sample_frames=4, sample_actions=128, random_select=True,
+            sample_frames=1, sample_actions=128, random_select=True,
             use_image_prompts=False,
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=40,
-        # num_workers=1,
+        # num_workers=40,
+        num_workers=2,
         batch_size=32,
         use_custom_dataloader=True,
         # wandb_enabled=False,
@@ -3697,7 +3697,7 @@ def build(api) -> list["api.TrainConfig"]:
         assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
-            sample_frames=4, sample_actions=128, random_select=True,
+            sample_frames=1, sample_actions=128, random_select=True,
             use_image_prompts=False,
         ),
         data=LeRobotLiberoIncontextDataConfig(
@@ -3717,7 +3717,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_train_steps=20_000,
         freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
-            sample_frames=4, sample_actions=128, random_select=True,
+            sample_frames=1, sample_actions=128, random_select=True,
             use_image_prompts=False,
         ).get_freeze_filter(),
         ema_decay=None,
