@@ -94,6 +94,7 @@ def create_trained_policy_incontext(
     sample_kwargs: dict[str, Any] | None = None,
     default_prompt: str | None = None,
     norm_stats: dict[str, transforms.NormStats] | None = None,
+    inference_dtype: str | None = None,
 ) -> _policy.Policy:
     """Create a policy from a trained checkpoint.
 
@@ -107,12 +108,27 @@ def create_trained_policy_incontext(
             data if it doesn't already exist.
         norm_stats: The norm stats to use for the policy. If not provided, the norm stats will be loaded
             from the checkpoint directory.
+        inference_dtype: Optional dtype override for inference (e.g., "float32", "bfloat16"). If not
+            provided, defaults to bfloat16.
     """
     repack_transforms = repack_transforms or transforms.Group()
     checkpoint_dir = download.maybe_download(str(checkpoint_dir))
 
-    logging.info("Loading model...")
-    model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16))
+    # Resolve inference dtype
+    if inference_dtype is None:
+        # Default to bfloat16 for backward compatibility
+        dtype = jnp.bfloat16
+    else:
+        # Convert string dtype to JAX dtype
+        dtype_map = {
+            "bfloat16": jnp.bfloat16,
+            "float32": jnp.float32,
+            "float16": jnp.float16,
+        }
+        dtype = dtype_map.get(inference_dtype, jnp.bfloat16)
+
+    logging.info(f"Loading model with dtype: {dtype}...")
+    model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=dtype))
     # import ipdb; ipdb.set_trace()
     data_config = train_config.data.create(train_config.assets_dirs, train_config.model)
     # TODO: check, use_quantile_norm is false in the pi0_aloha_handover, for training and tesging

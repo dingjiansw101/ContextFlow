@@ -143,6 +143,8 @@ class Checkpoint:
     config: str
     # Checkpoint directory (e.g., "checkpoints/pi0_aloha_sim/exp/10000").
     dir: str
+    # Optional: Override inference dtype (e.g., "float32", "bfloat16"). Defaults to bfloat16 if not specified.
+    inference_dtype: str | None = None
 
 
 @dataclasses.dataclass
@@ -613,7 +615,7 @@ def create_default_policy(env: EnvMode, *, default_prompt: str | None = None) ->
     """Create a default policy for the given environment."""
     if checkpoint := DEFAULT_CHECKPOINT.get(env):
         return _policy_config.create_trained_policy_incontext(
-            _config.get_config(checkpoint.config), checkpoint.dir, default_prompt=default_prompt
+            _config.get_config(checkpoint.config), checkpoint.dir, default_prompt=default_prompt, inference_dtype=checkpoint.inference_dtype
         )
     raise ValueError(f"Unsupported environment mode: {env}")
 
@@ -623,7 +625,7 @@ def create_policy_incontext(args: Args) -> _policy.Policy:
     match args.policy:
         case Checkpoint():
             return _policy_config.create_trained_policy_incontext(
-                _config.get_config(args.policy.config), args.policy.dir, default_prompt=args.default_prompt
+                _config.get_config(args.policy.config), args.policy.dir, default_prompt=args.default_prompt, inference_dtype=args.policy.inference_dtype
             )
         case Default():
             return create_default_policy(args.env, default_prompt=args.default_prompt)
