@@ -92,6 +92,9 @@ class Pi0IncontextConfigv18(_model.BaseModelConfig):
     num_state_compressor_layers: int = 2   # number of cross/self-attention layers for state compressor
     num_action_compressor_layers: int = 2  # number of cross/self-attention layers for action compressor
 
+    # Random modality masking during training
+    prompt_mask_prob: float = 0.0  # Probability to mask one random prompt modality during training
+
     @property
     @override
     def model_type(self) -> _model.ModelType:
@@ -320,6 +323,7 @@ class PerceiverCompressor(nnx.Module):
 class Pi0Incontextv18(_model.BaseModel):
     def __init__(self, config: Pi0IncontextConfigv18, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
+        self.config = config  # Store config to access prompt_mask_prob
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
         self.use_image_prompts = config.use_image_prompts
@@ -394,7 +398,7 @@ class Pi0Incontextv18(_model.BaseModel):
 
     @at.typecheck
     def embed_midfix(
-        self, obs: _model.ObservationIncontext
+        self, obs: _model.ObservationIncontext, rng: at.KeyArrayLike | None = None, train: bool = False
     ) -> tuple[at.Float[at.Array, "b s emb"], at.Bool[at.Array, "b s"], at.Bool[at.Array, " s"]]:
 
         input_mask = []
@@ -422,19 +426,48 @@ class Pi0Incontextv18(_model.BaseModel):
             # image tokens attend to each other
             ar_mask += [False] * image_tokens.shape[1]
 
+        # -------------------------------------------------------------------------
+        # Randomly mask one prompt modality during training
+        mask_image_prompts = False
+        mask_text_prompts = False
+        mask_action_state_prompts = False
+
+        if train and rng is not None and self.config.prompt_mask_prob > 0:
+            # Collect available modalities
+            available_modalities = []
+            if self.use_image_prompts:
+                available_modalities.append(0)  # 0 = image
+            if self.use_text_prompts and obs.tokenized_prompt is not None:
+                available_modalities.append(1)  # 1 = text
+            if self.use_action_state_prompts:
+                available_modalities.append(2)  # 2 = action_state
+
+            # Only mask if ≥2 modalities exist (guarantee at least 1 remains)
+            if len(available_modalities) >= 2:
+                should_mask = jax.random.uniform(rng) < self.config.prompt_mask_prob
+                if should_mask:
+                    rng1, rng2 = jax.random.split(rng)
+                    mask_idx_value = jax.random.choice(rng2, jnp.array(available_modalities))
+                    # Set masking flags
+                    mask_image_prompts = (mask_idx_value == 0)
+                    mask_text_prompts = (mask_idx_value == 1)
+                    mask_action_state_prompts = (mask_idx_value == 2)
+
         # add language (aka tokenized inputs)
-        if self.use_text_prompts:
-            if obs.tokenized_prompt is not None:
-                tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
-                # tokenized_inputs = self.text_proj(tokenized_inputs)
-                tokens.append(tokenized_inputs)
-                input_mask.append(obs.tokenized_prompt_mask)
-                # full attention between image and language inputs
-                ar_mask += [False] * tokenized_inputs.shape[1]
+        if self.use_text_prompts and obs.tokenized_prompt is not None:
+            tokenized_inputs = self.PaliGemma.llm(obs.tokenized_prompt, method="embed")
+            # tokenized_inputs = self.text_proj(tokenized_inputs)
+            tokens.append(tokenized_inputs)
+            # Apply modality masking if needed
+            text_mask = obs.tokenized_prompt_mask
+            if mask_text_prompts:
+                text_mask = jnp.zeros_like(text_mask, dtype=jnp.bool_)
+            input_mask.append(text_mask)
+            # full attention between image and language inputs
+            ar_mask += [False] * tokenized_inputs.shape[1]
 
         # -------------------------------------------------------------------------
         # embed in-context images
-        # TODO: set a ratio to randomly mask input or prompt
         if self.use_image_prompts:
             for name in obs.incontext_images:
                 image_sequence = obs.incontext_images[name]
@@ -476,6 +509,10 @@ class Pi0Incontextv18(_model.BaseModel):
                 has_valid_frames = jnp.any(obs.incontext_image_masks[name], axis=1)  # (B,)
                 output_mask = einops.repeat(has_valid_frames, "b -> b q", q=self.num_image_queries)
 
+                # Apply modality masking if needed
+                if mask_image_prompts:
+                    output_mask = jnp.zeros_like(output_mask, dtype=jnp.bool_)
+
                 tokens.append(compressed)
                 input_mask.append(output_mask)
                 ar_mask += [False] * self.num_image_queries
@@ -499,6 +536,10 @@ class Pi0Incontextv18(_model.BaseModel):
             has_valid_states = jnp.any(incontext_state_masks_input, axis=1)  # (B,)
             state_output_mask = einops.repeat(has_valid_states, "b -> b q", q=self.num_state_queries)
 
+            # Apply modality masking if needed
+            if mask_action_state_prompts:
+                state_output_mask = jnp.zeros_like(state_output_mask, dtype=jnp.bool_)
+
             tokens.append(dem_state_tokens)
             input_mask.append(state_output_mask)
             ar_mask += [False] * self.num_state_queries
@@ -519,6 +560,10 @@ class Pi0Incontextv18(_model.BaseModel):
             # Output mask: valid if ANY input action was valid
             has_valid_actions = jnp.any(incontext_action_masks_input, axis=1)  # (B,)
             action_output_mask = einops.repeat(has_valid_actions, "b -> b q", q=self.num_action_queries)
+
+            # Apply modality masking if needed
+            if mask_action_state_prompts:
+                action_output_mask = jnp.zeros_like(action_output_mask, dtype=jnp.bool_)
 
             tokens.append(dem_action_tokens)
             input_mask.append(action_output_mask)
@@ -580,7 +625,7 @@ class Pi0Incontextv18(_model.BaseModel):
     ) -> at.Float[at.Array, "*b ah"]:
         # jax.debug.print("observation = {} ", observation)
         # import ipdb; ipdb.set_trace()
-        preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
+        preprocess_rng, noise_rng, time_rng, mask_rng = jax.random.split(rng, 4)
         observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
 
         batch_shape = actions.shape[:-2]
@@ -590,7 +635,7 @@ class Pi0Incontextv18(_model.BaseModel):
         x_t = time_expanded * noise + (1 - time_expanded) * actions
         u_t = noise - actions
 
-        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
+        midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation, rng=mask_rng, train=train)
         suffix_tokens, suffix_mask, suffix_ar_mask = self.embed_suffix(observation, x_t, time)
         input_mask = jnp.concatenate([midfix_mask, suffix_mask], axis=1)
         ar_mask = jnp.concatenate([midfix_ar_mask, suffix_ar_mask], axis=0)
@@ -621,7 +666,7 @@ class Pi0Incontextv18(_model.BaseModel):
         noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
 
         midfix_tokens, midfix_mask, midfix_ar_mask = self.embed_midfix(observation)
-        
+
         midfix_attn_mask = make_attn_mask(midfix_mask, midfix_ar_mask)
         positions = jnp.cumsum(midfix_mask, axis=1) - 1
         _, kv_cache = self.PaliGemma.llm([midfix_tokens, None], mask=midfix_attn_mask, positions=positions)
