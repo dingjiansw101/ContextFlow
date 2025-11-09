@@ -878,6 +878,7 @@ class TestModalityMasking:
             assert not all_masked, "At least one modality must remain unmasked"
 
     def test_single_modality_never_masked(self):
+        # resume to test from here
         """Test single modality is never masked (guaranteed unmasked)."""
         # Test with only image prompts
         config = _pi0v18.Pi0IncontextConfigv18(

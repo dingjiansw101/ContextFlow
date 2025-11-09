@@ -3660,7 +3660,7 @@ def build(api) -> list["api.TrainConfig"]:
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
             sample_frames=4, sample_actions=128, random_select=True, 
-            prompt_mask_prob=0.3,
+            prompt_mask_prob=0.2,
         ),
         data=CustomLeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
@@ -3682,12 +3682,12 @@ def build(api) -> list["api.TrainConfig"]:
         freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
             sample_frames=4, sample_actions=128, random_select=True,
-            prompt_mask_prob=0.3,
+            prompt_mask_prob=0.2,
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=2,
+        num_workers=16,
         # num_workers=1,
-        batch_size=2,
+        batch_size=32,
         use_custom_dataloader=True,
         # wandb_enabled=False,
     ),
@@ -3698,7 +3698,7 @@ def build(api) -> list["api.TrainConfig"]:
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
             sample_frames=4, sample_actions=128, random_select=True,
-            prompt_mask_prob=0.3,
+            prompt_mask_prob=0.2,
         ),
         data=LeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
@@ -3718,7 +3718,7 @@ def build(api) -> list["api.TrainConfig"]:
         freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
             sample_frames=4, sample_actions=128, random_select=True,
-            prompt_mask_prob=0.3,
+            prompt_mask_prob=0.2,
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=4,
