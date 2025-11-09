@@ -439,3 +439,4 @@ uv run scripts/serve_policy_incontext.py --port $PORT policy:checkpoint --policy
 - [ ] test examples/libero/main_incontext_unseen.py
 - [ ] row-gating issue of v17
 - [ ] remove the third masked images from dataloader
+- [ ] compute norm stats with only train tasks
