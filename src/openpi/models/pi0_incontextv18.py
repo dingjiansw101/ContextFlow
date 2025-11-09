@@ -445,13 +445,13 @@ class Pi0Incontextv18(_model.BaseModel):
             # Only mask if ≥2 modalities exist (guarantee at least 1 remains)
             if len(available_modalities) >= 2:
                 should_mask = jax.random.uniform(rng) < self.config.prompt_mask_prob
-                if should_mask:
-                    rng1, rng2 = jax.random.split(rng)
-                    mask_idx_value = jax.random.choice(rng2, jnp.array(available_modalities))
-                    # Set masking flags
-                    mask_image_prompts = (mask_idx_value == 0)
-                    mask_text_prompts = (mask_idx_value == 1)
-                    mask_action_state_prompts = (mask_idx_value == 2)
+                # Compute mask variables unconditionally (JAX-compatible)
+                rng1, rng2 = jax.random.split(rng)
+                mask_idx_value = jax.random.choice(rng2, jnp.array(available_modalities))
+                # Set masking flags with boolean AND to conditionally enable masking
+                mask_image_prompts = should_mask & (mask_idx_value == 0)
+                mask_text_prompts = should_mask & (mask_idx_value == 1)
+                mask_action_state_prompts = should_mask & (mask_idx_value == 2)
 
         # add language (aka tokenized inputs)
         if self.use_text_prompts and obs.tokenized_prompt is not None:
@@ -460,8 +460,7 @@ class Pi0Incontextv18(_model.BaseModel):
             tokens.append(tokenized_inputs)
             # Apply modality masking if needed
             text_mask = obs.tokenized_prompt_mask
-            if mask_text_prompts:
-                text_mask = jnp.zeros_like(text_mask, dtype=jnp.bool_)
+            text_mask = jnp.where(mask_text_prompts, jnp.zeros_like(text_mask, dtype=jnp.bool_), text_mask)
             input_mask.append(text_mask)
             # full attention between image and language inputs
             ar_mask += [False] * tokenized_inputs.shape[1]
@@ -510,8 +509,7 @@ class Pi0Incontextv18(_model.BaseModel):
                 output_mask = einops.repeat(has_valid_frames, "b -> b q", q=self.num_image_queries)
 
                 # Apply modality masking if needed
-                if mask_image_prompts:
-                    output_mask = jnp.zeros_like(output_mask, dtype=jnp.bool_)
+                output_mask = jnp.where(mask_image_prompts, jnp.zeros_like(output_mask, dtype=jnp.bool_), output_mask)
 
                 tokens.append(compressed)
                 input_mask.append(output_mask)
@@ -537,8 +535,7 @@ class Pi0Incontextv18(_model.BaseModel):
             state_output_mask = einops.repeat(has_valid_states, "b -> b q", q=self.num_state_queries)
 
             # Apply modality masking if needed
-            if mask_action_state_prompts:
-                state_output_mask = jnp.zeros_like(state_output_mask, dtype=jnp.bool_)
+            state_output_mask = jnp.where(mask_action_state_prompts, jnp.zeros_like(state_output_mask, dtype=jnp.bool_), state_output_mask)
 
             tokens.append(dem_state_tokens)
             input_mask.append(state_output_mask)
@@ -562,8 +559,7 @@ class Pi0Incontextv18(_model.BaseModel):
             action_output_mask = einops.repeat(has_valid_actions, "b -> b q", q=self.num_action_queries)
 
             # Apply modality masking if needed
-            if mask_action_state_prompts:
-                action_output_mask = jnp.zeros_like(action_output_mask, dtype=jnp.bool_)
+            action_output_mask = jnp.where(mask_action_state_prompts, jnp.zeros_like(action_output_mask, dtype=jnp.bool_), action_output_mask)
 
             tokens.append(dem_action_tokens)
             input_mask.append(action_output_mask)
