@@ -10,6 +10,21 @@ import openpi.policies.aloha_mobile_incontext_policy as aloha_incontext_policy
 import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
 import openpi.policies.aloha_policy as aloha_policy
 
+# Constants for ALOHA objects dataset
+ALOHA_OBJECT_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/vo2yager/objects_pickup_place/meta/episodes.jsonl"
+
+ALOHA_OBJECT_TEST_TASK = [
+    "pick_up_the_onion_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_pear_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_bottle_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_orange_juice_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_onion_and_place_it_in_the_basket_with_right_hand",
+    "pick_up_the_kiwi_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_kiwi_and_place_it_in_the_basket_with_right_hand",
+    "pick_up_the_bottle_and_place_it_in_the_basket_with_right_hand",
+    "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_right_hand",
+]
+
 def build(api) -> list["api.TrainConfig"]:
     g = globals()
     g["DataConfig"] = getattr(api, "DataConfig")
@@ -136,6 +151,8 @@ def build(api) -> list["api.TrainConfig"]:
         states_cache_path: str = "metadata/aloha_pen_uncap/episode_states_cache.json"
         actions_cache_path: str = "metadata/aloha_pen_uncap/episode_actions_first_cache.json"
         tracks_path: str = "metadata/aloha_pen_uncap/episode_tracks_combined.json"
+        task_to_episode: str = "metadata/aloha_pen_uncap/task_to_episode.json"
+        episode_to_indexes_file: str = "metadata/aloha_pen_uncap/episode_to_indexes.json"
         libero_input_refactor: bool = False
         # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
         # Gripper dimensions will remain in absolute values.
@@ -148,6 +165,7 @@ def build(api) -> list["api.TrainConfig"]:
         # use standard Aloha data should set this to true.
         # adapt_to_pi: bool = True
         adapt_to_pi: bool = False
+        multi_process: bool = False
 
         # Repack transforms.
         repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
@@ -155,9 +173,17 @@ def build(api) -> list["api.TrainConfig"]:
                 inputs=[
                     api._transforms.RepackTransform(
                         {
-                            "images": {"cam_high": "observation.images.top"},
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
                             "state": "observation.state",
                             "actions": "action",
+                            "prompt": "prompt",
+                            "episode_index": "episode_index",
+                            "index": "index",
+                            "task_index": "task_index",
                         }
                     )
                 ]
@@ -176,9 +202,9 @@ def build(api) -> list["api.TrainConfig"]:
 
             data_transforms = api._transforms.Group(
                 inputs=[api._transforms.InjectDemoIndexes(
-                                                    task_to_episode="metadata/aloha_pen_uncap/task_to_episode.json",
-                                                    episode_to_indexes="metadata/aloha_pen_uncap/episode_to_indexes.json",
-                                                    sample_frames=model_config.sample_frames, 
+                                                    task_to_episode=self.task_to_episode,
+                                                    episode_to_indexes=self.episode_to_indexes_file,
+                                                    sample_frames=model_config.sample_frames,
                                                     random_select=model_config.random_select,
                                                     sample_episodes=model_config.sample_episodes,
                                                     train_episode_index_list=train_epi)],
@@ -414,28 +440,13 @@ def build(api) -> list["api.TrainConfig"]:
                 asset_id="trossen_mobile",
             ),
             # default_prompt="uncap the pen",
-            repack_transforms=api._transforms.Group(
-                inputs=[
-                    api._transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
             base_config=api.DataConfig(
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            states_cache_path="metadata/aloha_pen_uncap/episode_states_cache.json",
+            actions_cache_path="metadata/aloha_pen_uncap/episode_actions_cache.json",
             # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
         ),
@@ -450,6 +461,265 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=1,
         batch_size=32,
         # wandb_enabled=False,
+    ),
+
+    # Objects pickup/place configs
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select",
+        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
+            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
+            states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
+            remove_task_list=ALOHA_OBJECT_TEST_TASK,
+            episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=2,
+        batch_size=32,
+    ),
+
+    # Inference variant (no test task filtering)
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_inference",
+        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
+            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
+            states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8",
+        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
+            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
+            states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
+            remove_task_list=ALOHA_OBJECT_TEST_TASK,
+            episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=2,
+        batch_size=32,
+    ),
+
+    # Inference variant (no test task filtering)
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8_inference",
+        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
+            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
+            states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
+    # 40k variant
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_40k",
+        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
+            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
+            states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
+            remove_task_list=ALOHA_OBJECT_TEST_TASK,
+            episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=40_000,
+        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
+    # 80k variant
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k",
+        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
+            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
+            states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
+            remove_task_list=ALOHA_OBJECT_TEST_TASK,
+            episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=80_000,
+        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
     ),
 
     api.TrainConfig(
