@@ -7170,4 +7170,32 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=32,
         # wandb_enabled=False,
     ),
+
+    # Test config for cache generation validation
+    api.TrainConfig(
+        name="pi0_libero_incontext_test_cache",
+        model=api.pi0_incontext.Pi0IncontextConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
+        ),
+        data=LeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero_test/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero_test/episode_actions_without_delta_cache.json",
+            task_to_episode="metadata/libero_test/task_to_episode.json",
+            episode_to_indexes_file="metadata/libero_test/episode_to_indexes.json",
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontext.Pi0IncontextConfig(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora", sample_frames=2, sample_actions=32, random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=4,
+        batch_size=36,
+    ),
     ]
