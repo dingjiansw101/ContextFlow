@@ -12,6 +12,7 @@ import openpi.policies.aloha_policy as aloha_policy
 
 # Constants for ALOHA objects dataset
 ALOHA_OBJECT_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/vo2yager/objects_pickup_place/meta/episodes.jsonl"
+OBJECT_TASK_SUITE_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/vo2yager/object_task_suite/meta/episodes.jsonl"
 
 ALOHA_OBJECT_TEST_TASK = [
     "pick_up_the_onion_and_place_it_in_the_basket_with_left_hand",
@@ -660,7 +661,7 @@ def build(api) -> list["api.TrainConfig"]:
             states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
             # remove_task_list=ALOHA_OBJECT_TEST_TASK,
-            # episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+            episode_json_path=OBJECT_TASK_SUITE_EPISODE_JSON,
             multi_process=False,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
@@ -703,6 +704,7 @@ def build(api) -> list["api.TrainConfig"]:
             episode_to_indexes_file="metadata/object_task_suite/episode_to_indexes.json",
             states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
+            episode_json_path=OBJECT_TASK_SUITE_EPISODE_JSON,
             multi_process=False,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
