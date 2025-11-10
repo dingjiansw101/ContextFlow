@@ -588,7 +588,7 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=40,
+        num_workers=2,
         batch_size=32,
     ),
 
@@ -1028,5 +1028,51 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
+    ),
+
+    # Transferred from /home/dingj0b/code/openpi/src/openpi/training/config.py
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_pickup_place_incontext_low_mem_finetune_split_train",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            # default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
+            remove_task_list=ALOHA_OBJECT_TEST_TASK,
+            episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
     ),
     ]

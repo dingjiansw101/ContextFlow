@@ -66,6 +66,42 @@ This will exclude the 9 test tasks defined in `ALOHA_OBJECT_TEST_TASK` from trai
 
 ---
 
+## Evaluation
+
+Once training is complete, you can evaluate the model using a server-client setup.
+
+### Terminal 1: Start Policy Server
+
+Start the policy server with your trained checkpoint:
+
+```bash
+uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+  --policy.config=pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k_inference \
+  --policy.dir=checkpoints/pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k/pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k/79999
+```
+
+**Note:** Adjust the checkpoint path and config name to match your trained model.
+
+### Terminal 2: Run Evaluation Client
+
+1. Modify the task prompt in `examples/aloha_mobile_real/main_incontext.py` to specify the task you want to evaluate:
+
+```python
+# Example task prompt
+task_prompt = "pick_up_the_pear_and_place_it_in_the_basket_with_left_hand"
+```
+
+2. Activate the environment and run the client:
+
+```bash
+source examples/aloha_mobile_real/.venv/bin/activate
+python examples/aloha_mobile_real/main_incontext.py
+```
+
+The client will connect to the policy server and execute the specified task using the trained model.
+
+---
+
 ## Troubleshooting and Testing
 
 ### Check Correctness of Prompt During Real-World Testing
