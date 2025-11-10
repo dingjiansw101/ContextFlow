@@ -1,6 +1,9 @@
 steps for create data of ICFM
 1. convert hdf5 to parquet
 ``convert_aloha_mobile_data_to_lerobot_multi.py``
+1.2 compute norm stats
+``uv run scripts/compute_norm_stats.py
+  --config-name pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8 ``
 2. generate "task_to_episode.json" and "episode_to_indexes.json", with all tasks, and use pi0 config to generate
 ``openpi/src/openpi/training/generate_task_to_index.py``   
 3. run the config with all tasks to generate "episode_actions_without_delta_cache.json" and "episode_states_without_delta_cache.json"
