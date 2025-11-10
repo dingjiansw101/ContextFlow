@@ -634,6 +634,91 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=32,
     ),
 
+    api.TrainConfig(
+        name="pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8",
+        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/object_task_suite",
+            # assets=api.AssetsConfig(
+            #     assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+            #     asset_id="trossen_mobile",
+            # ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/object_task_suite/task_to_episode.json",
+            episode_to_indexes_file="metadata/object_task_suite/episode_to_indexes.json",
+            states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
+            # remove_task_list=ALOHA_OBJECT_TEST_TASK,
+            # episode_json_path=ALOHA_OBJECT_EPISODE_JSON,
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=2,
+        batch_size=32,
+    ),
+
+    # Inference variant (no test task filtering)
+    api.TrainConfig(
+        name="pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8_inference",
+        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/object_task_suite",
+            # assets=api.AssetsConfig(
+            #     assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+            #     asset_id="trossen_mobile",
+            # ),
+            default_prompt="pick up object and place in basket",
+            base_config=api.DataConfig(
+                local_files_only=False,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=False,
+            task_to_episode="metadata/object_task_suite/task_to_episode.json",
+            episode_to_indexes_file="metadata/object_task_suite/episode_to_indexes.json",
+            states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
     # 40k variant
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_40k",
