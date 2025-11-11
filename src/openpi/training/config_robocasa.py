@@ -183,7 +183,11 @@ def build(api) -> list["api.TrainConfig"]:
         # # XJ: deprecated flags
         # use_delta_joint_actions: bool = False
         # robocasa_input_refactor: bool = False
-        
+
+        # Padding mode for AddStatesActionsPromptTransform
+        padding_mode: str = "keep_all"
+        mask_padding_as_valid: bool = False
+
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
             repack_transform = api._transforms.Group(

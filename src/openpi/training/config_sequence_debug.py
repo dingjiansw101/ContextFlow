@@ -33,6 +33,10 @@ def build(api) -> list["api.TrainConfig"]:
         tracks_path: str = "metadata/libero/episode_tracks_combined.json"
         libero_input_refactor: bool = False
 
+        # Padding mode for AddStatesActionsPromptTransform
+        padding_mode: str = "keep_all"
+        mask_padding_as_valid: bool = False
+
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
             # Make inputs look like they come from the Libero environment

@@ -13,14 +13,29 @@ def save_frame_images(dataset, frame_idx: int, save_dir: Path):
     # Get the frame data
     frame = dataset[frame_idx]
 
-    # Create subdirectory for this frame
-    frame_dir = save_dir / f"frame_{frame_idx:06d}"
+    # Get task name if available
+    task_index = frame.get("task_index")
+    if task_index is not None:
+        task_index = int(task_index)
+        # Get task name from dataset metadata
+        if hasattr(dataset, 'meta') and hasattr(dataset.meta, 'tasks'):
+            task_name = dataset.meta.tasks.get(task_index, f"task_{task_index}")
+        else:
+            task_name = f"task_{task_index}"
+        # Clean task name for filesystem (remove special characters)
+        task_name = task_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
+    else:
+        task_name = "unknown_task"
+
+    # Create subdirectory structure: save_dir/task_name/frame_XXXXXX/
+    frame_dir = save_dir / task_name / f"frame_{frame_idx:06d}"
     frame_dir.mkdir(parents=True, exist_ok=True)
 
     # Save metadata
     metadata_file = frame_dir / "metadata.txt"
     with open(metadata_file, "w") as f:
         f.write(f"Frame index: {frame_idx}\n")
+        f.write(f"Task name: {task_name}\n")
         if "task_index" in frame:
             f.write(f"Task index: {frame['task_index']}\n")
         if "episode_index" in frame:
@@ -143,12 +158,23 @@ def main():
     save_dir.mkdir(parents=True, exist_ok=True)
 
     total_images = 0
+    tasks_saved = set()
     for idx in args.frame_indexes:
         if idx >= len(dataset):
             print(f"⚠ Warning: Frame index {idx} exceeds dataset size ({len(dataset)}), skipping")
             continue
 
-        print(f"\nProcessing frame {idx}...")
+        # Get task info for display
+        frame = dataset[idx]
+        task_index = frame.get("task_index")
+        if task_index is not None and hasattr(dataset, 'meta') and hasattr(dataset.meta, 'tasks'):
+            task_name = dataset.meta.tasks.get(int(task_index), f"task_{task_index}")
+            tasks_saved.add(task_name)
+        else:
+            task_name = f"task_{task_index}" if task_index is not None else "unknown"
+            tasks_saved.add(task_name)
+
+        print(f"\nProcessing frame {idx} (Task: {task_name})...")
         try:
             num_images = save_frame_images(dataset, idx, save_dir)
             total_images += num_images
@@ -158,6 +184,8 @@ def main():
 
     print(f"\n{'='*80}")
     print(f"Done! Saved {total_images} total images to: {save_dir.absolute()}")
+    if tasks_saved:
+        print(f"Tasks saved: {', '.join(sorted(tasks_saved))}")
     print(f"{'='*80}")
 
 

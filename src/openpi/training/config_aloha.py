@@ -167,6 +167,13 @@ def build(api) -> list["api.TrainConfig"]:
         adapt_to_pi: bool = False
         multi_process: bool = False
 
+        # Padding mode for AddStatesActionsPromptTransform
+        # "keep_all": Keep all L frames when L < max_len, then pad with last frame
+        # "linspace_repeat": Always use linspace sampling, then repeat last sample if needed
+        padding_mode: str = "keep_all"
+        # Whether to mask padded frames as valid (True) or invalid (False)
+        mask_padding_as_valid: bool = False
+
         # Repack transforms.
         repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
             default=api._transforms.Group(
@@ -682,21 +689,17 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
         ),
         data=LeRobotAlohaMobileIncontextDataConfig(
-            repo_id="vo2yager/object_task_suite",
-            # assets=api.AssetsConfig(
-            #     assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
-            #     asset_id="trossen_mobile",
-            # ),
-            default_prompt="pick up object and place in basket",
+            repo_id="vo2yager/demonstrations",
+            # repo_id="vo2yager/object_task_suite",
             base_config=api.DataConfig(
                 local_files_only=False,
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/object_task_suite/task_to_episode.json",
-            episode_to_indexes_file="metadata/object_task_suite/episode_to_indexes.json",
-            states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
+            task_to_episode="metadata/demonstrations/task_to_episode.json",
+            episode_to_indexes_file="metadata/demonstrations/episode_to_indexes.json",
+            states_cache_path="metadata/demonstrations/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/demonstrations/episode_actions_without_delta_cache.json",
             multi_process=False,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),

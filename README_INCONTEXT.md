@@ -7,7 +7,7 @@ This guide provides the workflow for preparing data and training in-context lear
 Convert the raw HDF5 data to LeRobot parquet format using:
 
 ```bash
-convert_aloha_mobile_data_to_lerobot_multi.py
+python examples/aloha_mobile_real/convert_aloha_mobile_data_to_lerobot_multi.py
 ```
 
 ## Step 2: Compute Normalization Statistics
@@ -31,6 +31,8 @@ echo '{}' > metadata/object_task_suite/task_to_episode.json
 echo '{}' > metadata/object_task_suite/episode_to_indexes.json
 ```
 
+
+
 **Why:** The config tries to load these files during initialization. Creating empty placeholders bypasses the chicken-and-egg problem.
 
 ## Step 4: Generate Task-to-Index Metadata
@@ -52,6 +54,11 @@ Run the training config with all tasks included to generate the following cache 
 - `episode_states_without_delta_cache.json`
 
 These cache files are automatically generated during the first training run.
+
+Or use the script to build cache
+`
+/home/dingj0b/code/openpi/src/openpi/training/build_episode_cache.py
+`
 
 ## Step 6: Run Config and Remove Unseen Tasks
 
