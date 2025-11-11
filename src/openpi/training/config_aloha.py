@@ -645,11 +645,6 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         data=LeRobotAlohaMobileIncontextDataConfig(
             repo_id="vo2yager/object_task_suite",
-            # assets=api.AssetsConfig(
-            #     assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
-            #     asset_id="trossen_mobile",
-            # ),
-            default_prompt="pick up object and place in basket",
             base_config=api.DataConfig(
                 local_files_only=False,
                 prompt_from_task=True,
@@ -659,8 +654,6 @@ def build(api) -> list["api.TrainConfig"]:
             episode_to_indexes_file="metadata/object_task_suite/episode_to_indexes.json",
             states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
-            # remove_task_list=ALOHA_OBJECT_TEST_TASK,
-            # episode_json_path=OBJECT_TASK_SUITE_EPISODE_JSON,
             multi_process=False,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
@@ -673,11 +666,12 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=2,
+        num_workers=64,
         batch_size=32,
     ),
 
     # Inference variant (no test task filtering)
+    # TODO: need to set a dataset of unseen tasks in test config
     api.TrainConfig(
         name="pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8_inference",
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
