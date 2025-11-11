@@ -1075,4 +1075,84 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=16,
         batch_size=32,
     ),
+
+    api.TrainConfig(
+        name="pi0_aloha_objects_all_pickup_place_incontext_low_mem_finetune_split_train_inference",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/objects_pickup_place",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            # default_prompt="uncap the pen",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
+
+    api.TrainConfig(
+        name="pi0_aloha_objects_task_suite_low_mem_finetune_split_train",
+        assets_repo_override="pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/object_task_suite",
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=False,  # Set to True for local-only datasets.
+                prompt_from_task=True,
+            ),
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
     ]
