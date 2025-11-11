@@ -819,6 +819,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
     dataset: any  # the underlying dataset from which to fetch demo items
 
     max_len: int = 32
+    demo_state_dim: int | None = None
 
     episode_to_all_states: Dict[int, np.ndarray] = dataclasses.field(init=False)
     episode_to_all_first_actions: Dict[int, np.ndarray] = dataclasses.field(init=False)
@@ -867,6 +868,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             save_episode_states_to_json(states, self.states_cache_path)
             save_episode_states_to_json(actions, self.actions_cache_path)
 
+        states = self._maybe_slice_states(states)
         object.__setattr__(self, "episode_to_all_states", states)
         object.__setattr__(self, "episode_to_all_first_actions", actions)
 
@@ -878,6 +880,15 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             "actions": None,
             "actions_mask": None,
         })
+
+    def _maybe_slice_states(self, states: Dict[int, np.ndarray]) -> Dict[int, np.ndarray]:
+        if self.demo_state_dim is None:
+            return states
+        sliced: Dict[int, np.ndarray] = {}
+        for ep, arr in states.items():
+            arr_np = np.asarray(arr, dtype=np.float32)
+            sliced[ep] = arr_np[..., : self.demo_state_dim]
+        return sliced
 
     # ---------- helpers ----------
     @staticmethod

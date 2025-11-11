@@ -367,6 +367,8 @@ class DataConfig:
     # Xianjie: add additioanl episode field to enable train-test split
     # the episode arg will be passed to LeRobotDataset.episodes
     train_episode: list[int] | None = None
+    # Optional override for incontext demo state dimension (applied before tokenization).
+    demo_state_dim: int | None = None
     
 
 class GroupFactory(Protocol):
