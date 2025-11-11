@@ -73,6 +73,15 @@ def build(api) -> list["api.TrainConfig"]:
         tracks_path: str = "metadata/libero/episode_tracks_combined.json"
         libero_input_refactor: bool = False
 
+        # Padding strategy for AddStatesActionsPromptTransform
+        # "keep_all": Keep all frames when L < max_len, then pad (default, current behavior)
+        # "linspace_repeat": Always linspace sample, then repeat last (training behavior)
+        padding_mode: str = "keep_all"
+
+        # Whether to mask padded frames as valid (True) or invalid (False)
+        # True = training behavior, False = current inference behavior (default)
+        mask_padding_as_valid: bool = False
+
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
             # Make inputs look like they come from the Libero environment
@@ -3499,6 +3508,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3510,7 +3521,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3569,6 +3580,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3580,7 +3593,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3639,6 +3652,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3650,7 +3665,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3709,6 +3724,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3720,7 +3737,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3758,7 +3775,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=16,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3794,7 +3811,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3856,6 +3873,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3868,7 +3887,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3928,6 +3947,9 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            # Match training behavior: use linspace sampling and mask all frames as valid
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -3939,7 +3961,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -3999,6 +4021,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -4010,7 +4034,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -4072,6 +4096,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -4084,7 +4110,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -4147,6 +4173,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -4159,7 +4187,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -4219,6 +4247,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -4230,7 +4260,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,
         # wandb_enabled=False,
     ),
 
@@ -4290,6 +4320,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -4301,7 +4333,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 
@@ -4362,6 +4394,8 @@ def build(api) -> list["api.TrainConfig"]:
             # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             libero_input_refactor=True,
+            padding_mode="linspace_repeat",
+            mask_padding_as_valid=True,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -4373,7 +4407,7 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=4,
         # num_workers=1,
         batch_size=32,
-        use_custom_dataloader=True,
+        use_custom_dataloader=False,  # Inference uses LeRobotDataset + AddStatesActionsPromptTransform
         # wandb_enabled=False,
     ),
 

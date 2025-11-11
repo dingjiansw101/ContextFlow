@@ -415,5 +415,33 @@ def main():
     exit(0 if success else 1)
 
 
+def test_v18_training_inference_consistency():
+    """Test that v18 inference config matches training config output.
+
+    This test verifies that AddStatesActionsPromptTransform with training-style
+    parameters (padding_mode="linspace_repeat", mask_padding_as_valid=True)
+    produces the same results as CustomLeRobotDataset used during training.
+
+    Compares:
+    - Training: pi0_libero_incontextv18_low_mem_finetune (CustomLeRobotDataset)
+    - Inference: pi0_libero_incontextv18_low_mem_finetune_inference (AddStatesActionsPromptTransform)
+    """
+    training_config = "pi0_libero_incontextv18_low_mem_finetune"
+    inference_config = "pi0_libero_incontextv18_low_mem_finetune_inference"
+
+    success = compare_dataloaders(
+        config1_name=training_config,
+        config2_name=inference_config,
+        num_batches=2,  # Small number for fast testing
+        seed=42,
+        batch_size=2,
+    )
+
+    assert success, (
+        f"Training config '{training_config}' and inference config '{inference_config}' "
+        f"produce different outputs. This indicates the padding/masking behavior does not match."
+    )
+
+
 if __name__ == "__main__":
     main()

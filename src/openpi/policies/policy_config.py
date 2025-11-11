@@ -159,18 +159,26 @@ def create_trained_policy_incontext(
         print("Inference: Adding action state prompts")
         if train_config.data.episode_to_indexes_file is not None:
             input_transforms.append(
-                        transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=train_config.model.sample_actions,
-                                              states_cache_path=train_config.data.states_cache_path,
-                                              actions_cache_path=train_config.data.actions_cache_path,
-                                              episode_to_indexes_file=train_config.data.episode_to_indexes_file,
-                                              )
+                        transforms.AddStatesActionsPromptTransform(
+                            dataset=dataset,
+                            max_len=train_config.model.sample_actions,
+                            states_cache_path=train_config.data.states_cache_path,
+                            actions_cache_path=train_config.data.actions_cache_path,
+                            episode_to_indexes_file=train_config.data.episode_to_indexes_file,
+                            padding_mode=train_config.data.padding_mode,
+                            mask_padding_as_valid=train_config.data.mask_padding_as_valid,
+                        )
         )
         else:
             input_transforms.append(
-                            transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=train_config.model.sample_actions,
-                                                states_cache_path=train_config.data.states_cache_path,
-                                                actions_cache_path=train_config.data.actions_cache_path,
-                                                )
+                            transforms.AddStatesActionsPromptTransform(
+                                dataset=dataset,
+                                max_len=train_config.model.sample_actions,
+                                states_cache_path=train_config.data.states_cache_path,
+                                actions_cache_path=train_config.data.actions_cache_path,
+                                padding_mode=train_config.data.padding_mode,
+                                mask_padding_as_valid=train_config.data.mask_padding_as_valid,
+                            )
             )
 
     if train_config.model.use_point_track_prompts:

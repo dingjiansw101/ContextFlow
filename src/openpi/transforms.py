@@ -1015,7 +1015,24 @@ class AddStatesActionsPromptTransform(DataTransformFn):
     all_episode_stage: Optional[str] = None
     debug_checks: bool = False
 
+    # Padding mode: how to sample/pad when episode length differs from max_len
+    # "keep_all": Keep all L frames when L < max_len, then pad with last frame (current behavior)
+    # "linspace_repeat": Always use linspace sampling, then repeat last sample if needed (training behavior)
+    padding_mode: str = "keep_all"
+
+    # Whether to mask padded frames as valid (True) or invalid (False)
+    # True matches training behavior where repeated frames have mask=True
+    # False is current inference behavior where padded frames have mask=False
+    mask_padding_as_valid: bool = False
+
     def __post_init__(self):
+        # Validate padding_mode
+        if self.padding_mode not in {"keep_all", "linspace_repeat"}:
+            raise ValueError(
+                f"Invalid padding_mode: '{self.padding_mode}'. "
+                f"Must be 'keep_all' or 'linspace_repeat'."
+            )
+
         expected_idx_map: Optional[Dict[int, List[int]]] = None
         if self.debug_checks and self.episode_to_indexes_file is not None:
             idx_path = Path(self.episode_to_indexes_file)
@@ -1132,11 +1149,63 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             return np.zeros((max_len,), dtype=int)
         return np.linspace(0, T - 1, num=max_len, dtype=int)
 
+    def _linspace_sample_and_pad(self, arr: np.ndarray, s: int, e: int) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Sample using linspace, then repeat last sample if needed (training behavior).
+        Mimics CustomLeRobotDataset padding strategy.
+
+        Returns: (sampled, mask) where mask indicates valid frames.
+        """
+        T_total = arr.shape[0]
+        s = max(0, min(s, T_total))
+        e = max(s + 1, min(e, T_total))  # ensure at least 1 frame
+        window = arr[s:e]                 # [L, D]
+        L = window.shape[0]
+        D = window.shape[1] if window.ndim > 1 else 1
+
+        # Always use linspace sampling for num_samples = min(L, max_len)
+        num_samples = min(L, self.max_len)
+        idxs = self._even_sample_len(L, num_samples)
+        sampled_frames = window[idxs]  # [num_samples, D]
+
+        # If we need more frames, repeat the last sampled frame
+        if num_samples < self.max_len:
+            pad_count = self.max_len - num_samples
+            # Repeat last sampled frame
+            repeat_shape = (pad_count,) + (1,) * (sampled_frames.ndim - 1)
+            last_frame = sampled_frames[-1:] if num_samples > 0 else np.zeros((1, D), dtype=arr.dtype)
+            repeated_frames = np.repeat(last_frame, pad_count, axis=0)
+
+            # Concatenate original samples with repeated frames
+            sampled = np.concatenate([sampled_frames, repeated_frames], axis=0)
+
+            # Mask handling based on mask_padding_as_valid
+            if self.mask_padding_as_valid:
+                # Training behavior: all frames (including repeated) are marked as valid
+                mask = np.ones((self.max_len,), dtype=bool)
+            else:
+                # Current inference behavior: only original samples are valid
+                mask = np.zeros((self.max_len,), dtype=bool)
+                mask[:num_samples] = True
+        else:
+            # No padding needed, all frames are from linspace sampling
+            sampled = sampled_frames
+            mask = np.ones((self.max_len,), dtype=bool)
+
+        return sampled, mask
+
     def _window_sample_and_pad(self, arr: np.ndarray, s: int, e: int) -> Tuple[np.ndarray, np.ndarray]:
         """
         Sample / pad from window [s, e) to max_len.
         Returns: (sampled, mask) with mask True for valid frames.
+
+        Dispatches to appropriate implementation based on padding_mode.
         """
+        if self.padding_mode == "linspace_repeat":
+            # Training-style: always linspace sample, repeat last if needed
+            return self._linspace_sample_and_pad(arr, s, e)
+
+        # Default "keep_all" mode: original implementation
         T_total = arr.shape[0]
         s = max(0, min(s, T_total))
         e = max(s + 1, min(e, T_total))  # ensure at least 1 frame
@@ -1152,8 +1221,12 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             sampled = np.zeros((self.max_len, D), dtype=arr.dtype)
             sampled[:L] = window
             sampled[L:] = window[-1] if L > 0 else 0
-            mask = np.zeros((self.max_len,), dtype=bool)
-            mask[:L] = True
+            # Apply mask_padding_as_valid for backward compatibility control
+            if self.mask_padding_as_valid:
+                mask = np.ones((self.max_len,), dtype=bool)
+            else:
+                mask = np.zeros((self.max_len,), dtype=bool)
+                mask[:L] = True
         return sampled, mask
 
     @staticmethod
