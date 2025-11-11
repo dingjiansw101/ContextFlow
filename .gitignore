@@ -15,6 +15,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+saved_demo_frames/
 # XJ's ignored files
 dcgm/
 train_inference_transform_check.py

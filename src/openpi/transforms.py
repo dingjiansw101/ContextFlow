@@ -844,7 +844,20 @@ class AddImagePromptTransform(DataTransformFn):
         else:
             data["dem_prompt_images"] = imgs
             data["dem_prompt_images_mask"] = msks
-            
+
+        # DEBUG: Print loaded demonstration info
+        print("\n" + "="*80)
+        print("LOADED IN-CONTEXT DEMONSTRATIONS:")
+        # Print the text prompt if available
+        if "prompt" in data:
+            prompt_str = data["prompt"].item() if hasattr(data["prompt"], 'item') else str(data["prompt"])
+            print(f"  Text prompt: '{prompt_str}'")
+        print(f"  Demo indexes: {idx_lists}")
+        print(f"  Number of demo episodes: {len(idx_lists)}")
+        for name, img_arr in data["dem_prompt_images"].items():
+            print(f"  Camera '{name}': shape={img_arr.shape}, dtype={img_arr.dtype}")
+        print("="*80 + "\n")
+
         # ---- Update cache for test split ----
         if split == "test":
             self._cache["split"] = "test"
@@ -1255,6 +1268,21 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         stacked_states_mask = np.stack(states_mask_b, axis=0)
         stacked_actions = np.stack(actions_b, axis=0)
         stacked_actions_mask = np.stack(actions_mask_b, axis=0)
+
+        # DEBUG: Print loaded state/action prompt info
+        print("\n" + "="*80)
+        print("LOADED STATE/ACTION PROMPTS:")
+        # Print the text prompt if available
+        if "prompt" in data:
+            prompt_str = data["prompt"].item() if hasattr(data["prompt"], 'item') else str(data["prompt"])
+            print(f"  Text prompt: '{prompt_str}'")
+        print(f"  Demo episodes: {eps}")
+        print(f"  States shape: {stacked_states.shape}, dtype={stacked_states.dtype}")
+        print(f"  Actions shape: {stacked_actions.shape}, dtype={stacked_actions.dtype}")
+        if cur_stage is not None and cur_rank is not None:
+            print(f"  Current stage: rank={cur_rank}, label='{cur_stage.get('label', '')}', frames=[{cur_stage['start']}, {cur_stage['end']})")
+        print("="*80 + "\n")
+
         # Single-episode squeeze
         if len(eps) == 1:
             data["dem_prompt_all_states"] = stacked_states[0]
@@ -1443,6 +1471,12 @@ class InjectDefaultPrompt(DataTransformFn):
     def __call__(self, data: DataDict) -> DataDict:
         if self.prompt is not None and "prompt" not in data:
             data["prompt"] = np.asarray(self.prompt)
+            # DEBUG: Print injected prompt
+            print(f"[InjectDefaultPrompt] Injected prompt: '{self.prompt}'")
+        elif "prompt" in data:
+            # DEBUG: Print existing prompt
+            prompt_str = data["prompt"].item() if hasattr(data["prompt"], 'item') else str(data["prompt"])
+            print(f"[InjectDefaultPrompt] Using existing prompt: '{prompt_str}'")
         return data
 
 

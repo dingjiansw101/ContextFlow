@@ -80,6 +80,14 @@ uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
   --policy.dir=checkpoints/pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k/pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k/79999
 ```
 
+```bash
+export JAX_DEFAULT_MATMUL_PRECISION=float32
+
+uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+  --policy.config=pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8_inference \
+  --policy.dir=checkpoints/pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8/pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8/10000
+```
+
 **Note:** Adjust the checkpoint path and config name to match your trained model.
 
 ### Terminal 2: Run Evaluation Client
