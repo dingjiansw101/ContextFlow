@@ -92,6 +92,8 @@ class Pi0IncontextConfigv18(_model.BaseModelConfig):
     num_state_compressor_layers: int = 2   # number of cross/self-attention layers for state compressor
     num_action_compressor_layers: int = 2  # number of cross/self-attention layers for action compressor
 
+    compress_state_action_prompts: bool = True  # Whether to use Perceiver compressors for state/action; if False, use full sequence length
+
     # Random modality masking during training
     prompt_mask_prob: float = 0.0  # Probability to mask one random prompt modality during training
 
@@ -380,7 +382,7 @@ class Pi0Incontextv18(_model.BaseModel):
                 rngs=rngs
             )
 
-        if self.use_action_state_prompts:
+        if self.use_action_state_prompts and config.compress_state_action_prompts:
             self.state_compressor = PerceiverCompressor(
                 num_queries=config.num_state_queries,
                 embed_dim=prompt_expert_config.width,
@@ -527,19 +529,24 @@ class Pi0Incontextv18(_model.BaseModel):
                 dem_state_tokens = self.demo_state_proj(obs.incontext_states)
                 incontext_state_masks_input = obs.incontext_state_masks
 
-            # Compress: (B, seq_len, D) → (B, num_state_queries, D)
-            dem_state_tokens = self.state_compressor(dem_state_tokens, mask=incontext_state_masks_input)
+            # Compress: (B, seq_len, D) → (B, num_state_queries, D) or keep full sequence if compression disabled
+            if hasattr(self, 'state_compressor'):
+                dem_state_tokens = self.state_compressor(dem_state_tokens, mask=incontext_state_masks_input)
+                num_state_tokens = self.num_state_queries
+            else:
+                # No compression, use all tokens
+                num_state_tokens = dem_state_tokens.shape[1]
 
             # Output mask: valid if ANY input state was valid
             has_valid_states = jnp.any(incontext_state_masks_input, axis=1)  # (B,)
-            state_output_mask = einops.repeat(has_valid_states, "b -> b q", q=self.num_state_queries)
+            state_output_mask = einops.repeat(has_valid_states, "b -> b q", q=num_state_tokens)
 
             # Apply modality masking if needed
             state_output_mask = jnp.where(mask_action_state_prompts, jnp.zeros_like(state_output_mask, dtype=jnp.bool_), state_output_mask)
 
             tokens.append(dem_state_tokens)
             input_mask.append(state_output_mask)
-            ar_mask += [False] * self.num_state_queries
+            ar_mask += [False] * num_state_tokens
 
             #------------------------------------------------------------------------
             # embed in-context actions
@@ -551,19 +558,24 @@ class Pi0Incontextv18(_model.BaseModel):
                 dem_action_tokens = self.demo_action_proj(obs.incontext_actions)
                 incontext_action_masks_input = obs.incontext_action_masks
 
-            # Compress: (B, seq_len, D) → (B, num_action_queries, D)
-            dem_action_tokens = self.action_compressor(dem_action_tokens, mask=incontext_action_masks_input)
+            # Compress: (B, seq_len, D) → (B, num_action_queries, D) or keep full sequence if compression disabled
+            if hasattr(self, 'action_compressor'):
+                dem_action_tokens = self.action_compressor(dem_action_tokens, mask=incontext_action_masks_input)
+                num_action_tokens = self.num_action_queries
+            else:
+                # No compression, use all tokens
+                num_action_tokens = dem_action_tokens.shape[1]
 
             # Output mask: valid if ANY input action was valid
             has_valid_actions = jnp.any(incontext_action_masks_input, axis=1)  # (B,)
-            action_output_mask = einops.repeat(has_valid_actions, "b -> b q", q=self.num_action_queries)
+            action_output_mask = einops.repeat(has_valid_actions, "b -> b q", q=num_action_tokens)
 
             # Apply modality masking if needed
             action_output_mask = jnp.where(mask_action_state_prompts, jnp.zeros_like(action_output_mask, dtype=jnp.bool_), action_output_mask)
 
             tokens.append(dem_action_tokens)
             input_mask.append(action_output_mask)
-            ar_mask += [False] * self.num_action_queries
+            ar_mask += [False] * num_action_tokens
 
         # ---------------------------------------------------------
         assert len(ar_mask) > 0
