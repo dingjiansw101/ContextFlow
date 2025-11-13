@@ -35,6 +35,7 @@ class Pi0FASTIncontextSeqConfig(_model.BaseModelConfig):
     max_token_len: int = 250
     state_dim: int = 32
     demo_action_dim: int | None = None
+    demo_state_dim: int = 32
 
     siglip_variant: str = "So400m/14"
     pool_type: str = "none"
@@ -113,7 +114,7 @@ class Pi0FASTIncontextSeq(_model.BaseModel):
         img.lazy_init(next(iter(config.fake_obs().images.values())), train=False, rngs=rngs)
         self.PaliGemma = nnx.Dict(llm=llm, img=img)
 
-        self.demo_state_proj = nnx.Linear(config.demo_action_dim, paligemma_config.width, rngs=rngs)
+        self.demo_state_proj = nnx.Linear(config.demo_state_dim, paligemma_config.width, rngs=rngs)
         self.demo_action_proj = nnx.Linear(config.demo_action_dim, paligemma_config.width, rngs=rngs)
 
     def _project_sequence(
