@@ -132,6 +132,102 @@ class PaliGemmaWeightLoader(WeightLoader):
         # Add all missing weights.
         return _merge_params(loaded_params, params, missing_regex=".*")
 
+
+@dataclasses.dataclass(frozen=True)
+class VisionEncoderOnlyLoader(WeightLoader):
+    """Loads vision encoder and optionally embedder weights from the official PaliGemma checkpoint.
+
+    This loader is useful when you want to initialize only the vision backbone from PaliGemma
+    while randomly initializing the LLM layers. This avoids shape mismatch issues when using
+    smaller LLM variants (e.g., gemma_300m) with the PaliGemma 3B checkpoint.
+
+    The embedder can be safely loaded when the prompt_expert variant has width=2048 (e.g., gemma_300m_v2)
+    which matches PaliGemma's Gemma-2B embedder dimension.
+
+    Use cases:
+    - Loading vision backbone from PaliGemma 3B into models with gemma_300m or gemma_300m_v2
+    - Avoiding MLP dimension mismatches (PaliGemma: mlp_dim=16,384 vs gemma_300m: mlp_dim=4,096)
+    - Starting with strong vision features while training LLM from scratch
+    - Optionally loading pre-trained token embeddings
+
+    Args:
+        prefix: Parameter prefix for vision encoder (default: "PaliGemma/img")
+        include_embedder: Whether to also load the embedder weights (default: False)
+        verbose: Whether to log detailed loading information
+    """
+
+    prefix: str = "PaliGemma/img"
+    include_embedder: bool = False
+    verbose: bool = False
+
+    def load(self, params: at.Params) -> at.Params:
+        # Download the official PaliGemma checkpoint
+        path = download.maybe_download(
+            "gs://vertex-model-garden-paligemma-us/paligemma/pt_224.npz", gs={"token": "anon"}
+        )
+
+        # Load the checkpoint
+        with path.open("rb") as f:
+            flat_params = dict(np.load(f, allow_pickle=False))
+
+        # Unflatten to nested dict structure
+        loaded_params = {"PaliGemma": flax.traverse_util.unflatten_dict(flat_params, sep="/")["params"]}
+
+        # Flatten and filter vision encoder and optionally embedder parameters
+        flat_loaded = flax.traverse_util.flatten_dict(loaded_params, sep="/")
+
+        if self.include_embedder:
+            # Load both vision encoder and embedder
+            filtered_params = {
+                k: v for k, v in flat_loaded.items()
+                if k.startswith(self.prefix) or "llm/embedder" in k
+            }
+        else:
+            # Load only vision encoder
+            filtered_params = {k: v for k, v in flat_loaded.items() if k.startswith(self.prefix)}
+
+        if not filtered_params:
+            raise ValueError(
+                f"No parameters found with prefix '{self.prefix}' in PaliGemma checkpoint. "
+                f"Available prefixes: {set(k.split('/')[0] for k in flat_loaded.keys())}"
+            )
+
+        # Count vision and embedder parameters separately for logging
+        vision_count = sum(1 for k in filtered_params if k.startswith(self.prefix))
+        embedder_count = sum(1 for k in filtered_params if "llm/embedder" in k)
+
+        logger.info(
+            f"[VisionEncoderOnlyLoader] Loaded {len(filtered_params)} parameters total"
+        )
+        logger.info(f"  Vision encoder: {vision_count} parameters")
+        if self.include_embedder:
+            logger.info(f"  Embedder: {embedder_count} parameters")
+
+        if self.verbose:
+            # Show vision encoder samples
+            vision_keys = [k for k in sorted(filtered_params.keys()) if k.startswith(self.prefix)]
+            if vision_keys:
+                logger.info("  Vision encoder samples:")
+                for k in vision_keys[:5]:
+                    logger.info(f"    {k}: shape={filtered_params[k].shape}")
+                if len(vision_keys) > 5:
+                    logger.info(f"    ... and {len(vision_keys) - 5} more vision parameters")
+
+            # Show embedder samples
+            if self.include_embedder:
+                embedder_keys = [k for k in sorted(filtered_params.keys()) if "llm/embedder" in k]
+                if embedder_keys:
+                    logger.info("  Embedder samples:")
+                    for k in embedder_keys:
+                        logger.info(f"    {k}: shape={filtered_params[k].shape}")
+
+        # Unflatten and merge with reference parameters
+        loaded_subset = flax.traverse_util.unflatten_dict(filtered_params, sep="/")
+
+        # Use missing_regex=".*" to fill all non-loaded parameters from random initialization
+        return _merge_params(loaded_subset, params, missing_regex=".*")
+
+
 # TODO: write an empty weight loader that does not load any weights
 
 def _merge_params(loaded_params: at.Params, params: at.Params, *, missing_regex: str) -> at.Params:

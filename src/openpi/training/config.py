@@ -128,6 +128,19 @@ DEFAULT_LIBERO_TEST_TASK_V4 = [
         "pick up the black bowl from table center and place it on the plate",
 ]
 
+
+# correspond to v4 in google sheet
+DEFAULT_LIBERO_TEST_TASK_V5 = [
+        "pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate",
+        "pick up the black bowl on the ramekin and place it on the plate",
+        "pick up the chocolate pudding and place it in the basket",
+        "pick up the orange juice and place it in the basket",
+        "put the wine bottle on the rack",
+        "put the bowl on top of the cabinet",
+        "put the yellow and white mug in the microwave and close it",
+        "put the black bowl in the bottom drawer of the cabinet and close it",
+]
+
 DEFAULT_ROBOCASA_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl").expanduser())
 #"/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
 
