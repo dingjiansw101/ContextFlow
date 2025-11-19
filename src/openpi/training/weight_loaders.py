@@ -228,6 +228,118 @@ class VisionEncoderOnlyLoader(WeightLoader):
         return _merge_params(loaded_subset, params, missing_regex=".*")
 
 
+@dataclasses.dataclass(frozen=True)
+class SelectiveVisionAndProjectionsLoader(WeightLoader):
+    """Loads vision encoder, embedder, and basic projection layers from pi0_base checkpoint.
+
+    This loader is designed for in-context learning models (like pi0_incontextv18) where you want to:
+    - Load pre-trained vision encoder from pi0_base
+    - Load pre-trained embedder from pi0_base
+    - Load pre-trained basic projection layers (state_proj, action_*) from pi0_base
+    - Randomly initialize all LLM layers (prompt expert and action expert)
+    - Randomly initialize all in-context specific components (demo projections, compressors)
+
+    This gives a fresh start for the LLM experts while leveraging pre-trained vision and action processing components.
+
+    Components loaded from pi0_base:
+    - Vision encoder: PaliGemma/img/*
+    - Token embedder: PaliGemma/llm/embedder/*
+    - Projections: state_proj, action_in_proj, action_time_mlp_in, action_time_mlp_out, action_out_proj
+
+    Components randomly initialized (not loaded):
+    - Prompt expert LLM layers: PaliGemma/llm/layers/*, PaliGemma/llm/final_norm*
+    - Action expert LLM layers: PaliGemma/llm/layers/*_1, PaliGemma/llm/final_norm_1
+    - LoRA weights (if any): *lora*
+    - In-context projections: demo_action_proj, demo_state_proj, img_proj, text_proj, demo_track_proj
+    - Compressors: image_compressor, state_compressor, action_compressor
+
+    Args:
+        params_path: Path to the pi0_base checkpoint (e.g., "s3://openpi-assets/checkpoints/pi0_base/params")
+        verbose: Whether to log detailed loading information
+    """
+
+    params_path: str
+    verbose: bool = False
+
+    def load(self, params: at.Params) -> at.Params:
+        # Load the pi0_base checkpoint
+        loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
+
+        # Flatten to filter specific components
+        flat_loaded = flax.traverse_util.flatten_dict(loaded_params, sep="/")
+        flat_ref = flax.traverse_util.flatten_dict(params, sep="/")
+
+        # Define what to load: vision encoder, embedder, and basic projection layers
+        load_patterns = [
+            r"^PaliGemma/img/.*",                    # Vision encoder
+            r"^PaliGemma/llm/embedder/.*",           # Token embedder
+            r"^state_proj/.*",                       # State projection
+            r"^action_in_proj/.*",                   # Action input projection
+            r"^action_time_mlp_in/.*",               # Action time MLP input
+            r"^action_time_mlp_out/.*",              # Action time MLP output
+            r"^action_out_proj/.*",                  # Action output projection
+        ]
+
+        # Compile patterns
+        compiled_patterns = [re.compile(pattern) for pattern in load_patterns]
+
+        # Filter loaded parameters to keep only matching components
+        filtered_params = {}
+        for k, v in flat_loaded.items():
+            if any(pattern.match(k) for pattern in compiled_patterns):
+                if k in flat_ref:  # Only load if the key exists in the reference params
+                    filtered_params[k] = v
+
+        # Count loaded parameters by category for logging
+        vision_count = sum(1 for k in filtered_params if k.startswith("PaliGemma/img/"))
+        embedder_count = sum(1 for k in filtered_params if k.startswith("PaliGemma/llm/embedder/"))
+        projection_count = sum(1 for k in filtered_params if any(
+            k.startswith(prefix) for prefix in ["state_proj/", "action_in_proj/", "action_time_mlp_in/",
+                                                 "action_time_mlp_out/", "action_out_proj/"]
+        ))
+
+        logger.info(
+            f"[SelectiveVisionAndProjectionsLoader] Loaded {len(filtered_params)} parameters from pi0_base:"
+        )
+        logger.info(f"  Vision encoder: {vision_count} parameters")
+        logger.info(f"  Embedder: {embedder_count} parameters")
+        logger.info(f"  Projections: {projection_count} parameters")
+
+        if self.verbose:
+            logger.info("  Loaded parameter samples:")
+            for category, prefix in [("Vision", "PaliGemma/img/"), ("Embedder", "PaliGemma/llm/embedder/"),
+                                     ("Projections", "state_proj/")]:
+                category_keys = [k for k in sorted(filtered_params.keys()) if k.startswith(prefix)]
+                if category_keys:
+                    logger.info(f"  {category}:")
+                    for k in category_keys[:3]:
+                        logger.info(f"    {k}: shape={filtered_params[k].shape}")
+                    if len(category_keys) > 3:
+                        logger.info(f"    ... and {len(category_keys) - 3} more {category.lower()} parameters")
+
+        # Unflatten the filtered parameters
+        loaded_subset = flax.traverse_util.unflatten_dict(filtered_params, sep="/")
+
+        # Define what should be randomly initialized (everything else)
+        # This regex matches all parameters NOT in the load patterns above
+        fallback_pattern = r".*(?:llm/(?:layers|final_norm)|lora|demo_action_proj|demo_state_proj|img_proj|text_proj|demo_track_proj|image_compressor|state_compressor|action_compressor).*"
+
+        # Merge loaded parameters with random initialization
+        result = _merge_params(loaded_subset, params, missing_regex=fallback_pattern)
+
+        # Log what's being randomly initialized
+        if self.verbose:
+            randomly_init_keys = [k for k in flat_ref.keys() if k not in filtered_params]
+            logger.info(f"  Randomly initialized: {len(randomly_init_keys)} parameters")
+            logger.info("  Random initialization samples:")
+            for k in sorted(randomly_init_keys)[:5]:
+                logger.info(f"    {k}")
+            if len(randomly_init_keys) > 5:
+                logger.info(f"    ... and {len(randomly_init_keys) - 5} more randomly initialized parameters")
+
+        return result
+
+
 # TODO: write an empty weight loader that does not load any weights
 
 def _merge_params(loaded_params: at.Params, params: at.Params, *, missing_regex: str) -> at.Params:
