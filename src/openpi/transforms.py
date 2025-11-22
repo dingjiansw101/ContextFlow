@@ -472,7 +472,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
     # Sampling refinements (optional)
     keep_anchor_when_random: bool = True          # Prefer to include anchor for random/random_stratified
     enforce_unique: bool = True                   # Whether to enforce unique sampled indices
-    debug_checks: bool = True                     # Whether to enable strict assertions
 
     # Randomness control: defaults to numpy global RNG (differs per worker)
     seed_base: Optional[int] = None               # Optional per-instance base seed for reproducibility
@@ -501,11 +500,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
         object.__setattr__(self, "_rng", rng)
 
         # Basic parameter validation
-        if self.debug_checks:
-            assert self.n_frames >= 2, "n_frames must be >= 2 to be meaningful (disable this transform or use single-frame otherwise)"
-            assert self.sampling in {"uniform", "around", "random", "random_stratified"}, \
-                f"Unsupported sampling: {self.sampling}"
-
     # -----------------------------
     # Sampling helpers
     # -----------------------------
@@ -601,18 +595,8 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
 
         # Assertions for uniqueness and range
         loc = [int(i) for i in loc]
-        if self.debug_checks:
-            assert len(loc) == self.n_frames, f"Sample count should equal n_frames={self.n_frames}, got {len(loc)}"
-            if self.enforce_unique:
-                assert len(set(loc)) == len(loc), f"Sampled local indices not unique: {loc}"
-            assert all(0 <= i < n for i in loc), f"Sampled local indices out of range: {loc} with n={n}"
-
         # Map to global frame indices
         chosen_global = [int(frame_list[i]) for i in loc]
-        if self.debug_checks:
-            # Global indices must be recoverable from frame_list
-            back = [frame_list.index(g) for g in chosen_global]
-            assert all(0 <= b < n for b in back), f"Global indices not traceable back to local: {chosen_global}"
         return chosen_global
 
     # -----------------------------
@@ -625,8 +609,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
             return data
 
         # Basic field assertions
-        if self.debug_checks:
-            assert "episode_index" in data, "data is missing episode_index"
         ep_idx = int(data["episode_index"])
 
         # Anchor (local frame index), used to try to include under around/random*
@@ -638,10 +620,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
             raise ValueError("[AddCurrentFramesSequenceTransform] Missing frame index list for episode "
                              f"(ep={ep_idx}); check episode_to_indexes_file.")
         frame_list = self._epi2idx[ep_idx]
-        if self.debug_checks:
-            assert isinstance(frame_list, list) and len(frame_list) >= self.n_frames, \
-                f"episode={ep_idx} has insufficient frames ({len(frame_list)} < n_frames={self.n_frames})"
-
         anchor_local = None
         anchor_global = None
         if anchor_val is not None:
@@ -664,14 +642,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
                         except ValueError:
                             idx = None
                 anchor_local = idx
-            if anchor_local is None and self.debug_checks:
-                logging.warning(
-                    "[AddCurrentFramesSequenceTransform] Could not match anchor frame (frame_index=%s, index=%s) in episode=%s index list (len=%s)",
-                    anchor_val,
-                    data.get("index"),
-                    ep_idx,
-                    len(frame_list),
-                )
         if anchor_local is not None:
             anchor_global = frame_list[anchor_local]
 
@@ -695,8 +665,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
 
         # Select and stack
         items = [self.dataset[int(i)] for i in chosen_global]
-        if self.debug_checks:
-            assert len(items) == self.n_frames, f"Unexpected item count: {len(items)} vs n_frames={self.n_frames}"
         if len(items) == 0:
             raise ValueError(f"[AddCurrentFramesSequenceTransform] empty chosen_global: {chosen_global}")
 
@@ -711,30 +679,6 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
         act_seq    = stacked["actions"]
 
         # Strict assertions (shape/type)
-        if self.debug_checks:
-            N = self.n_frames
-            # Image/mask keys must match
-            assert set(images_seq.keys()) == set(masks_seq.keys()), \
-                f"image and image_mask view keys differ: {images_seq.keys()} vs {masks_seq.keys()}"
-            # Shape checks
-            for cam, arr in images_seq.items():
-                assert arr.ndim == 4 and arr.shape[0] == N, \
-                    f"images_seq[{cam}] expected [N,H,W,3], got {arr.shape}"
-            for cam, arr in masks_seq.items():
-                assert arr.ndim == 1 and arr.shape[0] == N and arr.dtype == np.bool_, \
-                    f"masks_seq[{cam}] expected [N] and bool, got {arr.shape}, {arr.dtype}"
-            assert state_seq.ndim == 2 and state_seq.shape[0] == N, \
-                f"state_seq expected [N,A], got {state_seq.shape}"
-            assert act_seq.ndim == 3 and act_seq.shape[0] == N, \
-                f"actions_seq expected [N,H,A], got {act_seq.shape}"
-            # Monotonicity (chosen_global should be time-sorted)
-            assert chosen_global == sorted(chosen_global), \
-                f"chosen_global not in ascending temporal order: {chosen_global}"
-            # Uniqueness
-            if self.enforce_unique:
-                assert len(set(chosen_global)) == len(chosen_global), \
-                    f"chosen_global contains duplicates: {chosen_global}"
-
         # Write back to data (downstream fused expects these keys)
         data["current_images_seq"]       = images_seq
         data["current_image_masks_seq"]  = masks_seq
@@ -1012,7 +956,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
 
     # Stage JSON (list of dicts; each entry has "episode_name" and "segments":[{start,end,label,id}, ...])
     all_episode_stage: Optional[str] = None
-    debug_checks: bool = False
 
     # Padding mode: how to sample/pad when episode length differs from max_len
     # "keep_all": Keep all L frames when L < max_len, then pad with last frame (current behavior)
@@ -1033,12 +976,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             )
 
         expected_idx_map: Optional[Dict[int, List[int]]] = None
-        if self.debug_checks and self.episode_to_indexes_file is not None:
-            idx_path = Path(self.episode_to_indexes_file)
-            if idx_path.exists():
-                with idx_path.open("r") as f:
-                    expected_idx_map = {int(k): v for k, v in json.load(f).items()}
-
         # ---- Load / Build caches for states & actions ----
         try:
             states = load_episode_states_from_json(self.states_cache_path)
@@ -1062,26 +999,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
 
         object.__setattr__(self, "episode_to_all_states", states)
         object.__setattr__(self, "episode_to_all_first_actions", actions)
-
-        if self.debug_checks and expected_idx_map is not None:
-            expected_eps = set(expected_idx_map.keys())
-            state_eps = set(self.episode_to_all_states.keys())
-            action_eps = set(self.episode_to_all_first_actions.keys())
-            missing_state_eps = sorted(expected_eps - state_eps)
-            missing_action_eps = sorted(expected_eps - action_eps)
-            if missing_state_eps:
-                sample = ", ".join(str(x) for x in missing_state_eps[:10])
-                raise AssertionError(
-                    f"[AddStatesActionsPromptTransform] Missing state cache for episodes: {sample}"
-                )
-            if missing_action_eps:
-                sample = ", ".join(str(x) for x in missing_action_eps[:10])
-                raise AssertionError(
-                    f"[AddStatesActionsPromptTransform] Missing action cache for episodes: {sample}"
-                )
-            print(
-                f"[AddStatesActionsPromptTransform] Loaded state/action caches for {len(state_eps)} episodes from {self.states_cache_path} / {self.actions_cache_path}"
-            )
 
         # ---- Build stage map: {episode_name -> segments} ----
         stage_map: Optional[Dict[str, List[Dict[str, Any]]]] = None

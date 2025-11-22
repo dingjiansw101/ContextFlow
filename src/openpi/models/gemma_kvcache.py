@@ -209,7 +209,6 @@ class Attention(nn.Module):
     """Attention module."""
     configs: Sequence[Config]
     allow_bn_broadcast: bool = True
-    debug_checks: bool = True  # <<<<<< toggle
 
     @nn.compact
     def __call__(self, xs, positions, attn_mask, kv_cache, ep_index=None):
@@ -220,16 +219,8 @@ class Attention(nn.Module):
         assert (self.configs[0].num_heads % self.configs[0].num_kv_heads) == 0, \
             "num_heads must be divisible by num_kv_heads."
 
-        if self.debug_checks:
-            _host_assert(jnp.array(self.configs[0].head_dim % 2 == 0),
-                         "head_dim must be even, got {}", jnp.array(self.configs[0].head_dim))
-
         # === 1) Basic dtype/shape validation ===
         assert isinstance(xs, (list, tuple)) and any(x is not None for x in xs), "xs must contain at least one non-None branch"
-        if self.debug_checks:
-            _host_assert(jnp.array(positions.ndim == 2), "positions must be [B,T], got ndim={}", jnp.array(positions.ndim))
-            _host_assert(jnp.array(attn_mask.ndim == 4), "attn_mask must be [B,1,T,S], got ndim={}", jnp.array(attn_mask.ndim))
-
         x0 = next(x for x in xs if x is not None)
         Bq = int(x0.shape[0])
         dtype = x0.dtype
@@ -275,42 +266,19 @@ class Attention(nn.Module):
         Tcur = int(k_cur.shape[1])
 
         # Verify positions against Tq before applying RoPE
-        if self.debug_checks:
-            _host_assert(jnp.array(positions.shape[0] == Bq), "positions batch mismatch, pos.B={}, Bq={}",
-                         jnp.array(positions.shape[0]), jnp.array(Bq))
-            _host_assert(jnp.array(positions.shape[1] == Tq), "positions time mismatch, pos.T={}, Tq={}",
-                         jnp.array(positions.shape[1]), jnp.array(Tq))
-
         # RoPE + scaling (cached K/V already had RoPE applied during encode; only apply to current tokens here)
         q = _apply_rope(q, positions=positions)
         q *= self.configs[0].head_dim ** -0.5
         k_cur = _apply_rope(k_cur, positions=positions)
 
-        if self.debug_checks:
-            _host_assert(jnp.array(q.dtype == dtype),    "q dtype mismatch", jnp.array(1))
-            _host_assert(jnp.array(k_cur.dtype == dtype),"k_cur dtype mismatch", jnp.array(1))
-            _host_assert(jnp.array(v_cur.dtype == dtype),"v_cur dtype mismatch", jnp.array(1))
-
         # === 4) Broadcast KV cache across batch and concatenate time (per-layer view inside Attention: cache is [B,Tpm,K,H]) ===
         cache_k, cache_v = kv_cache  # [Bcache, Tpm, K, H]
-
-        if self.debug_checks:
-            _host_assert(jnp.array(cache_k.ndim == 4), "kv_cache.K expected [B,Tpm,K,H], got ndim={}", jnp.array(cache_k.ndim))
-            _host_assert(jnp.array(cache_v.ndim == 4), "kv_cache.V expected [B,Tpm,K,H], got ndim={}", jnp.array(cache_v.ndim))
 
         B = int(q.shape[0])                  # Use B consistently for the current query batch size
         Bc, Tpm = int(cache_k.shape[0]), int(cache_k.shape[1])
         if ep_index is not None:
             # With ep_index: each query row points to an episode (0..Bcache-1) so BN shuffling stays aligned.
             ep = jnp.asarray(ep_index)
-            if self.debug_checks:
-                _host_assert(jnp.array(ep.ndim == 1), "ep_index must be 1D, got ndim={}", jnp.array(ep.ndim))
-                _host_assert(jnp.array(ep.shape[0] == B), "ep_index length {} != B {}", jnp.array(ep.shape[0]), jnp.array(B))
-                _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index must be an integer dtype", jnp.array(1))
-                e_min = jnp.min(ep); e_max = jnp.max(ep)
-                _host_assert(jnp.array((e_min >= 0) & (e_max < Bc)),
-                             "ep_index out of range: allowed [0, {}), got min={}, max={}",
-                             jnp.array(Bc), e_min, e_max)
             # Gather per-sample cache entries according to ep_index (regular gather, not uniform repeat).
             cache_k = cache_k[ep, :, :, :]    # [B, Tpm, K, H]
             cache_v = cache_v[ep, :, :, :]
@@ -333,33 +301,12 @@ class Attention(nn.Module):
                 ).reshape(B, Tpm, cache_v.shape[2], cache_v.shape[3])
 
         # Align K/H dimensions
-        if self.debug_checks:
-            K_conf, H_conf = self.configs[0].num_kv_heads, self.configs[0].head_dim
-            _host_assert(jnp.array(k_cur.shape[-2] == K_conf), "k_cur K dimension {} != {}", jnp.array(k_cur.shape[-2]), jnp.array(K_conf))
-            _host_assert(jnp.array(k_cur.shape[-1] == H_conf), "k_cur H dimension {} != {}", jnp.array(k_cur.shape[-1]), jnp.array(H_conf))
-            _host_assert(jnp.array(v_cur.shape[-2] == K_conf), "v_cur K dimension {} != {}", jnp.array(v_cur.shape[-2]), jnp.array(K_conf))
-            _host_assert(jnp.array(v_cur.shape[-1] == H_conf), "v_cur H dimension {} != {}", jnp.array(v_cur.shape[-1]), jnp.array(H_conf))
-
         # Concatenate cached tokens first, then current tokens
         k = jnp.concatenate([cache_k, k_cur], axis=1)  # [Bq, Tpm+Tcur, K, H]
         v = jnp.concatenate([cache_v, v_cur], axis=1)
-        if self.debug_checks:
-            _host_assert(jnp.array(k.shape[1] == (Tpm + Tcur)), "K time dimension {} != Tpm+Tcur {}", jnp.array(k.shape[1]), jnp.array(Tpm + Tcur))
-            _host_assert(jnp.array(v.shape[1] == (Tpm + Tcur)), "V time dimension {} != Tpm+Tcur {}", jnp.array(v.shape[1]), jnp.array(Tpm + Tcur))
-
         # === 5) Attention computation plus mask validation ===
         q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
         logits = jnp.einsum("BTKGH,BSKH->BKGTS", q, k, preferred_element_type=jnp.float32)
-
-        if self.debug_checks:
-            expected_mask_shape = (Bq, 1, Tq, Tpm + Tcur)
-            _host_assert(jnp.array(attn_mask.shape[0] == expected_mask_shape[0]), "mask B {} != {}",
-                         jnp.array(attn_mask.shape[0]), jnp.array(expected_mask_shape[0]))
-            _host_assert(jnp.array(attn_mask.shape[1] == expected_mask_shape[1]), "mask 1D axis must be 1", jnp.array(1))
-            _host_assert(jnp.array(attn_mask.shape[2] == expected_mask_shape[2]), "mask T {} != {}",
-                         jnp.array(attn_mask.shape[2]), jnp.array(expected_mask_shape[2]))
-            _host_assert(jnp.array(attn_mask.shape[3] == expected_mask_shape[3]), "mask S {} != {}",
-                         jnp.array(attn_mask.shape[3]), jnp.array(expected_mask_shape[3]))
 
         big_neg = -2.3819763e38  # Match the original Gemma behavior
         masked_logits = jnp.where(attn_mask[:, :, None, :, :], logits, big_neg)
@@ -375,9 +322,6 @@ class Attention(nn.Module):
             if x is not None:
                 Ti = int(x.shape[1])
                 end = start + Ti
-                if self.debug_checks:
-                    _host_assert(jnp.array(end <= encoded.shape[1]), "encoded slice out of bounds end={} > T={}",
-                                 jnp.array(end), jnp.array(encoded.shape[1]))
                 out_e = lora.Einsum(
                     shape=(cfg.num_heads, cfg.head_dim, cfg.width),
                     name=_nm("attn_vec_einsum", i),
@@ -423,14 +367,13 @@ class Block(nn.Module):
     configs: Sequence[Config]
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
-    debug_checks: bool = True  # <<<<<< toggle forwarded to Attention
 
     @nn.compact
     def __call__(self, xs, kv_cache, positions, attn_mask, ep_index=None, deterministic=True):  # noqa: FBT002
         xs = sharding.activation_sharding_constraint(xs)
         drop = nn.Dropout(self.dropout, self.dropout_bdims) if self.dropout else lambda x, _: x
 
-        attn = Attention(configs=self.configs, name="attn", debug_checks=self.debug_checks)
+        attn = Attention(configs=self.configs, name="attn")
 
         if self.configs[0].expert_name is not None:
             _name = partial(_namev2, expert_names=[config.expert_name for config in self.configs])
@@ -479,7 +422,6 @@ class Module(nn.Module):
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
-    debug_checks: bool = True  # <<<<<< top-level toggle
     use_text_prompts: bool = True
 
     def _zero_kv(self, B: int, dtype) -> KVCache:
@@ -536,7 +478,7 @@ class Module(nn.Module):
             configs=self.configs,
             dropout=self.dropout,
             dropout_bdims=self.dropout_bdims,
-            debug_checks=self.debug_checks,  # <<<<<< forwarded to Block
+            # <<<<<< forwarded to Block
         )
 
         if self.configs[0].expert_name is not None:
@@ -572,56 +514,6 @@ class Module(nn.Module):
         B = int(e_list[0].shape[0])
         dt = jnp.dtype(self.embed_dtype)
 
-        if self.debug_checks:
-            same_B = jnp.array(all(int(e.shape[0]) == B for e in e_list))
-            _host_assert(same_B, "batch size mismatch across experts", same_B)
-
-            T_sum = int(sum(int(e.shape[1]) for e in e_list))
-            _host_assert(jnp.array(positions.shape[0] == B), "positions.B {} != {}", jnp.array(positions.shape[0]), jnp.array(B))
-            _host_assert(jnp.array(positions.shape[1] == T_sum), "positions.T {} != sum T_i {}", jnp.array(positions.shape[1]), jnp.array(T_sum))
-
-            _host_assert(jnp.array(mask_3d.shape[0] == B), "mask.B {} != {}", jnp.array(mask_3d.shape[0]), jnp.array(B))
-            _host_assert(jnp.array(mask_3d.shape[1] == T_sum), "mask.T {} != sum T_i {}", jnp.array(mask_3d.shape[1]), jnp.array(T_sum))
-
-            if kv_cache is None:
-                _host_assert(jnp.array(mask_3d.shape[2] == T_sum),
-                            "Without cache S {} != T_sum {}", jnp.array(mask_3d.shape[2]), jnp.array(T_sum))
-                # Only require a non-decreasing sequence within [0, T_sum-1]
-                pos_d_ok = jnp.all((positions[:, 1:] - positions[:, :-1]) >= 0)
-                _host_assert(pos_d_ok, "positions must be non-decreasing", jnp.array(1))
-                pos_min = jnp.min(positions)
-                pos_max = jnp.max(positions)
-                rng_ok = jnp.logical_and(pos_min >= 0, pos_max <= (T_sum - 1))
-                _host_assert(rng_ok, "positions range must lie in [0, T_sum-1], min={}, max={}", pos_min, pos_max)
-            else:
-                pos_d_ok = jnp.all((positions[:, 1:] - positions[:, :-1]) >= 0)
-                _host_assert(pos_d_ok, "positions (with cache) must also be non-decreasing", jnp.array(1))
-
-                k0, v0 = kv_cache
-                L = self.configs[0].depth
-                _host_assert(jnp.array(k0.shape[0] == L), "external cache K layer count {} != L {}", jnp.array(k0.shape[0]), jnp.array(L))
-                _host_assert(jnp.array(v0.shape[0] == L), "external cache V layer count {} != L {}", jnp.array(v0.shape[0]), jnp.array(L))
-                _host_assert(jnp.array(k0.shape[1] == B), "external cache K batch {} != {}", jnp.array(k0.shape[1]), jnp.array(B))
-                _host_assert(jnp.array(v0.shape[1] == B), "external cache V batch {} != {}", jnp.array(v0.shape[1]), jnp.array(B))
-
-            # dtype checks (ensure bool/int without printing strings)
-            _host_assert(jnp.array(mask_3d.dtype == jnp.bool_), "mask.dtype must be bool", jnp.array(1))
-            _host_assert(jnp.array(positions.dtype in (jnp.int16, jnp.int32, jnp.int64)), "positions.dtype must be int", jnp.array(1))
-
-        if self.debug_checks and ep_index is not None:
-            ep = jnp.asarray(ep_index)
-            Bq = int(e_list[0].shape[0])                    # Current query batch
-            _host_assert(jnp.array(ep.ndim == 1), "ep_index must be 1D, got ndim={}", jnp.array(ep.ndim))
-            _host_assert(jnp.array(ep.shape[0] == Bq), "ep_index length {} != B {}", jnp.array(ep.shape[0]), jnp.array(Bq))
-            _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index must be an integer dtype", jnp.array(1))
-            if kv_cache is not None:
-                k0, _ = kv_cache
-                Bc = int(k0.shape[1])                       # Note: the top-level KVCache is [L,Bc,...]
-                e_min = jnp.min(ep); e_max = jnp.max(ep)
-                _host_assert(jnp.array((e_min >= 0) & (e_max < Bc)),
-                             "ep_index out of range: allowed [0, {}), got min={}, max={}",
-                             jnp.array(Bc), e_min, e_max)
-                
         kv_arg = kv_cache if kv_cache is not None else self._zero_kv(B, dt)
 
         # Expand to [B,1,T,S] before entering scan/Attention
@@ -629,15 +521,6 @@ class Module(nn.Module):
 
         embedded, kv_out = self.layers(embedded, kv_arg, positions, mask_4d, ep_index, deterministic)
         out = [f(e) if e is not None else e for f, e in zip(self.final_norms, embedded, strict=True)]
-
-        if self.debug_checks:
-            _host_assert(jnp.array(isinstance(kv_out, tuple) and len(kv_out) == 2), "kv_out must be (k,v)", jnp.array(1))
-            L = self.configs[0].depth
-            k_out, v_out = kv_out
-            _host_assert(jnp.array(k_out.shape[0] == L), "kv_out.K L dimension {} != {}", jnp.array(k_out.shape[0]), jnp.array(L))
-            _host_assert(jnp.array(v_out.shape[0] == L), "kv_out.V L dimension {} != {}", jnp.array(v_out.shape[0]), jnp.array(L))
-            _host_assert(jnp.array(k_out.shape[1] == B), "kv_out.K B dimension {} != {}", jnp.array(k_out.shape[1]), jnp.array(B))
-            _host_assert(jnp.array(v_out.shape[1] == B), "kv_out.V B dimension {} != {}", jnp.array(v_out.shape[1]), jnp.array(B))
 
         return out, kv_out
 
@@ -668,19 +551,6 @@ class Module(nn.Module):
 
         _, kv_cache = self.layers(embedded_pm, self._zero_kv(B, dt), positions_pm, mask_pm_b, None, deterministic)
 
-        if self.debug_checks:
-            self._assert_monotonic_positions(positions_pm, mask_pm.astype(bool), "positions_pm")
-            k_all = kv_cache[0]            # [L,B,Tpm,K,H]
-            Tpm_cache = k_all.shape[2]
-            Tpm_input = positions_pm.shape[1]
-            _host_assert(jnp.array(Tpm_cache == Tpm_input),
-                         "pm_cache T ({}) must equal positions_pm.shape[1] ({})",
-                         jnp.array(Tpm_cache), jnp.array(Tpm_input))
-            valid_pm = jnp.any(mask_pm.astype(bool), axis=-1)  # [B,Tpm]
-            Tpm_valid_min = jnp.min(jnp.sum(valid_pm, axis=-1))
-            _host_assert(jnp.array((Tpm_valid_min <= Tpm_cache) & (Tpm_valid_min >= 0)),
-                         "mask_pm minimum valid token {} must not exceed pm_cache T {}",
-                         jnp.array(Tpm_valid_min), jnp.array(Tpm_cache))
         return PMCache(kv_cache)
 
     # ------------ Decode suffix using pm-cache ------------
@@ -699,29 +569,9 @@ class Module(nn.Module):
         mask_suf_b = jnp.asarray(mask_suf)[:, None, :, :]  # [BN,1,Ts,Tpm+Ts]
 
         L = self.configs[0].depth
-        if self.debug_checks:
-            k0, v0 = pm_cache.kv
-            _host_assert(jnp.array(k0.shape[0] == L), "pm_cache.K L {} != {}", jnp.array(k0.shape[0]), jnp.array(L))
-            _host_assert(jnp.array(v0.shape[0] == L), "pm_cache.V L {} != {}", jnp.array(v0.shape[0]), jnp.array(L))
-        if self.debug_checks and ep_index is not None:
-            e0 = next(e for e in embedded_suf if e is not None)
-            Bq = int(e0.shape[0])
-            ep = jnp.asarray(ep_index)
-            _host_assert(jnp.array(ep.ndim == 1), "ep_index must be 1D, got ndim={}", jnp.array(ep.ndim))
-            _host_assert(jnp.array(ep.shape[0] == Bq), "ep_index length {} != B {}", jnp.array(ep.shape[0]), jnp.array(Bq))
-            _host_assert(jnp.array(ep.dtype in (jnp.int16, jnp.int32, jnp.int64)), "ep_index must be an integer dtype", jnp.array(1))
-            Bc = int(pm_cache.kv[0].shape[1])
-            e_min = jnp.min(ep); e_max = jnp.max(ep)
-            _host_assert(jnp.array((e_min >= 0) & (e_max < Bc)),
-                         "ep_index out of range: allowed [0, {}), got min={}, max={}",
-                         jnp.array(Bc), e_min, e_max)
-
         outputs, _ = self.layers(embedded_suf, pm_cache.kv, positions_suf, mask_suf_b, ep_index, deterministic)
         outs = [f(e) if e is not None else e for f, e in zip(self.final_norms, outputs, strict=True)]
 
-        if self.debug_checks:
-            ok_dtype = jnp.array(all((e is None) or (e.dtype == jnp.dtype(self.embed_dtype)) for e in outs))
-            _host_assert(ok_dtype, "decode_with_cache output dtype mismatch", ok_dtype)
         return outs
 
 # -------- Utils --------

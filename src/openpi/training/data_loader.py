@@ -24,37 +24,6 @@ T_co = TypeVar("T_co", covariant=True)
 import dataclasses
 from typing import Any, Dict, Sequence as _Seq  # avoid shadowing the Sequence import above
 
-@dataclasses.dataclass
-class DebugProbe:
-    tag: str = "probe"
-    keys: _Seq[str] = ("episode_index", "frame_index", "index", "task_index")
-    max_print: int = 5       # Print only the first N times
-    every_n: int = 0         # Or print every N times; 0 disables periodic printing
-
-    def __post_init__(self):
-        self._count = 0
-
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        self._count += 1
-        do_print = (self._count <= self.max_print) or (self.every_n and self._count % self.every_n == 0)
-        if do_print:
-            fields = " ".join(f"{k}={data.get(k, None)}" for k in self.keys)
-            print(f"[{self.tag}] {fields}")
-        return data
-
-def _instrument_transforms(transforms: Sequence[_transforms.DataTransformFn],
-                           *,
-                           prefix: str = "T",
-                           keys: tuple[str, ...] = ("episode_index", "frame_index", "index", "task_index"),
-                           max_print: int = 5) -> list[_transforms.DataTransformFn]:
-    """Insert DebugProbe before each transform (tag='prefix#idx:ClassName')."""
-    out: list[_transforms.DataTransformFn] = []
-    for i, t in enumerate(transforms):
-        tag = f"{prefix}#{i}:{t.__class__.__name__}"
-        out.append(DebugProbe(tag=tag, keys=keys, max_print=max_print))
-        out.append(t)
-    return out
-
 
 # TODO: refactor: checking passed train_episode is None or not
 def is_effective_none(x):
@@ -375,11 +344,6 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
         *data_config.model_transforms.inputs,
     ]
 
-    # Toggle: inject probes only when DL_TRACE=1 (off by default)
-    if os.environ.get("DL_TRACE", "0") == "1":
-        seq = _instrument_transforms(seq, prefix="TF", keys=("episode_index", "frame_index", "index", "task_index"),
-                                     max_print=int(os.environ.get("DL_TRACE_MAX", "20")))
-
     return TransformedDataset(dataset, seq)
 
 
@@ -471,21 +435,18 @@ def create_incontext_data_loader(
 
     if config.model.use_action_state_prompts:
         print("Using action-state prompt")
-        debug_prompt_cache = getattr(config.data, "debug_prompt_cache", False)
         if config.data.episode_to_indexes_file is not None:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
                                                                 episode_to_indexes_file=config.data.episode_to_indexes_file,
                                                                 all_episode_stage=getattr(config.data, "all_episode_stage", None),
-                                                                debug_checks=debug_prompt_cache,
-                                                                )                                        
+                                                                )
         else:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
                                                                 all_episode_stage=getattr(config.data, "all_episode_stage", None),
-                                                                debug_checks=debug_prompt_cache,
                                                                 )
         dataset = TransformedDataset(dataset, [add_demo_transform])
     

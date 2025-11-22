@@ -56,11 +56,6 @@ def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals):
             raise AssertionError(msg.format(*vals_np))
     jax.debug.callback(_cb, pred_scalar, *debug_vals)
 
-def _dbg_assert(enable: bool, pred_scalar: jax.Array, msg: str, *debug_vals):
-    """Trigger host assertion only when enable=True; otherwise a no-op."""
-    if enable:
-        _host_assert(pred_scalar, msg, *debug_vals)
-  
 ### XJ: for online kv caching type
 @dataclasses.dataclass
 class PMCache:
@@ -245,7 +240,6 @@ class Attention(nn.Module):
 
     configs: Sequence[Config]
     allow_bn_broadcast: bool = True
-    debug_checks: bool = False
 
     @nn.compact
     def __call__(self, xs, positions, attn_mask, kv_cache):
@@ -256,20 +250,10 @@ class Attention(nn.Module):
         assert (self.configs[0].num_heads % self.configs[0].num_kv_heads) == 0, \
             "num_heads must be divisible by num_kv_heads."
 
-        if self.debug_checks:
-            # === 1) Basic dtype/shape checks (allow each expert to have different T; Tq=∑T_i) ===
-            assert isinstance(xs, (list, tuple)) and any(x is not None for x in xs), "xs must include at least one non-None branch"
-            assert positions.ndim == 2, f"positions expected [B,T], got {positions.shape}"
-            assert attn_mask.ndim == 4, f"attn_mask expected [B,1,T,S], got {attn_mask.shape}"
-
         # Batch size and total sequence length
         x0 = next(x for x in xs if x is not None)
         Bq = int(x0.shape[0])
-        if self.debug_checks:
-            assert all((x is None) or (int(x.shape[0]) == Bq) for x in xs), "Batch sizes differ across experts"
         t_list = [int(x.shape[1]) for x in xs if x is not None]
-        if self.debug_checks:
-            assert len(t_list) > 0
         Tq = int(sum(t_list))  # concatenated total query length
 
         dtype = x0.dtype  # keep half precision
@@ -314,21 +298,12 @@ class Attention(nn.Module):
         v_cur = jnp.concatenate([v for _, _, v in qkvs], axis=1)  # [B,Tcur,K,H]
         Tcur = int(k_cur.shape[1])
 
-        if self.debug_checks:
-            # Before RoPE, verify positions matches Tq
-            assert positions.shape == (Bq, Tq), f"positions mismatches q shape: pos={positions.shape}, Tq={Tq}"
-
         # === 3) RoPE & scaling (cache K/V already had RoPE during encode; apply only to current tokens) ===
         q = _apply_rope(q, positions=positions); q *= self.configs[0].head_dim ** -0.5
         k_cur = _apply_rope(k_cur, positions=positions)
         
-        if self.debug_checks:
-            assert q.dtype == k_cur.dtype == v_cur.dtype == dtype
-
         # === 4) KV-cache batch broadcast + time concatenation (grab Tpm first, then concat) ===
         cache_k, cache_v = kv_cache  # expect [Bcache, Tpm, K, H]; Tpm can be 0
-        if self.debug_checks:
-            assert cache_k.ndim == 4 and cache_v.ndim == 4, "kv_cache expected [B,Tpm,K,H]"
         Bc, Tpm = int(cache_k.shape[0]), int(cache_k.shape[1])
 
         if Bq != Bc:
@@ -349,10 +324,6 @@ class Attention(nn.Module):
         # Concatenate: cache first, then current
         k = jnp.concatenate([cache_k, k_cur], axis=1)  # [Bq, Tpm+Tcur, K, H]
         v = jnp.concatenate([cache_v, v_cur], axis=1)
-        if self.debug_checks:
-            assert k.shape[1] == Tpm + Tcur and v.shape[1] == Tpm + Tcur, \
-                f"KV time concat mismatch: Tpm={Tpm}, Tcur={Tcur}, got K={k.shape}, V={v.shape}"
-
         # === 5) Attention computation + mask validation ===
         # Treat q as (K*G) heads, grouped by K
         q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
@@ -432,14 +403,13 @@ class Block(nn.Module):
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()
-    debug_checks: bool = True
 
     @nn.compact
     def __call__(self, xs, kv_cache, positions, attn_mask, deterministic=True):  # noqa: FBT002
         xs = sharding.activation_sharding_constraint(xs)
         drop = nn.Dropout(self.dropout, self.dropout_bdims) if self.dropout else lambda x, _: x
 
-        attn = Attention(configs=self.configs, name="attn", debug_checks=self.debug_checks)
+        attn = Attention(configs=self.configs, name="attn")
 
         if self.configs[0].expert_name is not None:
             _name = partial(_namev2, expert_names=[config.expert_name for config in self.configs])
@@ -492,7 +462,6 @@ class Module(nn.Module):
 
     dropout: float = 0.0
     dropout_bdims: tuple[int, ...] = ()  # Every float is dropped independently.
-    debug_checks: bool = True
     
     def _zero_kv(self, B: int, dtype) -> KVCache:
         L = self.configs[0].depth
@@ -524,15 +493,11 @@ class Module(nn.Module):
             raise ValueError(f"{name}: mask ndim must be 2/3/4, got {mask.shape}")
 
         # 2) Align shapes
-        _dbg_assert(True, jnp.array(pos.ndim == 2 and pos.shape == token_mask.shape),
-                    f"{name}: positions shape {pos.shape} must equal token_mask shape {token_mask.shape}")
-
         # 3) Reference positions: cumulative valid-token count minus 1
         ref = jnp.cumsum(token_mask, axis=-1) - 1      # [B,T]
 
         # 4) Compare only at valid token positions
         ok = jnp.all(jnp.where(token_mask, pos == ref, True))
-        _dbg_assert(True, ok, f"{name} is not monotonic per mask (expected cumsum(valid)-1)")
 
         
     def setup(self):
@@ -563,8 +528,7 @@ class Module(nn.Module):
             configs=self.configs,
             dropout=self.dropout,
             dropout_bdims=self.dropout_bdims,
-            debug_checks=self.debug_checks,
-        )
+                    )
         
         if self.configs[0].expert_name is not None:
             _name = partial(_namev2, expert_names=[config.expert_name for config in self.configs])
@@ -605,16 +569,6 @@ class Module(nn.Module):
 
         embedded, kv_out = self.layers(embedded, kv_arg, positions, mask_4d, deterministic)
         out = [f(e) if e is not None else e for f, e in zip(self.final_norms, embedded, strict=True)]
-
-        if self.debug_checks:
-            # _host_assert(jnp.array(positions.dtype in (jnp.int32, jnp.int16, jnp.int64)),
-            #  "positions dtype should be an integer, got {}", positions.dtype)
-            # _host_assert(jnp.array(attn_mask.dtype == jnp.bool_), 
-            #             "attn_mask must be bool, got {}", attn_mask.dtype)
-            assert isinstance(kv_out, tuple) and len(kv_out) == 2
-            L = self.configs[0].depth
-            assert kv_out[0].shape[0] == L and kv_out[1].shape[0] == L, \
-                f"L mismatch: {kv_out[0].shape} / {kv_out[1].shape}"
 
         return out, kv_out
 
@@ -658,29 +612,6 @@ class Module(nn.Module):
 
         _, kv_cache = self.layers(embedded_pm, self._zero_kv(B, dt), positions_pm, mask_pm_b, deterministic)
 
-        if self.debug_checks:
-            # 1) Consistency between positions and mask (fixed version, OK)
-            self._assert_monotonic_positions(positions_pm, mask_pm.astype(bool), "positions_pm")
-
-            # 2) pm_cache T dimension should match the number of valid tokens per batch
-            k_all = kv_cache[0]                       # [L,B,Tpm,K,H]
-            Tpm_cache = k_all.shape[2]                # per-layer K/V sequence length in cache
-            Tpm_input = positions_pm.shape[1]         # total tokens passed in (∑ lengths per branch)
-
-            _dbg_assert(self.debug_checks, 
-                jnp.array(Tpm_cache == Tpm_input),
-                "pm_cache T ({}) should equal positions_pm.shape[1] ({})",
-                Tpm_cache, Tpm_input,
-            )
-
-            # Optional: if you still monitor the number of valid tokens, only perform lower/upper-bound sanity checks
-            valid_pm = jnp.any(mask_pm.astype(bool), axis=-1)  # [B,Tpm]
-            Tpm_valid_min = jnp.min(jnp.sum(valid_pm, axis=-1))  # minimum valid tokens per batch
-            _dbg_assert(self.debug_checks, 
-                jnp.array((Tpm_valid_min <= Tpm_cache) & (Tpm_valid_min >= 0)),
-                "mask_pm minimum valid-token count {} should not exceed pm_cache T ({})",
-                Tpm_valid_min, Tpm_cache,
-            )
         return PMCache(kv_cache)
     
     # ------------ NEW: helper to decode suffix using a given per-layer KV cache ------------
@@ -706,9 +637,6 @@ class Module(nn.Module):
         assert k0.shape[0] == L and v0.shape[0] == L, f"pm_cache L mismatch: {k0.shape} / {v0.shape}"
         outputs, _ = self.layers(embedded_suf, pm_cache.kv, positions_suf, mask_suf_b, deterministic)
         outs = [f(e) if e is not None else e for f, e in zip(self.final_norms, outputs, strict=True)]
-        if self.debug_checks:
-            # Output dtype should match embed_dtype
-            assert all((e is None) or (e.dtype == jnp.dtype(self.embed_dtype)) for e in outs)
         return outs
 
 

@@ -175,7 +175,6 @@ class Pi0LightIncontextConfigv14(_model.BaseModelConfig):
     # XJ: for training sequence
     use_frame_sequence_transform: bool = False
     frame_sequence_length: int = 4
-    debug_fused_checks: bool = False
 
     @property
     @override
@@ -359,13 +358,11 @@ class Pi0LightIncontextv14(_model.BaseModel):
         # XJ: for training sequence
         self.use_frame_sequence_transform = config.use_frame_sequence_transform
         self.frame_sequence_length = config.frame_sequence_length
-        self.debug_fused_checks = config.debug_fused_checks
 
         # TODO: rewrite gemma in NNX. For now, use bridge.
         gemma_kwargs = {
             "configs": [prompt_expert_config, action_expert_config],
             "embed_dtype": config.dtype,
-            "debug_checks":config.debug_fused_checks,
             "use_text_prompts": config.use_text_prompts,
         }
         if config.vocab_size is not None:
@@ -620,10 +617,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
         train: bool = False,
     ) -> at.Float[at.Array, "*b ah"]:
 
-        cfg_dbg = self.debug_fused_checks
-        if cfg_dbg:
-            self._dbg_reset_flags()
-
         # ---------------------------
         # 0) Preprocess and detect multi-frame batches
         # ---------------------------
@@ -653,10 +646,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
             obs_current_images_seq      = obs.current_images_seq
             obs_current_image_masks_seq = obs.current_image_masks_seq
 
-            if cfg_dbg:
-                # Ensure every camera view has the same sequence length
-                lens = [v.shape[1] for v in obs_current_images_seq.values()]
-                assert all(L == N for L in lens), f"Per-camera sequence length mismatch: {lens}"
         else:
             # Fallback to a single-frame path
             assert actions.ndim == 3, f"Single-frame mode expects actions=[B,H,A], got {actions.shape}"
@@ -668,9 +657,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
             obs_current_image_masks_seq = {k: v[:, None]      for k, v in obs.image_masks.items()}
 
         # Optional hard assertion to enforce the fused path during training
-        if cfg_dbg and train:
-            assert has_multi and N > 1, "Training requires the fused-N path, but the input is not multi-frame (N<=1)."
-
         # ---------------------------
         # 1) FM noise synthesis
         # ---------------------------
@@ -679,27 +665,12 @@ class Pi0LightIncontextv14(_model.BaseModel):
         x_t   = t[..., None, None] * noise + (1.0 - t[..., None, None]) * actions_seq
         u_t   = noise - actions_seq
 
-        if cfg_dbg:
-            self._assert_shape(x_t,   (B, N, H, A), "x_t")
-            self._assert_shape(u_t,   (B, N, H, A), "u_t")
-            self._assert_shape(t,     (B, N),       "t")
-
         # ---------------------------
         # 2) midfix -> encode_pm_only (single pass)
         # ---------------------------
         midfix_tokens, midfix_mask, midfix_ar = self.embed_midfix(obs)               # [B, S_mid, D], [B, S_mid], [S_mid]
-        if cfg_dbg:
-            self._assert_bool_mask(midfix_mask, "midfix_mask")
-            assert midfix_ar.ndim == 1, f"midfix_ar expected [S_mid], got {midfix_ar.shape}"
-
         midfix_attn = make_attn_mask(midfix_mask, midfix_ar)                         # [B,S_mid,S_mid]
         pos_midfix  = jnp.cumsum(midfix_mask, axis=1) - 1                             # [B,S_mid]
-
-        if cfg_dbg:
-            self._assert_shape(midfix_tokens, (B, None, None), "midfix_tokens")
-            self._assert_shape(midfix_attn,   (B, midfix_tokens.shape[1], midfix_tokens.shape[1]), "midfix_attn")
-            self._assert_shape(pos_midfix,    (B, midfix_tokens.shape[1]), "pos_midfix")
-            self._assert_monotonic_positions(pos_midfix, midfix_mask, "pos_midfix", allow_offset=False)
 
         pm_cache = self._llm_encode_pm_only(
             embedded_pm=[midfix_tokens, None],
@@ -707,10 +678,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
             mask_pm=midfix_attn,
             deterministic=True,
         )
-
-        if cfg_dbg:
-            assert self._dbg_used_encode_pm_only, "encode_pm_only path was not executed (wrapper not triggered)"
-            assert pm_cache is not None, "encode_pm_only should return pm_cache but got None"
 
         # ---------------------------
         # 3) Build the BN suffix and run decode_with_cache once
@@ -764,13 +731,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
             flat_images, flat_img_masks, flat_states, flat_x_t, flat_t
         )
 
-        if cfg_dbg:
-            self._assert_shape(suffix_tokens, (BN, None, None), "suffix_tokens")
-            self._assert_bool_mask(suffix_mask, "suffix_mask")
-            assert suffix_ar.ndim == 1, f"suffix_ar expected [Ts], got {suffix_ar.shape}"
-            # Ensure the action block AR constraint holds for the trailing H tokens
-            self._assert_block_ar_mask(suffix_ar, self.action_horizon, "suffix_ar")
-
         suffix_attn = make_attn_mask(suffix_mask, suffix_ar)                          # [BN,Ts,Ts]
         midfix_seen = einops.repeat(midfix_mask, "b p -> (b n) s p", n=N, s=suffix_tokens.shape[1])
         # we only need the lower half of the full attention mask: [suffix_tokens, midfix_tokens+suffix_tokens]
@@ -783,12 +743,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
         pos_offset = einops.repeat(jnp.sum(midfix_mask, axis=-1), "b -> (b n) 1", n=N)
         pos_suf    = pos_offset + jnp.cumsum(suffix_mask, axis=-1) - 1
 
-        if cfg_dbg:
-            self._assert_shape(suffix_attn, (BN, suffix_tokens.shape[1], suffix_tokens.shape[1]), "suffix_attn")
-            self._assert_shape(full_mask,  (BN, suffix_tokens.shape[1], midfix_mask.shape[1] + suffix_tokens.shape[1]), "full_mask")
-            self._assert_shape(pos_suf,    (BN, suffix_tokens.shape[1]), "pos_suf")
-            self._assert_monotonic_positions(pos_suf, suffix_mask, "pos_suf", allow_offset=True)
-
         ep_index = einops.repeat(jnp.arange(B, dtype=jnp.int32), "b -> (b n)", n=N)
         outs_suf = self._llm_decode_with_cache(
             embedded_suf=[None, suffix_tokens],
@@ -800,11 +754,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
         )
         suffix_out = outs_suf[1]   # [BN,Ts,D]
 
-        if cfg_dbg:
-            assert self._dbg_used_decode_with_cache, "decode_with_cache path was not executed (wrapper not triggered)"
-            # Soft check: suffix_out should have BN batches
-            self._assert_shape(suffix_out, (BN, None, None), "suffix_out")
-
         # ---------------------------
         # 4) Action positions and loss
         # ---------------------------
@@ -814,21 +763,11 @@ class Pi0LightIncontextv14(_model.BaseModel):
         v_t = self.action_out_proj(action_hidden)  # [BN,H,A]
         v_t = einops.rearrange(v_t, " (b n) h a -> b n h a", b=B, n=N)
 
-        if cfg_dbg:
-            self._assert_shape(v_t, (B, N, H, A), "v_t")
-            self._assert_shape(u_t, (B, N, H, A), "u_t")
-
         loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)  # [B,N,H]
 
         # Final shape assertions to confirm we are truly in the fused path
         if has_multi:
-            if cfg_dbg:
-                assert loss.shape == (B, N, H), f"loss expected [B,N,H], got {loss.shape}"
-                assert N > 1, "has_multi=True but N<=1, which violates fused-multi semantics."
         else:
-            if cfg_dbg:
-                assert loss.shape == (B, 1, H), f"Single-frame fallback loss expected [B,1,H], got {loss.shape}"
-
         return loss if has_multi else loss[:, 0, :]
 
 
@@ -891,14 +830,9 @@ class Pi0LightIncontextv14(_model.BaseModel):
     # ---------------------------
     # Debug helpers (lightweight wrappers & assertions)
     # ---------------------------
-    def _dbg_reset_flags(self):
         # Track whether encode_pm_only / decode_with_cache were actually invoked.
-        self._dbg_used_encode_pm_only = False
-        self._dbg_used_decode_with_cache = False
-        self._dbg_last_pm_cache = None
 
     def _llm_encode_pm_only(self, *, embedded_pm, positions_pm, mask_pm, deterministic):
-        self._dbg_used_encode_pm_only = True
         pm_cache = self.PaliGemma.llm(
             embedded_pm=embedded_pm,
             positions_pm=positions_pm,
@@ -906,13 +840,11 @@ class Pi0LightIncontextv14(_model.BaseModel):
             deterministic=deterministic,
             method="encode_pm_only",
         )
-        self._dbg_last_pm_cache = pm_cache
         return pm_cache
 
     def _llm_decode_with_cache(self, *, embedded_suf, positions_suf, mask_suf, pm_cache, ep_index, deterministic):
         # Ensure the reused pm_cache is populated.
         assert pm_cache is not None, "decode_with_cache expects a non-empty pm_cache but received None."
-        self._dbg_used_decode_with_cache = True
         return self.PaliGemma.llm(
             embedded_suf=embedded_suf,
             positions_suf=positions_suf,
