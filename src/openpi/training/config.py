@@ -17,23 +17,11 @@ import tyro
 import openpi.models.model as _model
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
-import openpi.models.pi0_incontext as pi0_incontext
-import openpi.models.pi0_incontextv2 as pi0_incontextv2
-import openpi.models.pi0_incontextv3 as pi0_incontextv3
-import openpi.models.pi0_incontextv4 as pi0_incontextv4
-import openpi.models.pi0_incontextv6 as pi0_incontextv6
-import openpi.models.pi0_incontextv7 as pi0_incontextv7
-import openpi.models.pi0_incontextv8 as pi0_incontextv8
-import openpi.models.pi0_incontextv9 as pi0_incontextv9
-import openpi.models.pi0_incontextv10 as pi0_incontextv10
-import openpi.models.pi0_incontextv11 as pi0_incontextv11
 import openpi.models.pi0_incontextv12 as pi0_incontextv12
-import openpi.models.pi0_incontextv17 as pi0_incontextv17
 import openpi.models.pi0_incontextv18 as pi0_incontextv18
 import openpi.models.pi0_light as pi0Light
 import openpi.models.deprecated_pi0light_incontextv12 as deprecated_pi0light_incontextv12
 import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12
-import openpi.models.pi0_incontextv12_dummy as pi0_incontextv12_dummy
 import openpi.models.pi0_light_incontextv14 as pi0_light_incontextv14
 
 import openpi.models.pi0_light_incontextv12_separate_img_proj as pi0_light_incontextv12_separate_img_proj

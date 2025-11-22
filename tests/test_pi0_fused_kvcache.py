@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import pytest
 
 # ====== 你项目内的导入 ======
-from openpi.models.pi0_incontext_v14 import Pi0LightIncontextConfigv14, Pi0LightIncontextv14, SIGLIP_OUTPUT_DIM
+from openpi.models.pi0_light_incontextv14 import Pi0LightIncontextConfigv14, Pi0LightIncontextv14, SIGLIP_OUTPUT_DIM
 from openpi.models import model as _model
 from openpi.shared import array_typing as at
 
@@ -151,7 +151,7 @@ def make_fused_observation(B=2, N=3, H=4, A=6, Tpm=5, cams=("base_0_rgb","left_w
 # ===================== 测试用例 =====================
 
 def test_make_attn_mask_shapes_and_values():
-    from openpi.models.pi0_incontext_v14 import make_attn_mask
+    from openpi.models.pi0_light_incontextv14 import make_attn_mask
     B, T = 2, 6
     input_mask = jnp.array([[1,1,1,1,1,1],[1,1,1,1,1,1]], dtype=bool)
     # 构造一个“前缀 + 因果”的 ar_mask：前三个共享，后三个因果
