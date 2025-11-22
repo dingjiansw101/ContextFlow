@@ -30,7 +30,6 @@ def build(api) -> list["api.TrainConfig"]:
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
         task_to_episode: str='metadata/libero/task_to_episode.json'
         episode_to_indexes_file: str='metadata/libero/episode_to_indexes.json'
-        tracks_path: str = "metadata/libero/episode_tracks_combined.json"
         libero_input_refactor: bool = False
 
         # Padding mode for AddStatesActionsPromptTransform
@@ -125,7 +124,6 @@ def build(api) -> list["api.TrainConfig"]:
         actions_cache_path: str = "metadata/libero_90/episode_actions_cache.json"
         task_to_episode: str = "metadata/libero_90/task_to_episode.json"
         episode_to_indexes_file: str = "metadata/libero_90/episode_to_indexes.json"
-        tracks_path: str = "metadata/libero/episode_tracks_combined.json"
         tasks_split_path: str = "examples/libero_90/libero_robossm_kitchen_tasks.json"
         split: str = "train"  # "train" or "test"
         libero_input_refactor: bool = False

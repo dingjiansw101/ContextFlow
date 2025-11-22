@@ -150,7 +150,6 @@ def build(api) -> list["api.TrainConfig"]:
     class LeRobotAlohaMobileIncontextDataConfig(api.DataConfigFactory):
         states_cache_path: str = "metadata/aloha_pen_uncap/episode_states_cache.json"
         actions_cache_path: str = "metadata/aloha_pen_uncap/episode_actions_first_cache.json"
-        tracks_path: str = "metadata/aloha_pen_uncap/episode_tracks_combined.json"
         task_to_episode: str = "metadata/aloha_pen_uncap/task_to_episode.json"
         episode_to_indexes_file: str = "metadata/aloha_pen_uncap/episode_to_indexes.json"
         libero_input_refactor: bool = False

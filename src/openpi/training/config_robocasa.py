@@ -179,7 +179,6 @@ def build(api) -> list["api.TrainConfig"]:
         actions_cache_path: str = "metadata/robocasa/episode_actions_cache.json"
         task_to_episode: str='metadata/robocasa/task_to_episode.json'
         episode_to_indexes_file: str='metadata/robocasa/episode_to_indexes.json'
-        tracks_path: str = "metadata/robocasa/episode_tracks_combined.json"
         # # XJ: deprecated flags
         # use_delta_joint_actions: bool = False
         # robocasa_input_refactor: bool = False
@@ -256,7 +255,6 @@ def build(api) -> list["api.TrainConfig"]:
         actions_cache_path: str = "metadata/robocasa_mg/episode_actions_cache.json"
         task_to_episode: str='metadata/robocasa_mg/task_to_episode.json'
         episode_to_indexes_file: str='metadata/robocasa_mg/episode_to_indexes.json'
-        tracks_path: str = "metadata/robocasa_mg/episode_tracks_combined.json"
         # # XJ: deprecated flags
         # use_delta_joint_actions: bool = False
         # robocasa_input_refactor: bool = False

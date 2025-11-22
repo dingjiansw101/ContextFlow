@@ -501,13 +501,7 @@ def create_incontext_data_loader(
                 seed_base=config.seed,
             )
         ])
-        
-    if getattr(config.model, "use_point_track_prompts", False):
-        print("Using point track prompt")
-        add_point_track_transform = _transforms.AddPointTrackPromptTransform(
-            max_len=config.model.sample_actions,
-            tracks_path=config.data.tracks_path)
-        dataset = TransformedDataset(dataset, [add_point_track_transform])
+
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
         dataset,

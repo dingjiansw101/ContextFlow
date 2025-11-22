@@ -76,8 +76,6 @@ class EnvMode(enum.Enum):
     # final_3
     XJ_PI0_LIBERO90_INCONTEXTV12_LOW_MEM_FINETUNE = "pi0_libero90_incontextv12_low_mem_finetune"
     PI0_LIBERO_MORE_SAMPLE_FRAMES = "pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_train_split_v1"
-    POINT_TRACK = "pi0_libero_incontextv12_point_track_low_mem_finetune_train_split"
-    VIDEO_PROMPT = "pi0_libero_incontextv12_video_prompt_low_mem_finetune_train_split"
     RANDOM_INIT = "pi0_libero_incontextv12_low_mem_finetune_random_init_train_split"
     PI0_LIBERO_90_NONE_LORA = "pi0_libero90_incontextv12_finetune_x"
     PI0_LIBERO_90_NONE_LORA_LIBERO90 = "pi0_libero90_incontextv12_finetune"
@@ -386,14 +384,6 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     EnvMode.PI0_LIBERO_MORE_SAMPLE_FRAMES: Checkpoint(
         config="pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_train_split_v1/pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_train_split_v1/19999"
-    ),
-    EnvMode.POINT_TRACK: Checkpoint(
-        config="pi0_libero_incontextv12_point_track_low_mem_finetune_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_point_track_low_mem_finetune_train_split/pi0_libero_incontextv12_point_track_low_mem_finetune_train_split/19999"
-    ),
-    EnvMode.VIDEO_PROMPT: Checkpoint(
-        config="pi0_libero_incontextv12_video_prompt_low_mem_finetune_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_video_prompt_low_mem_finetune_train_split/pi0_libero_incontextv12_video_prompt_low_mem_finetune_train_split/19999"
     ),
     EnvMode.RANDOM_INIT: Checkpoint(
         config="pi0_libero_incontextv12_low_mem_finetune_random_init_inference",

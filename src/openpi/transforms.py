@@ -1498,46 +1498,6 @@ class AddDemoPromptTransform(DataTransformFn):
         return data
 
 @dataclasses.dataclass(frozen=True)
-class AddPointTrackPromptTransform(DataTransformFn):
-    """Adds track sequences for multiple episodes."""
-    max_len: int = 32
-    tracks_path: str = "metadata/libero/episode_tracks_combined.json"
-    episode_to_tracks: Dict[int, np.ndarray] = dataclasses.field(init=False)
-
-    def __post_init__(self):
-        object.__setattr__(self, "episode_to_tracks", load_episode_states_from_json(self.tracks_path))
-
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        eps: List[int] = data.get("selected_episode", [])
-        tracks_b, tracks_mask_b = [], []
-        for ep in eps:
-            tr = self.episode_to_tracks[ep]
-            T, F = tr.shape
-            if T >= self.max_len:
-                idxs = np.linspace(0, T - 1, num=self.max_len, dtype=int)
-                sampled_tr = tr[idxs]
-                tracks_mask = np.ones((self.max_len,), dtype=bool)
-            else:
-                sampled_tr = np.zeros((self.max_len, F), dtype=tr.dtype)
-                sampled_tr[:T] = tr
-                sampled_tr[T:] = tr[T - 1] if T > 0 else 0
-                tracks_mask = np.zeros((self.max_len,), dtype=bool)
-                tracks_mask[:T] = True
-            tracks_b.append(sampled_tr)
-            tracks_mask_b.append(tracks_mask)
-
-        stacked_tracks = np.stack(tracks_b, axis=0)
-        stacked_tracks_mask = np.stack(tracks_mask_b, axis=0)
-
-        if len(eps) == 1:
-            data["dem_prompt_tracks"] = stacked_tracks[0]
-            data["dem_prompt_tracks_mask"] = stacked_tracks_mask[0]
-        else:
-            data["dem_prompt_tracks"] = stacked_tracks
-            data["dem_prompt_tracks_mask"] = stacked_tracks_mask
-        return data
-
-@dataclasses.dataclass(frozen=True)
 class InjectDefaultPrompt(DataTransformFn):
     prompt: str | None
 
