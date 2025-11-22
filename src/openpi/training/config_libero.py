@@ -4217,7 +4217,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=8, sample_actions=128, random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
-        num_workers=2,
+        num_workers=8,
         # num_workers=1,
         batch_size=32,
         use_custom_dataloader=True,
