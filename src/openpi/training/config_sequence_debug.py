@@ -1,7 +1,7 @@
-# config_template.py
+# config_sequence_debug.py
 """
 An example of children config.
-RoboCasa 实验的 children config。
+Debug 实验的 children config。
 父 config.py 会 import 本文件，并调用 build(api) 来拿 TrainConfig 列表。
 """
 

@@ -40,8 +40,6 @@ May 20, 2025
     │     • config.py (672 lines, core only)                     │
     │     • config_aloha.py (628 lines)                          │
     │     • config_libero.py (4191 lines)                        │
-    │     • config_robocasa.py (1036 lines)                      │
-    │     • config_rlbench.py (129 lines)                        │
     │     • config_template.py (75 lines)                        │
     │     • deprecated_config.py (8352 lines, backup)            │
     │                                                             │
@@ -68,12 +66,10 @@ May 20, 2025
 src/openpi/training/config.py            | -7725 lines
 src/openpi/training/config_aloha.py      | +628 lines
 src/openpi/training/config_libero.py     | +4191 lines
-src/openpi/training/config_rlbench.py    | +129 lines
-src/openpi/training/config_robocasa.py   | +1036 lines
 src/openpi/training/config_template.py   | +75 lines
 src/openpi/training/deprecated_config.py | +8352 lines (backup)
 
-Total: +14,446 insertions, -7,725 deletions
+Total: +13,246 insertions, -7,725 deletions
 ```
 
 ---
@@ -138,8 +134,6 @@ src/openpi/training/
 │   ├── LiberoInputs/Outputs
 │   ├── LeRobotLiberoDataConfig
 │   └── All Libero TrainConfigs
-├── config_robocasa.py  (2,009 lines)
-├── config_rlbench.py  (129 lines)
 ├── config_sequence_debug.py  (3,452 lines)
 └── deprecated_config.py  (old backup)
 ```
@@ -493,7 +487,6 @@ metadata/
 │   ├── episode_actions_first_cache.json
 │   └── episode_tracks_combined.json
 ├── libero/
-├── robocasa/
 └── (other datasets...)
 ```
 
@@ -508,7 +501,6 @@ metadata/
 1. **Use Appropriate Config File**:
    - ALOHA configs → `config_aloha.py`
    - Libero configs → `config_libero.py`
-   - RoboCasa configs → `config_robocasa.py`
 
 2. **Metadata Paths**:
    - v1.0 → q_former: Change `metadata/pen_incontext/` to `metadata/aloha_pen_uncap/`

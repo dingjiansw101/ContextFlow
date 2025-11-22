@@ -258,8 +258,6 @@ See: [CONFIG_SYSTEM_CHANGES.md](CONFIG_SYSTEM_CHANGES.md), Section "Metadata Pat
 **A**: In the q_former branch (new system), configs are organized by domain:
 - ALOHA configs → `config_aloha.py`
 - Libero configs → `config_libero.py`
-- RoboCasa configs → `config_robocasa.py`
-- RLBench configs → `config_rlbench.py`
 
 In the v1.0 branch (old system), all configs are in `config.py`.
 

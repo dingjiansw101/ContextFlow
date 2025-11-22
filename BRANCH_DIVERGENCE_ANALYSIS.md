@@ -68,11 +68,10 @@ The two repositories **diverged** from commit `9018878afad484a40e553ef1fcdbed8b9
 
 **Focus Areas**:
 1. ✅ Q-former architecture development (v17, v18)
-2. ✅ RoboCasa in-context learning experiments
-3. ✅ Model architecture improvements (attention mechanisms, position coding)
-4. ✅ Training configs for in-context learning
-5. ✅ Float32 checkpoint loading support
-6. ⚠️ Some ALOHA data conversion (late addition)
+2. ✅ Model architecture improvements (attention mechanisms, position coding)
+3. ✅ Training configs for in-context learning
+4. ✅ Float32 checkpoint loading support
+5. ⚠️ Some ALOHA data conversion (late addition)
 
 ---
 
@@ -116,9 +115,9 @@ The two repositories **diverged** from commit `9018878afad484a40e553ef1fcdbed8b9
 
 | Aspect | v1.0 (Original) | q_former (PR) |
 |--------|-----------------|---------------|
-| **Structure** | Monolithic `config.py` (6,851 lines) | Modular: `config.py` (672 lines) + 6 domain files |
+| **Structure** | Monolithic `config.py` (6,851 lines) | Modular: `config.py` (672 lines) + domain files |
 | **Registration** | Manual `_CONFIGS` dict | Auto-discovery via `build(api)` |
-| **Files** | 1 file | 7 files (aloha, libero, robocasa, rlbench, etc.) |
+| **Files** | 1 file | Multiple files (aloha, libero, etc.) |
 | **Complexity** | ⭐ Simple | ⭐⭐⭐ Advanced (auto-loading) |
 
 ### Key Implications
@@ -216,7 +215,7 @@ May 20, 2025
     │ PR Branch (q_former)                    Original Branch (v1.0)
     │ 90 commits                              23 commits
     │                                                        │
-    ├─→ May 20-22: RoboCasa experiments       ├─→ May 22: Real-world incontext code ⭐
+    ├─→ May 20-22: Simulation experiments     ├─→ May 22: Real-world incontext code ⭐
     │                                         │
     ├─→ June-Sep: Q-former v12-v18 dev        ├─→ Jul 18: Task.json integration ⭐
     │   - Attention mechanisms                │   - env_incontext.py
@@ -241,8 +240,7 @@ May 20, 2025
 **Priorities**:
 1. Model architecture improvements (v12 → v18)
 2. Training stability and performance
-3. RoboCasa simulation experiments
-4. Research/experimentation focus
+3. Research/experimentation focus
 
 **Result**: Advanced model architecture, but **no real robot deployment infrastructure**
 

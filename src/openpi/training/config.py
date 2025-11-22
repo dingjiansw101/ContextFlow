@@ -129,25 +129,6 @@ DEFAULT_LIBERO_TEST_TASK_V5 = [
         "put the black bowl in the bottom drawer of the cabinet and close it",
 ]
 
-DEFAULT_ROBOCASA_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl").expanduser())
-#"/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_human_lerobot/meta/episodes.jsonl"
-
-
-DEFAULT_ROBOCASA_TEST_TASK = [
-    str(PROJECT_ROOT / "examples" / "robocasa" / "robocasa_human_tasks.json")
-]
-
-DEFAULT_ROBOCASA_MG_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/episodes.jsonl").expanduser())
-#"/home/dingj0b/.cache/huggingface/lerobot/daixianjie/robocasa_mg_lerobot/meta/episodes.jsonl"
-
-DEFAULT_ROBOCASA_MG_TEST_TASK = [
-    str(PROJECT_ROOT / "examples" / "robocasa" / "robocasa_mg_tasks.json")
-]
-
-DEFAULT_ROBOCASA_MG_TEST_TASK_WITHOUT_OPENDOUBLEDOOR = [
-    str(PROJECT_ROOT / "examples" / "robocasa" / "robocasa_mg_tasks_without_open_double_door.json")
-]
-
 
 # --- helper, keep tiny & local ---
 def _basename(x: str) -> str:

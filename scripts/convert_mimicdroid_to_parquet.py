@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert MimicDroid RoboCasa HDF5 trajectories into Lerobot-style Parquet shards
+Convert MimicDroid HDF5 trajectories into Lerobot-style Parquet shards
 suitable for OpenPI in-context training.
 
 Each HDF5 under the input directory can contain multiple demos (groups

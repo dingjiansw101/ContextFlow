@@ -55,65 +55,8 @@ mkdir assets
 mkdir checkpoints
 # where pre-computed training metadata is saved
 mkdir metadata
-
-# 1. add norm_stats.json 
-cd assets
-mkdir -p assets/pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split/daixianjie/robocasa_mg_lerobot
-
-mkdir -p assets/pi0tiny_incontext_robocasa_mg_three_image_scaleup_inference/daixianjie/robocasa_mg_lerobot
-# copy the following json file to the folders
-
-2. metadata
-# please copy the shared metadata (robocasa) to the "metadata" folder under the project directory
-
-
-
-3. Lerobot Source code
-# in order to be compatible with our robocasa dataset and increase the dataloader throughput, please modift the source code of lerobot:
-
-# 1. replace openpi/.venv/lib/python3.11/site-packages/lerobot/common/datasets/lerobot_dataset.py with openpi/examples/robocasa/modified_lerobot_dataset.py
-# 2. replace openpi/.venv/lib/python3.11/site-packages/lerobot/common/datasets/utils.py with openpi/examples/robocasa/modified_utils.py
 ```
 
-## Training Script (please avoid using any V100 GPU!)
+## Training Script
 
-Here is an example using SLURM to submit a training job (assuming the script is under the project directory, i.e. xxx/openpi/scripts.sh):
-
-```bash
-#!/bin/bash
-#SBATCH --**mem=200G** # memory pool for all cores`
-#SBATCH --**time 24:00:00** # time, specify max time allocation`
-#SBATCH --**gres=gpu:a100:8**
-#SBATCH --**cpus-per-gpu=10**
-#SBATCH --job-name=pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split
-#SBATCH --output=logs/pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split_%x-%j.log
-
-export WANDB_API_KEY=4da092c90a4ccc6ce17c17c6c5d268bbd9b628f2 
-
-cd ../..
-
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split --project-name=pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split --exp-name=pi0tiny_incontext_robocasa_mg_three_image_scaleup_train_split --save_interval=100_000 --**resume** 
-
-```
-
-Notes:
-
-1. Training may last several days and this script only asks for 24 hours of training. 
-    
-    The command has been set to automatically resume from last saved checkpoint. 
-    
-    Only need to submit the script multiple times without any modification 
-    
-    Notice that resuming training requires the same amount of GPUs as the first training session, which means you have to modify “--**resume**” (at the end of last command) to “**—overwrite**” in order to start training from scratch (remember to modify it to “resume” when resume training).
-    
-2. Please modify the SBATCH parameters accordingly. The number of GPUs is recommended to be larger
-3. The WANDB_API_KEY belongs to Xianjie for monitoring the training process.
-4. Notice that robocasa dataset is enormous in size, around 1TB and the script will automatically download the dataset to the root directory:
-    
-    ```bash
-    ~/.cache/huggingface/lerobot/daixianjie/robocasa_mg
-    ```
-    
-    You may want to create a softlink that mount “~/.cache/huggingface/lerobot” to another location with larger storage space.
-    
-5. The script will generate 15 checkpoints under “xxx/openpi/checkpoints” directory, each of which is around 2-3 GB.
+Please see the main CLAUDE.md documentation for training instructions.
