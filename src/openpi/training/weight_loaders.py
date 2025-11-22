@@ -128,7 +128,6 @@ class PaliGemmaWeightLoader(WeightLoader):
             flat_params = dict(np.load(f, allow_pickle=False))
         loaded_params = {"PaliGemma": flax.traverse_util.unflatten_dict(flat_params, sep="/")["params"]}
         # TODO: check the llm keys of PaliGemma
-        # import ipdb; ipdb.set_trace()
         # Add all missing weights.
         return _merge_params(loaded_params, params, missing_regex=".*")
 

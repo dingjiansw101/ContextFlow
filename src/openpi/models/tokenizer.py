@@ -18,7 +18,6 @@ class PaligemmaTokenizer:
     def tokenize(self, prompt: str) -> tuple[np.ndarray, np.ndarray]:
         cleaned_text = prompt.strip().replace("_", " ").replace("\n", " ")
         # tokenize "\n" separately as the "start of answer" token
-        # import ipdb; ipdb.set_trace()
         tokens = self._tokenizer.encode(cleaned_text, add_bos=True) + self._tokenizer.encode("\n")
         tokens_len = len(tokens)
         if tokens_len < self._max_len:
@@ -54,7 +53,6 @@ class FASTTokenizer:
         self, prompt: str, state: np.ndarray, actions: np.ndarray | None
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         cleaned_text = prompt.lower().strip().replace("_", " ")
-        # import ipdb; ipdb.set_trace()
         # Convention: state gets discretized into 256 discrete bins (assumed range after normalization: [-1, 1])
         # The state for mobile aloha is 14, however, it is set to be the same size as action dim 16
         # therefore, it is padded to 16 with zero

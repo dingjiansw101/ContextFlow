@@ -158,14 +158,11 @@ def test_pi0_lora_model_params():
     config = pi0.Pi0Config(paligemma_variant="gemma_2b_lora")
     model = config.create(key)
 
-    # import ipdb; ipdb.set_trace()
     import flax.nnx as nnx
 
     for path, node in nnx.iter_graph(model):
         if isinstance(node, nnx.Param):           # only params
             print(".".join(map(str, path)), node.value.shape, node.value.dtype)
-
-    import ipdb; ipdb.set_trace()
 
     batch_size = 2
     obs, act = config.fake_obs(batch_size), config.fake_act(batch_size)

@@ -75,15 +75,12 @@ def test_libero_dataset():
 
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_dataset(data_config, config.model)
-    # import ipdb; ipdb.set_trace()
     hf_dataset = dataset._dataset.hf_dataset
     task_to_episode, episode_to_index = build_lookup_tables(hf_dataset)
     save_lookup_tables(task_to_episode, episode_to_index, "metadata/libero/")
 
     for i in range(len(dataset)):
         print(dataset[i].keys())
-        # import ipdb
-        # ipdb.set_trace()
         # dict_keys(['image', 'wrist_image', 'state', 'actions',
         # 'timestamp', 'frame_index', 'episode_index', 'index',
         # 'task_index', 'actions_is_pad', 'prompt'])
@@ -96,8 +93,6 @@ def test_libero_dataset():
         print(dataset[i].keys())
         # dict_keys(['state', 'image', 'image_mask', 'actions',
         # 'tokenized_prompt', 'tokenized_prompt_mask'])
-        # import ipdb;
-        # ipdb.set_trace()
 
 
 if __name__ == "__main__":

@@ -119,7 +119,6 @@ def build(api) -> list["api.TrainConfig"]:
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
-            # import ipdb; ipdb.set_trace()
             # assert model_config.action_dim == 16
             data_transforms = api._transforms.Group(
                 inputs=[
@@ -200,7 +199,6 @@ def build(api) -> list["api.TrainConfig"]:
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
-            # import ipdb; ipdb.set_trace()
             # assert model_config.action_dim == 16
 
             # TODO: generate the indexes for aloha mobile data

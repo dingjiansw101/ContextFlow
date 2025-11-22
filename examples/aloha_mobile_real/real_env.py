@@ -207,14 +207,12 @@ class RealEnv:
         )
 
     def step(self, *, action, base_action=None, get_base_vel=False, get_obs=True):
-        # import ipdb; ipdb.set_trace()
 
         if len(action) == 16:
             # TODO: find a proper way to handle base action, and refactor the code
             print("Action length is 16, assuming base action is included")
             action = action[:14]
             # base_action = action[14:]
-        # import ipdb; ipdb.set_trace()
         state_len = int(len(action) / 2)
         left_action = action[:state_len]
         right_action = action[state_len:]

@@ -103,7 +103,6 @@ def build(api) -> list["api.TrainConfig"]:
                     outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
                 )
             # else:
-                # import ipdb; ipdb.set_trace()
             # Model transforms include things like tokenizing the prompt and action targets
             model_transforms = api.ModelTransformFactory()(model_config)
 

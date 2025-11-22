@@ -137,7 +137,6 @@ def compare_dicts(
         val2 = dict2[key]
         full_name = f"{name}/{key}" if name != "root" else key
         # if "states" in key:
-        #     import ipdb; ipdb.set_trace()
         #     print(f"val1: {val1}")
         #     print(f"val2: {val2}")
         #     print(f"full_name: {full_name}")

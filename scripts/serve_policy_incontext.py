@@ -40,9 +40,6 @@ class EnvMode(enum.Enum):
     XJ_PI0_MINI_LIBERO_INCONTEXT = "pi0mini_incontext_libero_low_mem_finetune_inference"
     XJ_PI0_MINI_LIBERO_INCONTEXT_ALL = "pi0mini_incontext_libero_low_mem_finetune_inference"
 
-    DEBUG_IMG_ENCODER = "debug_img_encoder"
-    DEBUG_TRAIN_WITHOUT_OPENDOUBLEDOOR = "debug_train_without_open_double_door"
-
     # final_3
     XJ_PI0_LIBERO90_INCONTEXTV12_LOW_MEM_FINETUNE = "pi0_libero90_incontextv12_low_mem_finetune"
     PI0_LIBERO_MORE_SAMPLE_FRAMES = "pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_train_split_v1"
@@ -50,10 +47,9 @@ class EnvMode(enum.Enum):
     PI0_LIBERO_90_NONE_LORA = "pi0_libero90_incontextv12_finetune_x"
     PI0_LIBERO_90_NONE_LORA_LIBERO90 = "pi0_libero90_incontextv12_finetune"
 
-    DEBUG_PAPER_V12 = "pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
     GET_VIDEO = "pi0_libero_incontextv12_1_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
     RANDOM_INIT_NO_LORA = "pi0_libero_incontextv12_random_init_train_split"
-    
+
     # new
     CLEAN_INFERENCE = "pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all"
     NOISY_INFERENCE = "pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all"
@@ -252,10 +248,6 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
     EnvMode.PI0_LIBERO_90_NONE_LORA_LIBERO90: Checkpoint(
         config="pi0_libero90_incontextv12_finetune",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero90_incontextv12_finetune/pi0_libero90_incontextv12_finetune/29999"
-    ),
-    EnvMode.DEBUG_PAPER_V12: Checkpoint(
-        config="pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/google-cloud-exp/pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/pi0_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split/19999"
     ),
     EnvMode.GET_VIDEO: Checkpoint(
         config="pi0_libero_incontextv12_1_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",

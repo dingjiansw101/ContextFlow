@@ -85,7 +85,6 @@ class Runtime:
         """A single step of the runtime loop."""
         observation = self._environment.get_observation()
         action = self._agent.get_action(observation)
-        # import ipdb; ipdb.set_trace()
         movement = np.sum(np.abs(observation["state"] - action["actions"][:14]))
         # print(f"observation: {observation['state']}")
         print(f"movement: {movement}")
@@ -93,9 +92,6 @@ class Runtime:
             print(f"movement: {movement}")
             print(f"observation: {observation['state']}")
             print(f"action: {action['actions'][:14]}")
-            import ipdb
-
-            ipdb.set_trace()
         self._environment.apply_action(action)
 
         for subscriber in self._subscribers:

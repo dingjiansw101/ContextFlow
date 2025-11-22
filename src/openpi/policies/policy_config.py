@@ -55,10 +55,8 @@ def create_trained_policy(
 
     logging.info("Loading model...")
     model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16))
-    # import ipdb; ipdb.set_trace()
     data_config = train_config.data.create(train_config.assets_dirs, train_config.model)
     # TODO: check, use_quantile_norm is false in the pi0_aloha_handover, for training and tesging
-    # import ipdb; ipdb.set_trace()
     if norm_stats is None:
         # We are loading the norm stats from the checkpoint instead of the config assets dir to make sure
         # that the policy is using the same normalization stats as the original training process.
@@ -129,10 +127,8 @@ def create_trained_policy_incontext(
 
     logging.info(f"Loading model with dtype: {dtype}...")
     model = train_config.model.load(_model.restore_params(checkpoint_dir / "params", dtype=dtype))
-    # import ipdb; ipdb.set_trace()
     data_config = train_config.data.create(train_config.assets_dirs, train_config.model)
     # TODO: check, use_quantile_norm is false in the pi0_aloha_handover, for training and tesging
-    # import ipdb; ipdb.set_trace()
     if norm_stats is None:
         # We are loading the norm stats from the checkpoint instead of the config assets dir to make sure
         # that the policy is using the same normalization stats as the original training process.

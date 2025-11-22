@@ -148,7 +148,6 @@ def build(api) -> list["api.TrainConfig"]:
                     outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
                 )
             # else:
-                # import ipdb; ipdb.set_trace()
             # Model transforms include things like tokenizing the prompt and action targets
             model_transforms = api.ModelTransformFactory()(model_config)
 
@@ -551,7 +550,6 @@ def build(api) -> list["api.TrainConfig"]:
                     outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
                 )
             # else:
-                # import ipdb; ipdb.set_trace()
             # Model transforms include things like tokenizing the prompt and action targets
             model_transforms = api.ModelTransformFactory()(model_config)
 
@@ -3295,7 +3293,7 @@ def build(api) -> list["api.TrainConfig"]:
     
     api.TrainConfig(
         # no delta with split
-        name="debug_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
+        name="libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
         model=api.deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
             sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
@@ -3331,10 +3329,10 @@ def build(api) -> list["api.TrainConfig"]:
     
 
     api.TrainConfig(
-        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py debug_pi0mini_libero_low_mem_finetune_split_train --exp-name=debug_pi0mini_libero_low_mem_finetune_split_train_ibex --overwrite
-        # this exp use customized paligemma and different pre-trained img encoder 
+        # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini.py pi0mini_libero_low_mem_finetune_split_train --exp-name=pi0mini_libero_low_mem_finetune_split_train_ibex --overwrite
+        # this exp use customized paligemma and different pre-trained img encoder
         # which has train_test_split; without delta; language prompt; lora; 20k
-        name="debug_pi0mini_libero_low_mem_finetune_split_train",
+        name="pi0mini_libero_low_mem_finetune_split_train",
         model=api.pi0Light.Pi0LightConfig(paligemma_variant="gemma_132m", action_expert_variant="gemma_66m", freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="S/16"),
         data=LeRobotLiberoDataConfig(
             repo_id="physical-intelligence/libero",
@@ -3440,7 +3438,7 @@ def build(api) -> list["api.TrainConfig"]:
     ),
 
     api.TrainConfig(
-        name="pi0mini_incontext_libero_low_mem_finetune_train_debug_baseline",
+        name="pi0mini_incontext_libero_low_mem_finetune_train_baseline",
         model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
             sample_frames=2, sample_actions=32, random_select=False,  
@@ -3479,9 +3477,9 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=2,
         batch_size=2,
     ),
-    # TODO: need to set random_select as True for non debug configs
+
     api.TrainConfig(
-        name="pi0mini_incontext_libero_custom_dataset_debug",
+        name="pi0mini_incontext_libero_custom_dataset",
         model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
             sample_frames=2, sample_actions=32, random_select=True,
@@ -3524,7 +3522,7 @@ def build(api) -> list["api.TrainConfig"]:
 
 
     api.TrainConfig(
-        name="pi0mini_incontext_libero_custom_dataset_v2_debug",
+        name="pi0mini_incontext_libero_custom_dataset_v2",
         model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
             prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
             sample_frames=2, sample_actions=32, random_select=True,

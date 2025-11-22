@@ -338,7 +338,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         self.use_action_state_prompts = config.use_action_state_prompts
         self.avg_current_img = config.avg_current_img
         self.causal_attention = config.causal_attention
-        # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
         gemma_kwargs = {
             "configs": [prompt_expert_config, action_expert_config],
@@ -417,7 +416,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         # -------------------------------------------------------------------------
         # embed in-context images
         # TODO: set a ratio to randomly mask input or prompt
-        # import ipdb; ipdb.set_trace()
         assert self.use_image_prompts == True
         assert self.use_action_state_prompts == True
 
@@ -435,7 +433,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
                     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
                     image_sqeuence_tokens = self.image_proj_prompr_expert(image_sqeuence_tokens)
 
-                    # import ipdb; ipdb.set_trace()
                     # TODO: to organize multiple episode prompts in order
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, episode_len * seq_len, -1, image_sqeuence_tokens.shape[-1]
@@ -459,13 +456,11 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
                 img_input_mask_per_cam[name] = obs.incontext_image_masks[name] 
                 # tokens.append(image_sqeuence_tokens)
                 # input_mask.append(obs.incontext_image_masks[name])
-                # jax.debug.print("name = {}, obs.incontext_image_masks = {}", name, obs.incontext_image_masks[name])
                 # ar_mask += [False] * image_sqeuence_tokens.shape[1]
 
         #------------------------------------------------------------------------
         # embed in-context states
         if self.use_action_state_prompts:
-            # import ipdb; ipdb.set_trace()
             if len(obs.incontext_states.shape) == 4:
                 incontext_states_reshape = obs.incontext_states.reshape(obs.incontext_states.shape[0], -1, obs.incontext_states.shape[-1])
                 dem_state_tokens = self.demo_state_proj(incontext_states_reshape)
@@ -492,9 +487,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         
         batch_size_s, seq_len_s, dimension_s = dem_state_tokens.shape
         inter_tokens = jnp.stack([dem_state_tokens, dem_action_tokens], axis=2).reshape(batch_size_s, 2*seq_len_s, dimension_s)  # (32, 2, 2048)
-        # jax.debug.print("inter_tokens shape = {}, dem_state_tokens shape = {}", inter_tokens.shape, dem_state_tokens.shape)
-        # jax.debug.print("Are states aligned? {}", jnp.allclose(inter_tokens[:, ::2, :], dem_state_tokens))
-        # import ipdb; ipdb.set_trace()
 
         inter_mask = jnp.stack([incontext_state_masks_input, incontext_action_masks_input], axis=2).reshape(batch_size_s, 2*seq_len_s)  
 
@@ -514,7 +506,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         tokens.append(inter_tokens[:, -2:, :])
         input_mask.append(inter_mask[:, -2:])
 
-        # import ipdb; ipdb.set_trace()
 
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
@@ -522,11 +513,8 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
 
             # image_tokens = self.obs_img_proj(image_tokens)
             if self.avg_current_img:
-                # import ipdb; ipdb.set_trace()
                 image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
-            # import ipdb; ipdb.set_trace()
-            # jax.debug.print("obs.image_masks = {}", obs.image_masks[name])
 
             input_mask.append(
                 einops.repeat(
@@ -552,7 +540,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         tokens = jnp.concatenate(tokens, axis=1) # (32, num_tokens, 2048)
         input_mask = jnp.concatenate(input_mask, axis=1)
 
-        # import ipdb; ipdb.set_trace()
 
         # ar_mask[0] = True
         ar_mask = [True] * tokens.shape[1]
@@ -593,7 +580,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
                     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
                     image_sqeuence_tokens = self.image_proj_prompr_expert(image_sqeuence_tokens)
 
-                    # import ipdb; ipdb.set_trace()
                     # TODO: to organize multiple episode prompts in order
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, episode_len * seq_len, -1, image_sqeuence_tokens.shape[-1]
@@ -620,7 +606,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         #------------------------------------------------------------------------
         # embed in-context states
         if self.use_action_state_prompts:
-            # import ipdb; ipdb.set_trace()
             if len(obs.incontext_states.shape) == 4:
                 incontext_states_reshape = obs.incontext_states.reshape(obs.incontext_states.shape[0], -1, obs.incontext_states.shape[-1])
                 dem_state_tokens = self.demo_state_proj(incontext_states_reshape)
@@ -647,7 +632,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
 
         # ---------------------------------------------------------
         assert len(ar_mask) > 0
-        # import ipdb; ipdb.set_trace()
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
 
@@ -671,11 +655,8 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
 
             # image_tokens = self.obs_img_proj(image_tokens)
             if self.avg_current_img:
-                # import ipdb; ipdb.set_trace()
                 image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
-            # import ipdb; ipdb.set_trace()
-            # jax.debug.print("name = {}, obs.image_masks = {}", name, obs.image_masks[name])
 
 
             input_mask.append(
@@ -722,8 +703,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         *,
         train: bool = False,
     ) -> at.Float[at.Array, "*b ah"]:
-        # jax.debug.print("observation = {} ", observation)
-        # import ipdb; ipdb.set_trace()
         preprocess_rng, noise_rng, time_rng = jax.random.split(rng, 3)
         observation = _model.preprocess_observation_incontext(preprocess_rng, observation, train=train)
 
@@ -743,7 +722,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         ar_mask = jnp.concatenate([midfix_ar_mask, suffix_ar_mask], axis=0)
         attn_mask = make_attn_mask(input_mask, ar_mask)
         positions = jnp.cumsum(input_mask, axis=1) - 1
-        # import ipdb; ipdb.set_trace()
         (midfix_out, suffix_out), _ = self.PaliGemma.llm(
             [midfix_tokens, suffix_tokens], mask=attn_mask, positions=positions
         )
@@ -759,7 +737,6 @@ class Pi0LightIncontextv12SepImgProj(_model.BaseModel):
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
     ) -> _model.Actions:
-        # import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation_incontext(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.

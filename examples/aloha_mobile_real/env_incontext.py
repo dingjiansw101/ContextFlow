@@ -61,7 +61,6 @@ class AlohaRealEnvironment(_environment.Environment):
 
         self.prompt = prompt
         self.task_index = task_description2index[prompt]
-        # import ipdb; ipdb.set_trace()
 
     @override
     def reset(self) -> None:

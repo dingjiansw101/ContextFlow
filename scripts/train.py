@@ -225,7 +225,6 @@ def main(config: _config.TrainConfig):
     )
     data_iter = iter(data_loader)
     batch = next(data_iter)
-    # jax.debug.print("batch = {} ", batch)
 
     logging.info(f"Initialized data loader:\n{training_utils.array_tree_to_info(batch)}")
 

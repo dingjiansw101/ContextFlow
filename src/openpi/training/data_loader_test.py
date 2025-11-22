@@ -103,12 +103,8 @@ def test_libero_incontext_dataset():
     dataset = transform_dataset(dataset, data_config, skip_norm_stats=True)
     for i in range(len(dataset)):
         print(dataset[i].keys())
-        # import ipdb
-        # ipdb.set_trace()
         # dict_keys(['state', 'image', 'image_mask', 'actions',
         # 'tokenized_prompt', 'tokenized_prompt_mask'])
-        # import ipdb;
-        # ipdb.set_trace()
 
 def test_custom_lerobot_dataset():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
@@ -137,8 +133,6 @@ def test_libero_incontext_data_loader():
     data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=False, num_batches=2)
     data_iter = iter(data_loader)
     next(data_iter)
-    # import ipdb
-    # ipdb.set_trace()
 
 
 def test_create_custom_incontext_data_loader():
@@ -422,12 +416,8 @@ def test_AddImagePromptTransform():
 
     for i in range(len(dataset)):
         print(dataset[i].keys())
-        # import ipdb
-        # ipdb.set_trace()
         # dict_keys(['state', 'image', 'image_mask', 'actions',
         # 'tokenized_prompt', 'tokenized_prompt_mask'])
-        # import ipdb;
-        # ipdb.set_trace()
 
 if __name__ == "__main__":
     # test_libero_incontext_dataset()

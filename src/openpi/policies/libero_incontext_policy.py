@@ -59,7 +59,6 @@ class LiberoIncontextInputs(transforms.DataTransformFn):
 
     def __call__(self, data: dict) -> dict:
         mask_padding = self.model_type == _model.ModelType.PI0  # We don't mask for pi0-FAST.
-        # jax.debug.print("model_type = {}, mask_padding = {}", self.model_type, mask_padding)
         # Get the state. We are padding from 8 to the model action dim.
         # For pi0-FAST, we don't pad the state (action_dim = 7, which is < 8, so pad is skipped).
         state = transforms.pad_to_dim(data["observation/state"], self.action_dim)
@@ -130,7 +129,6 @@ class LiberoIncontextInputs_refactor(transforms.DataTransformFn):
 
     def __call__(self, data: dict) -> dict:
         mask_padding = self.model_type == _model.ModelType.PI0_INCONTEXT  # We don't mask for pi0-FAST.
-        # jax.debug.print("model_type = {}, mask_padding = {}", self.model_type, mask_padding)
         # Get the state. We are padding from 8 to the model action dim.
         # For pi0-FAST, we don't pad the state (action_dim = 7, which is < 8, so pad is skipped).
         state = transforms.pad_to_dim(data["observation/state"], self.action_dim)

@@ -182,7 +182,6 @@ class InjectDemoIndexes(DataTransformFn):
 
         # Convert dictionary keys from strings to integers
         task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
-        # import ipdb; ipdb.set_trace()
         if self.train_episode_index_list is None:
             episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
         else:
@@ -1449,11 +1448,9 @@ class AddDemoPromptTransform(DataTransformFn):
         dem_prompt_items = [self.dataset[int(idx)] for idx in dem_prompt_indexes]
         dem_prompt_items = tree_stack_np(dem_prompt_items)
         data["dem_prompt_items"] = dem_prompt_items
-        # jax.debug.print("self.max_len: {}", self.max_len)
         # 2) Retrieve precomputed states and actions for the selected episode.
         # Here we assume that the key "selected_episode" exists in the data.
         episode_id = data["selected_episode"]
-        # jax.debug.print("episode_id: {}", episode_id)   
         all_states = self.episode_to_all_states[episode_id]       # shape: (T, D)
         all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
 

@@ -26,7 +26,6 @@ print("PaliGemma top-level keys:", paligemma_params.keys())
 # paligemma_params['PaliGemma']['img']
 # pi0_params['PaliGemma']['img']['Transformer']['encoderblock']['MultiHeadDotProductAttention_0']['key']['kernel']
 # paligemma_params['PaliGemma']['img']['Transformer']['encoderblock']['MultiHeadDotProductAttention_0']['key']['kernel']
-import ipdb; ipdb.set_trace()
 # Example: Compare shapes of a specific weight if keys match/are known
 # Assuming pi0_params also has a 'PaliGemma' key or similar structure
 # key_to_compare = ('PaliGemma', 'llm', 'embedder', 'input_embedding')

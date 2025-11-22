@@ -181,7 +181,6 @@ class Pi0FAST(_model.BaseModel):
         tokenized_inputs_embeddings = self.PaliGemma.llm(obs.tokenized_prompt, embed_only=True)
         token_embeddings.append(tokenized_inputs_embeddings)
         # TODO: add the prompt embeddings here
-        # import ipdb; ipdb.set_trace()
         input_mask.append(obs.tokenized_prompt_mask)
         ar_mask.append(obs.token_ar_mask)
 
@@ -208,8 +207,6 @@ class Pi0FAST(_model.BaseModel):
             observation.tokenized_prompt[:, 1:],
             self.PaliGemma.llm.module.vocab_size,
         )
-        # jax.debug.print("targets: {}", targets)
-        # import ipdb; ipdb.set_trace()
         # Each input predicts *next* token, so we don't input the last token.
         pre_logits, _, _ = self.PaliGemma.llm(
             embedded_prefix=input_token_embeddings[:, :-1],
@@ -240,7 +237,6 @@ class Pi0FAST(_model.BaseModel):
         temperature: float = 0.0,
     ) -> _model.Actions:
         # TODO: this is a hack to get the image keys.
-        # import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation(
             None, observation, train=False, image_keys=list(observation.images.keys())
         )  # shape of observation.state is the same as action_dim
@@ -273,7 +269,6 @@ class Pi0FAST(_model.BaseModel):
             # one step only predict one token, it will stop when eos is predicted. Then output_tokens will be decoded
             # as H actions.
             last_logit, output_tokens, cache, _, step = carry
-            # jax.debug.print("output_tokens = {}", output_tokens)
             # Sample token from last logit
             if temperature > 0.0:
                 last_logit = last_logit / temperature
@@ -284,7 +279,6 @@ class Pi0FAST(_model.BaseModel):
 
             # Check for early stopping --> stop if all batch elements have EOS token
             has_eos = jnp.any(token == PALIGEMMA_EOS_TOKEN, axis=-1)
-            # jax.debug.print("has_eos = {} ", has_eos)
             all_eos = jnp.all(has_eos)
 
             # Decode one step

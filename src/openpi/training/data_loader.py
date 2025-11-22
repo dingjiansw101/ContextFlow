@@ -194,7 +194,6 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
         },
         local_files_only=data_config.local_files_only,
     )
-    # import ipdb; ipdb.set_trace()
     if data_config.prompt_from_task:
         # TODO: language instrucitons of libero are stored here
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])

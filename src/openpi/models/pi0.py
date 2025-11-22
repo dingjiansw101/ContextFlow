@@ -184,7 +184,6 @@ class Pi0(_model.BaseModel):
         tokens = []
         # embed images
         # print("obs.images")
-        # jax.debug.print("obs.images")
         for name in obs.images:
             image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
 
@@ -283,7 +282,6 @@ class Pi0(_model.BaseModel):
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.
         dt = -1.0 / num_steps
-        # import ipdb; ipdb.set_trace()
         batch_size = observation.state.shape[0]
         noise = jax.random.normal(rng, (batch_size, self.action_horizon, self.action_dim))
 

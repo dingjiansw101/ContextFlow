@@ -120,14 +120,12 @@ def test_dataset(
             transforms for quick inspection (default: ``0`` = none).
     """
     # Resolve config name → object if necessary
-    # import ipdb; ipdb.set_trace()
     config_obj = _config.get_config(cfg) if isinstance(cfg, str) else cfg
 
     # Construct data config and dataset
     data_cfg = config_obj.data.create(config_obj.assets_dirs, config_obj.model)
     raw_dataset = create_dataset(data_cfg, config_obj.model)
 
-    # import ipdb; ipdb.set_trace()
     # Build lookup tables from the underlying HF dataset
     try:
         task_to_episode, episode_to_index = build_lookup_tables(raw_dataset._dataset.hf_dataset)

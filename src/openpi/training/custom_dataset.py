@@ -94,7 +94,6 @@ class CustomLeRobotDataset(LeRobotDataset):
         """
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
-        # import ipdb; ipdb.set_trace()
         query_indices = None
         if self.delta_indices is not None:
             current_ep_idx = self.episodes.index(ep_idx) if self.episodes is not None else ep_idx
@@ -323,7 +322,6 @@ class CustomLeRobotDatasetv2(CustomLeRobotDataset):
 
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
-        # import ipdb; ipdb.set_trace()
         query_indices = None
         if self.delta_indices is not None:
             current_ep_idx = self.episodes.index(ep_idx) if self.episodes is not None else ep_idx

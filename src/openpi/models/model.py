@@ -183,7 +183,6 @@ class ObservationIncontext(Generic[ArrayT]):
     def from_dict(cls, data: at.PyTree[ArrayT]) -> "ObservationIncontext[ArrayT]":
         """This method defines the mapping between unstructured data (i.e., nested dict) to the structured Observation format."""
         # Ensure that tokenized_prompt and tokenized_prompt_mask are provided together.
-        # import ipdb; ipdb.set_trace()
         if ("tokenized_prompt" in data) != ("tokenized_prompt_mask" in data):
             raise ValueError("tokenized_prompt and tokenized_prompt_mask must be provided together.")
         # If images are uint8, convert them to [-1, 1] float32.
@@ -209,7 +208,6 @@ class ObservationIncontext(Generic[ArrayT]):
                 
         # in the current implementation, the incontext images only sampeld 16 frames
         # for the states and actions, we used the full length of the episode
-        # jax.debug.print("data is: {}", data["selected_episode"])
         return cls(
             images=data["image"],
             image_masks=data["image_mask"],

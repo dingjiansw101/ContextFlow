@@ -92,7 +92,6 @@ def init_train_state(
         model = config.model.create(model_rng)
 
         # Merge the partial params into the model.
-        # import ipdb; ipdb.set_trace()
         if partial_params is not None:
             graphdef, state = nnx.split(model)
             # This will produce an error if the partial params are not a subset of the state.
@@ -155,7 +154,6 @@ def train_step(
 
     # Filter out frozen params.
     diff_state = nnx.DiffState(0, config.trainable_filter)
-    # import ipdb; ipdb.set_trace()
     loss, grads = nnx.value_and_grad(loss_fn, argnums=diff_state)(model, train_rng, observation, actions)
 
     params = state.params.filter(config.trainable_filter)
@@ -247,8 +245,6 @@ def main(config: _config.TrainConfig):
         )
     data_iter = iter(data_loader)
     batch = next(data_iter)
-    # jax.debug.print("batch = {} ", batch)
-    # import ipdb; ipdb.set_trace()
 
     logging.info(f"Initialized data loader:\n{training_utils.array_tree_to_info(batch)}")
 

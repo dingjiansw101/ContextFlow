@@ -66,7 +66,6 @@ def create_empty_dataset(
         "cam_right_wrist",
     ]
 
-    # import ipdb; ipdb.set_trace()
     features = {
         "observation.state": {
             "dtype": "float32",
@@ -200,7 +199,6 @@ def load_raw_episode_data(
         base_action = ep["/base_action"][:]
         base_action = preprocess_base_action(base_action)
         base_action = torch.from_numpy(base_action)
-        # import ipdb; ipdb.set_trace()
         action = torch.cat([action, base_action], -1)
 
         velocity = None
@@ -234,7 +232,6 @@ def populate_dataset(
 
     for ep_idx in tqdm.tqdm(episodes):
         ep_path = hdf5_files[ep_idx]
-        # import ipdb; ipdb.set_trace()
         imgs_per_cam, state, action, velocity, effort = load_raw_episode_data(ep_path)
         num_frames = state.shape[0]
 
@@ -253,7 +250,6 @@ def populate_dataset(
                 frame["observation.effort"] = effort[i]
 
             dataset.add_frame(frame)
-        # import ipdb; ipdb.set_trace()
 
         dataset.save_episode(task=task)
 

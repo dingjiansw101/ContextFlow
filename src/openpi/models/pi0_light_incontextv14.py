@@ -361,7 +361,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
         self.frame_sequence_length = config.frame_sequence_length
         self.debug_fused_checks = config.debug_fused_checks
 
-        # import ipdb; ipdb.set_trace()
         # TODO: rewrite gemma in NNX. For now, use bridge.
         gemma_kwargs = {
             "configs": [prompt_expert_config, action_expert_config],
@@ -467,7 +466,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
                     image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
                     image_sqeuence_tokens = self.image_proj_promtp_expert(image_sqeuence_tokens)
 
-                    # import ipdb; ipdb.set_trace()
                     # TODO: to organize multiple episode prompts in order
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, episode_len * seq_len, -1, image_sqeuence_tokens.shape[-1]
@@ -498,7 +496,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
         #------------------------------------------------------------------------
         # embed in-context states
         if self.use_action_state_prompts:
-            # import ipdb; ipdb.set_trace()
             if len(obs.incontext_states.shape) == 4:
                 incontext_states_reshape = obs.incontext_states.reshape(obs.incontext_states.shape[0], -1, obs.incontext_states.shape[-1])
                 dem_state_tokens = self.demo_state_proj(incontext_states_reshape)
@@ -525,7 +522,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
         # ---------------------------------------------------------
         assert len(ar_mask) > 0
-        # import ipdb; ipdb.set_trace()
         tokens = jnp.concatenate(tokens, axis=1)
         input_mask = jnp.concatenate(input_mask, axis=1)
 
@@ -549,12 +545,9 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
             # image_tokens = self.obs_img_proj(image_tokens)
             if self.avg_current_img:
-                # import ipdb; ipdb.set_trace()
                 # image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
                 image_tokens = self.img_pool_action_expert(image_tokens)
             tokens.append(image_tokens)  # image_tokens (32, 256, 2048)
-            # import ipdb; ipdb.set_trace()
-            # jax.debug.print("name = {}, obs.image_masks = {}", name, obs.image_masks[name])
 
 
             input_mask.append(
@@ -847,7 +840,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
         *,
         num_steps: int | at.Int[at.Array, ""] = 10,
     ) -> _model.Actions:
-        # import ipdb; ipdb.set_trace()
         observation = _model.preprocess_observation_incontext(None, observation, train=False)
         # note that we use the convention more common in diffusion literature, where t=1 is noise and t=0 is the target
         # distribution. yes, this is the opposite of the pi0 paper, and I'm sorry.

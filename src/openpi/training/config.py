@@ -455,7 +455,6 @@ class DataConfigFactory(abc.ABC):
         print("asset_id: ", asset_id)
         print("assets.asset_id: ", self.assets.asset_id)
         print("repo_id: ", repo_id)
-        # import ipdb; ipdb.set_trace() # TODO: fix this bug, The trossen remote norm stats is used for training and testing
         return dataclasses.replace(
             self.base_config or DataConfig(),
             repo_id=repo_id,
