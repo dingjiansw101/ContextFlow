@@ -152,7 +152,7 @@ def _load_weights_and_validate(
     vision_encoder_loader: _weight_loaders.WeightLoader | None = None,
     vision_encoder_prefix: str = "PaliGemma/img",
     verbose: bool = False,
-    config: _config.TrainConfig | None = None,  # 👈 新增参数
+    config: _config.TrainConfig | None = None,  # new parameter
 ) -> at.Params:
     """
     Load model parameters, optionally replacing vision encoder subtree,
@@ -175,7 +175,7 @@ def _load_weights_and_validate(
     flat_expected = flax.traverse_util.flatten_dict(params_shape, sep="/")
     
     # Step 2b: Remove existing vision encoder keys
-    # --- 新增：根据 config.model.use_text_prompts 判断是否删除 embedder ---
+    # --- New: drop embedder when config.model.use_text_prompts is False ---
     if config is not None and hasattr(config.model, "use_text_prompts"):
         if not getattr(config.model, "use_text_prompts"):
             EMBED_PREFIX = "PaliGemma/llm/embedder"
@@ -184,7 +184,7 @@ def _load_weights_and_validate(
                 if not (k == EMBED_PREFIX or k.startswith(EMBED_PREFIX + "/"))
             }
             logging.info("[_load_weights_and_validate] Dropped embedder subtree (use_text_prompts=False).")
-    # --- 新增结束 ---
+    # --- End new block ---
 
     # Step 3a: Remove existing vision encoder keys
     flat_loaded = {
@@ -308,23 +308,23 @@ def train_step(
     config: _config.TrainConfig,
     rng: at.KeyArrayLike,
     state: training_utils.TrainState,
-    batch: tuple[_model.ObservationIncontext, _model.Actions],  # ← 恢复二元 (obs, actions)
+    batch: tuple[_model.ObservationIncontext, _model.Actions],  # restored to two-tuple (obs, actions)
 ) -> tuple[training_utils.TrainState, dict[str, at.Array]]:
     model = nnx.merge(state.model_def, state.params)
     model.train()
 
-    # 用 fused 版本：N 帧时返回 [B,N,H]，我们在 loss_fn 里做 mean → 标量
+    # Use fused version: with N frames returns [B,N,H]; loss_fn averages to a scalar
     @at.typecheck
     def loss_fn(model, rng, observation, actions):
         chunked_loss = model.compute_loss(rng, observation, actions, train=True)
-        return jnp.mean(chunked_loss)  # 对 B/N/H 做均值，保持学习率标度稳定
+        return jnp.mean(chunked_loss)  # Mean over B/N/H to keep learning-rate scale stable
 
     train_rng = jax.random.fold_in(rng, state.step)
 
-    # 二元解包
+    # Unpack two-tuple
     observation, actions = batch
 
-    # 只对可训练参数求导
+    # Differentiate only trainable parameters
     diff_state = nnx.DiffState(0, config.trainable_filter)
     loss, grads = nnx.value_and_grad(loss_fn, argnums=diff_state)(model, train_rng, observation, actions)
 

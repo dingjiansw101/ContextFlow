@@ -44,7 +44,7 @@
 #     tasks = [(ep, idxs, dataset) for ep, idxs in idx_map.items()]
 #     states, actions = {}, {}
 
-#     # 使用 tqdm.update() 实时更新进度条
+#     # Use tqdm.update() to refresh the progress bar in real time
 #     with mp.Pool(processes=num_workers) as pool:
 #         with tqdm(total=len(tasks), desc="Building episode caches") as pbar:
 #             for ep, state_arr, action_arr in pool.imap_unordered(process_episode, tasks):
@@ -110,7 +110,7 @@ def build_cache(config: _config.TrainConfig):
 
 
 if __name__ == "__main__":
-    # 直接使用和训练脚本相同的 CLI
+    # Reuse the same CLI as the training script
     config = _config.cli()
     build_cache(config)
 

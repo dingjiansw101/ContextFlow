@@ -1,8 +1,8 @@
 # config_sequence_debug.py
 """
-An example of children config.
-Debug 实验的 children config。
-父 config.py 会 import 本文件，并调用 build(api) 来拿 TrainConfig 列表。
+An example of child configs.
+Debug experiment child configs.
+Parent config.py will import this file and call build(api) to collect TrainConfig entries.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import jsonlines
 from collections.abc import Sequence
 from typing_extensions import override
 
-# 如果这个 child 只在这里用到某些 policy/模块，可以直接在这里 import
+# If this child only needs certain policies/modules here, import them directly
 import openpi.policies.libero_incontext_policy as libero_incontext_policy
 
 
@@ -22,7 +22,7 @@ def build(api) -> list["api.TrainConfig"]:
     g = globals()
     g["DataConfig"] = getattr(api, "DataConfig")
     g["BaseModelConfig"] = getattr(api._model, "BaseModelConfig")
-    # 1) 在函数内定义 DataConfig 子类，继承父里的 DataConfigFactory（通过 api 取）
+    # 1) Define DataConfig subclasses inside this function, inheriting DataConfigFactory via api
     @dataclasses.dataclass(frozen=True)
     class SequenceDebugLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
         use_delta_joint_actions: bool = True
@@ -254,7 +254,7 @@ def build(api) -> list["api.TrainConfig"]:
                 model_transforms=model_transforms,
                 train_episode=kept_indices,
             )
-    # 2) 直接返回本 child 的 TrainConfig 条目（可多个）
+    # 2) Return this child's TrainConfig entries directly (can be multiple)
     return [
     api.TrainConfig(
         # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext.py sequence_compare_pi0_libero_incontextv12_train_split_v3 --project-name=ddd --exp-name=ddd --overwrite

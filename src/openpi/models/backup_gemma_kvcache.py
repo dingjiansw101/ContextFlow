@@ -48,7 +48,7 @@ KVCache: TypeAlias = tuple[
 ]
 
 def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals):
-    """原始 host 断言（会走 jax.debug.callback）"""
+    """Baseline host assertion (runs through jax.debug.callback)."""
     import numpy as np
     def _cb(p, *vals):
         if not bool(p):
@@ -57,7 +57,7 @@ def _host_assert(pred_scalar: jax.Array, msg: str, *debug_vals):
     jax.debug.callback(_cb, pred_scalar, *debug_vals)
 
 def _dbg_assert(enable: bool, pred_scalar: jax.Array, msg: str, *debug_vals):
-    """仅在 enable=True 时才触发 host 断言；否则完全 no-op。"""
+    """Trigger host assertion only when enable=True; otherwise a no-op."""
     if enable:
         _host_assert(pred_scalar, msg, *debug_vals)
   
@@ -249,7 +249,7 @@ class Attention(nn.Module):
 
     @nn.compact
     def __call__(self, xs, positions, attn_mask, kv_cache):
-        # --- 头部一致性（模型配置维） ---
+        # --- Head consistency (model-config dimensions) ---
         assert all(cfg.head_dim     == self.configs[0].head_dim     for cfg in self.configs)
         assert all(cfg.num_heads    == self.configs[0].num_heads    for cfg in self.configs)
         assert all(cfg.num_kv_heads == self.configs[0].num_kv_heads for cfg in self.configs)
@@ -257,24 +257,24 @@ class Attention(nn.Module):
             "num_heads must be divisible by num_kv_heads."
 
         if self.debug_checks:
-            # === 1) 基础 dtype/shape 校验（允许各 expert 的 T 不同；Tq=∑T_i） ===
-            assert isinstance(xs, (list, tuple)) and any(x is not None for x in xs), "xs 至少应有一个非 None 分支"
-            assert positions.ndim == 2, f"positions 期望 [B,T]，got {positions.shape}"
-            assert attn_mask.ndim == 4, f"attn_mask 期望 [B,1,T,S]，got {attn_mask.shape}"
+            # === 1) Basic dtype/shape checks (allow each expert to have different T; Tq=∑T_i) ===
+            assert isinstance(xs, (list, tuple)) and any(x is not None for x in xs), "xs must include at least one non-None branch"
+            assert positions.ndim == 2, f"positions expected [B,T], got {positions.shape}"
+            assert attn_mask.ndim == 4, f"attn_mask expected [B,1,T,S], got {attn_mask.shape}"
 
-        # batch 与总时间长度
+        # Batch size and total sequence length
         x0 = next(x for x in xs if x is not None)
         Bq = int(x0.shape[0])
         if self.debug_checks:
-            assert all((x is None) or (int(x.shape[0]) == Bq) for x in xs), "多 expert 的 batch 不一致"
+            assert all((x is None) or (int(x.shape[0]) == Bq) for x in xs), "Batch sizes differ across experts"
         t_list = [int(x.shape[1]) for x in xs if x is not None]
         if self.debug_checks:
             assert len(t_list) > 0
-        Tq = int(sum(t_list))  # ★ 拼接后的总 query 长度
+        Tq = int(sum(t_list))  # concatenated total query length
 
-        dtype = x0.dtype  # half-precision 也保持
+        dtype = x0.dtype  # keep half precision
 
-        # === 2) 逐 expert 线性映射，收集 q/k/v，然后在时间维拼接 ===
+        # === 2) Per-expert linear projections to collect q/k/v, then concatenate along time ===
         qkvs = []
         _nm = partial(_namev2, expert_names=[cfg.expert_name for cfg in self.configs]) \
             if self.configs[0].expert_name is not None else _namev2
@@ -283,7 +283,7 @@ class Attention(nn.Module):
             if x is None:
                 continue
             if cfg.num_kv_heads == cfg.num_heads:
-                # K==N 情况：一次性投出 q/k/v
+                # K==N case: emit q/k/v in one shot
                 qkv_e = lora.Einsum(
                     shape=(3, cfg.num_heads, cfg.width, cfg.head_dim),
                     name=_nm("qkv_einsum", i),
@@ -308,27 +308,27 @@ class Attention(nn.Module):
                 k_e, v_e = kv_einsum("BSD,2KDH->2BSKH", x)  # [B,Ti,K,H]
             qkvs.append((q_e, k_e, v_e))
 
-        # 按时间维拼接
+        # Concatenate along the time axis
         q = jnp.concatenate([q for q, _, _ in qkvs], axis=1)  # [B,Tq, N or K, H]
         k_cur = jnp.concatenate([k for _, k, _ in qkvs], axis=1)  # [B,Tcur,K,H]
         v_cur = jnp.concatenate([v for _, _, v in qkvs], axis=1)  # [B,Tcur,K,H]
         Tcur = int(k_cur.shape[1])
 
         if self.debug_checks:
-            # Rope 之前核对 positions 与 Tq
-            assert positions.shape == (Bq, Tq), f"positions 与 q 形状不匹配：pos={positions.shape}, Tq={Tq}"
+            # Before RoPE, verify positions matches Tq
+            assert positions.shape == (Bq, Tq), f"positions mismatches q shape: pos={positions.shape}, Tq={Tq}"
 
-        # === 3) RoPE & 缩放（cache 中的 K/V 已在 encode 阶段做过 RoPE，这里只对当前 tokens） ===
+        # === 3) RoPE & scaling (cache K/V already had RoPE during encode; apply only to current tokens) ===
         q = _apply_rope(q, positions=positions); q *= self.configs[0].head_dim ** -0.5
         k_cur = _apply_rope(k_cur, positions=positions)
         
         if self.debug_checks:
             assert q.dtype == k_cur.dtype == v_cur.dtype == dtype
 
-        # === 4) KV-cache 批广播 + 时间拼接（先拿 Tpm，再拼接） ===
-        cache_k, cache_v = kv_cache  # 期望 [Bcache, Tpm, K, H]；Tpm 可能为 0
+        # === 4) KV-cache batch broadcast + time concatenation (grab Tpm first, then concat) ===
+        cache_k, cache_v = kv_cache  # expect [Bcache, Tpm, K, H]; Tpm can be 0
         if self.debug_checks:
-            assert cache_k.ndim == 4 and cache_v.ndim == 4, "kv_cache 期望 [B,Tpm,K,H]"
+            assert cache_k.ndim == 4 and cache_v.ndim == 4, "kv_cache expected [B,Tpm,K,H]"
         Bc, Tpm = int(cache_k.shape[0]), int(cache_k.shape[1])
 
         if Bq != Bc:
@@ -346,15 +346,15 @@ class Attention(nn.Module):
                 broadcast_dimensions=(0, 2, 3, 4),
             ).reshape(Bq, Tpm, cache_v.shape[2], cache_v.shape[3])
 
-        # 拼接：先 cache 再当前
+        # Concatenate: cache first, then current
         k = jnp.concatenate([cache_k, k_cur], axis=1)  # [Bq, Tpm+Tcur, K, H]
         v = jnp.concatenate([cache_v, v_cur], axis=1)
         if self.debug_checks:
             assert k.shape[1] == Tpm + Tcur and v.shape[1] == Tpm + Tcur, \
-                f"KV 时间维拼接异常：Tpm={Tpm}, Tcur={Tcur}, got K={k.shape}, V={v.shape}"
+                f"KV time concat mismatch: Tpm={Tpm}, Tcur={Tcur}, got K={k.shape}, V={v.shape}"
 
-        # === 5) 注意力计算 + 掩码校验 ===
-        # 将 q 视作 (K*G) 个头，按 K 分组
+        # === 5) Attention computation + mask validation ===
+        # Treat q as (K*G) heads, grouped by K
         q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
         logits = jnp.einsum("BTKGH,BSKH->BKGTS", q, k, preferred_element_type=jnp.float32)  # [B,K,G,Tq,S]
 
@@ -363,21 +363,21 @@ class Attention(nn.Module):
             raise ValueError(f"Attention mask shape {attn_mask.shape} != expected {expected_mask_shape} "
                             f"(q={q.shape}, k={k.shape})")
 
-        big_neg = -2.3819763e38  # 与原 Gemma 对齐
+        big_neg = -2.3819763e38  # match original Gemma
         masked_logits = jnp.where(attn_mask[:, :, None, :, :], logits, big_neg)
         probs = jax.nn.softmax(masked_logits, axis=-1).astype(dtype)
 
         encoded = jnp.einsum("BKGTS,BSKH->BTKGH", probs, v)         # [B,Tq,K,G,H]
         encoded = einops.rearrange(encoded, "B T K G H -> B T (K G) H")  # [B,Tq,N,H]
 
-        # === 6) 回写到各 expert 的时间切片（不越界） ===
+        # === 6) Write back to each expert's time slice (bounds-checked) ===
         out = []
         start = 0
         for i, (x, cfg) in enumerate(zip(xs, self.configs, strict=True)):
             if x is not None:
                 Ti = int(x.shape[1])
                 end = start + Ti
-                assert end <= encoded.shape[1], "encoded T 维切片越界"
+                assert end <= encoded.shape[1], "encoded T slice out of bounds"
                 out_e = lora.Einsum(
                     shape=(cfg.num_heads, cfg.head_dim, cfg.width),
                     name=_nm("attn_vec_einsum", i),
@@ -502,37 +502,37 @@ class Module(nn.Module):
         v0 = jnp.zeros((L, B, 0, K, H), dtype)
         return (k0, v0)
 
-    # --- 小工具：monotonic 位置校验（仅在 True mask 上） ---
+    # --- Utility: monotonic position check (only on True mask) ---
 
 
     @staticmethod
     def _assert_monotonic_positions(pos: jax.Array, mask: jax.Array, name: str):
         """
-        检查：在“有效 token”位置，positions 是否等于 cumsum(valid)-1。
-        允许 mask 为 [B,T] / [B,T,S] / [B,1,T,S]。
+        Check whether positions equal cumsum(valid)-1 at valid-token locations.
+        Supports mask shapes [B,T] / [B,T,S] / [B,1,T,S].
         """
-        # 1) 统一成 token 级 mask: [B,T]
+        # 1) Normalize to token-level mask: [B,T]
         if mask.ndim == 4:
             # [B,1,T,S] -> [B,T,S]
-            assert mask.shape[1] == 1, f"{name}: 4D mask 第二维应为 1，got {mask.shape}"
+            assert mask.shape[1] == 1, f"{name}: second dim of 4D mask should be 1, got {mask.shape}"
             mask = jnp.squeeze(mask, axis=1)
         if mask.ndim == 3:
             token_mask = jnp.any(mask, axis=-1)        # [B,T,S] -> [B,T]
         elif mask.ndim == 2:
             token_mask = mask                           # [B,T]
         else:
-            raise ValueError(f"{name}: mask 维度必须是 2/3/4，got {mask.shape}")
+            raise ValueError(f"{name}: mask ndim must be 2/3/4, got {mask.shape}")
 
-        # 2) 形状对齐
+        # 2) Align shapes
         _dbg_assert(True, jnp.array(pos.ndim == 2 and pos.shape == token_mask.shape),
-                    f"{name}: positions 形状 {pos.shape} 必须等于 token_mask 形状 {token_mask.shape}")
+                    f"{name}: positions shape {pos.shape} must equal token_mask shape {token_mask.shape}")
 
-        # 3) 参考位置：有效 token 的累计计数 - 1
+        # 3) Reference positions: cumulative valid-token count minus 1
         ref = jnp.cumsum(token_mask, axis=-1) - 1      # [B,T]
 
-        # 4) 仅在有效 token 处比较
+        # 4) Compare only at valid token positions
         ok = jnp.all(jnp.where(token_mask, pos == ref, True))
-        _dbg_assert(True, ok, f"{name} 不是基于 mask 的单调累计位置（应等于 cumsum(valid)-1）")
+        _dbg_assert(True, ok, f"{name} is not monotonic per mask (expected cumsum(valid)-1)")
 
         
     def setup(self):
@@ -587,20 +587,20 @@ class Module(nn.Module):
         kv_cache: KVCache | None = None,
         deterministic: bool = True,
     ) -> tuple[Sequence[at.Float[at.Array, "b _t _d"] | None], KVCache]:
-        # 统一 dtype
+        # Normalize dtype
         embedded = jax.tree.map(lambda e: e.astype(self.embed_dtype) if e is not None else None, embedded)
-        mask_3d = jnp.asarray(mask)  # 保留为 [B,T,S] 做断言；稍后再扩一维给 Attention
+        mask_3d = jnp.asarray(mask)  # Keep as [B,T,S] for assertions; expand later for Attention
 
-        # 取 batch 大小 & dtype
+        # Derive batch size and dtype
         e_list = [e for e in embedded if e is not None]
-        assert len(e_list) > 0, "embedded 至少要有一个非 None 分支"
+        assert len(e_list) > 0, "embedded must have at least one non-None branch"
         B = int(e_list[0].shape[0])
         dt = jnp.dtype(self.embed_dtype)
 
-        # ★ 关键：没有 cache 时传“零长 cache”（带层维 L）
+        # Key: when no cache is provided, pass a zero-length cache (with layer dim L)
         kv_arg = kv_cache if kv_cache is not None else self._zero_kv(B, dt)
 
-        # 扩成 [B,1,T,S] 再进入 scan/Attention
+        # Expand to [B,1,T,S] before entering scan/Attention
         mask_4d = mask_3d[:, None, :, :]
 
         embedded, kv_out = self.layers(embedded, kv_arg, positions, mask_4d, deterministic)
@@ -608,13 +608,13 @@ class Module(nn.Module):
 
         if self.debug_checks:
             # _host_assert(jnp.array(positions.dtype in (jnp.int32, jnp.int16, jnp.int64)),
-            #  "positions dtype 应为整数，got {}", positions.dtype)
+            #  "positions dtype should be an integer, got {}", positions.dtype)
             # _host_assert(jnp.array(attn_mask.dtype == jnp.bool_), 
-            #             "attn_mask 必须为 bool，got {}", attn_mask.dtype)
+            #             "attn_mask must be bool, got {}", attn_mask.dtype)
             assert isinstance(kv_out, tuple) and len(kv_out) == 2
             L = self.configs[0].depth
             assert kv_out[0].shape[0] == L and kv_out[1].shape[0] == L, \
-                f"L 不匹配：{kv_out[0].shape} / {kv_out[1].shape}"
+                f"L mismatch: {kv_out[0].shape} / {kv_out[1].shape}"
 
         return out, kv_out
 
@@ -630,9 +630,9 @@ class Module(nn.Module):
     
     ### XJ: midfix KV cache per layer
     '''
-    这两个方法只是把你已有的 self.layers 包了一层,完全复用现有 scan 堆叠出的逐层 K/V 返回机制;
-    decode_with_cache 的关键在于：传入的 pm_cache 是 [L,B,...],而 embedded_suf/mask_suf 用的是 [B*N, ...];
-    在 Attention 内部会自动把 cache 从 B 广播到 B*N(Patch 1)
+    These two helpers simply wrap the existing self.layers, fully reusing the scan-stacked per-layer K/V returns.
+    decode_with_cache expects pm_cache shaped [L,B,...], while embedded_suf/mask_suf use [B*N, ...];
+    inside Attention the cache is automatically broadcast from B to B*N (Patch 1).
     '''  
     # ------------ NEW: helper to encode prefix/midfix and collect per-layer K/V ------------
     @at.typecheck
@@ -659,26 +659,26 @@ class Module(nn.Module):
         _, kv_cache = self.layers(embedded_pm, self._zero_kv(B, dt), positions_pm, mask_pm_b, deterministic)
 
         if self.debug_checks:
-            # 1) 位置与 mask 的一致性（已修过的版本，OK）
+            # 1) Consistency between positions and mask (fixed version, OK)
             self._assert_monotonic_positions(positions_pm, mask_pm.astype(bool), "positions_pm")
 
-            # 2) pm_cache 的 T 维 与 mask 有效 token 数一致（逐 batch）
+            # 2) pm_cache T dimension should match the number of valid tokens per batch
             k_all = kv_cache[0]                       # [L,B,Tpm,K,H]
-            Tpm_cache = k_all.shape[2]                # 缓存里每层的 K/V 序列长度
-            Tpm_input = positions_pm.shape[1]         # 传入的总 token 数（∑ 各分支长度）
+            Tpm_cache = k_all.shape[2]                # per-layer K/V sequence length in cache
+            Tpm_input = positions_pm.shape[1]         # total tokens passed in (∑ lengths per branch)
 
             _dbg_assert(self.debug_checks, 
                 jnp.array(Tpm_cache == Tpm_input),
-                "pm_cache T ({}) 应等于 positions_pm.shape[1] ({})",
+                "pm_cache T ({}) should equal positions_pm.shape[1] ({})",
                 Tpm_cache, Tpm_input,
             )
 
-            # 可选：如果你仍想监控“有效 token 数”，只能做下界/上界式的 sanity，不要等号：
+            # Optional: if you still monitor the number of valid tokens, only perform lower/upper-bound sanity checks
             valid_pm = jnp.any(mask_pm.astype(bool), axis=-1)  # [B,Tpm]
-            Tpm_valid_min = jnp.min(jnp.sum(valid_pm, axis=-1))  # 每 batch 的最少有效数
+            Tpm_valid_min = jnp.min(jnp.sum(valid_pm, axis=-1))  # minimum valid tokens per batch
             _dbg_assert(self.debug_checks, 
                 jnp.array((Tpm_valid_min <= Tpm_cache) & (Tpm_valid_min >= 0)),
-                "mask_pm 有效 token 数的最小值 {} 不应超过 pm_cache T ({})",
+                "mask_pm minimum valid-token count {} should not exceed pm_cache T ({})",
                 Tpm_valid_min, Tpm_cache,
             )
         return PMCache(kv_cache)
@@ -687,7 +687,7 @@ class Module(nn.Module):
     @at.typecheck
     def decode_with_cache(
         self,
-        embedded_suf: Sequence[at.Float[at.Array, "b t d"] | None],  # b 实际是 BN
+        embedded_suf: Sequence[at.Float[at.Array, "b t d"] | None],  # b is actually BN
         positions_suf: at.Int[at.Array, "b t"],
         mask_suf: at.Bool[at.Array, "b t s"],  # s = Tpm+Ts
         *,
@@ -703,11 +703,11 @@ class Module(nn.Module):
         
         L = self.configs[0].depth
         k0, v0 = pm_cache.kv
-        assert k0.shape[0] == L and v0.shape[0] == L, f"pm_cache L 不匹配：{k0.shape} / {v0.shape}"
+        assert k0.shape[0] == L and v0.shape[0] == L, f"pm_cache L mismatch: {k0.shape} / {v0.shape}"
         outputs, _ = self.layers(embedded_suf, pm_cache.kv, positions_suf, mask_suf_b, deterministic)
         outs = [f(e) if e is not None else e for f, e in zip(self.final_norms, outputs, strict=True)]
         if self.debug_checks:
-            # 输出 dtype 与 embed_dtype 一致
+            # Output dtype should match embed_dtype
             assert all((e is None) or (e.dtype == jnp.dtype(self.embed_dtype)) for e in outs)
         return outs
 

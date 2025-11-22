@@ -9,7 +9,7 @@ from openpi.models import model as _model
 from openpi.models.model import ObservationIncontext, IMAGE_KEYS
 
 
-# ----------------- 简单 stubs -----------------
+# ----------------- Simple stubs -----------------
 class StubPMCache:
     def __init__(self, kv): self.kv = kv
 
@@ -49,25 +49,25 @@ class StubIMGWrapper:
         return jnp.zeros((B, P, self.out_dim), dtype=jnp.float32), None
 
 def _to_nnx_stub(module_obj):
-    # Gemma: linen module 上有 configs + embed_dtype
+    # Gemma: linen module has configs + embed_dtype
     if hasattr(module_obj, "configs") and hasattr(module_obj, "embed_dtype"):
         try:
             c0 = module_obj.configs[0]
             return StubLLMWrapper(depth=c0.depth, num_kv_heads=c0.num_kv_heads, head_dim=c0.head_dim)
         except Exception:
             return StubLLMWrapper()
-    # SigLIP: 我们的 _Module 有 width/dtype_mm
+    # SigLIP: our _Module has width/dtype_mm
     if hasattr(module_obj, "width") and hasattr(module_obj, "dtype_mm"):
         return StubIMGWrapper(module_obj)
     raise RuntimeError(f"Unexpected module for ToNNX stub: {type(module_obj)}")
 
 
-# 预处理 mock：恒等返回，避免 resize/aug 带来差异
+# Preprocess mock: identity return to avoid resize/aug differences
 def _mock_preprocess_observation_incontext_fused(rng, observation, *, train=False, image_keys=IMAGE_KEYS, image_resolution=(224,224)):
     return observation
 
 
-# ----------------- 构造模型/观测 -----------------
+# ----------------- Build model/observation -----------------
 def make_model(siglip_variant="Ti/16", debug=False):
     cfg = Pi0LightIncontextConfigv14(
         vocab_size=5000,
@@ -79,9 +79,9 @@ def make_model(siglip_variant="Ti/16", debug=False):
         avg_current_img=True,
         debug_fused_checks=debug,
     )
-    # 注意：ToNNX 已在测试里 monkeypatch，因此这里直接 create
+    # Note: ToNNX is monkeypatched in tests, so create directly here
     model = cfg.create(jax.random.PRNGKey(0))
-    # 只保留图像提示，简化路径
+    # Keep only image prompts to simplify the path
     model.use_text_prompts = False
     model.use_action_state_prompts = False
     model.use_image_prompts = True
@@ -92,7 +92,7 @@ def make_model(siglip_variant="Ti/16", debug=False):
 def make_obs(B=2, N=3, H=4, A=6, H_img=64, W_img=64, C=3, T_inctx=5):
     key = jax.random.PRNGKey(0)
 
-    # 拆分随机键
+    # Split random keys
     key, k_state, k_actions = jax.random.split(key, 3)
     cams = IMAGE_KEYS
     # image = {nm: jnp.zeros((B, H_img, W_img, C), dtype=jnp.float32) for nm in cams}
@@ -130,26 +130,26 @@ def make_obs(B=2, N=3, H=4, A=6, H_img=64, W_img=64, C=3, T_inctx=5):
     return ObservationIncontext.from_dict(obs_dict)
 
 
-# ----------------- 测试 -----------------
+# ----------------- Tests -----------------
 def test_sequence_vs_stepwise_forward_and_loss(monkeypatch):
-    # 先把 ToNNX 和预处理打桩，再 create 模型
+    # Stub ToNNX and preprocessing before creating model
     monkeypatch.setattr(pi0_mod.nnx_bridge, "ToNNX", _to_nnx_stub, raising=True)
     monkeypatch.setattr(_model, "preprocess_observation_incontext_fused",
                         _mock_preprocess_observation_incontext_fused, raising=True)
 
     model, _ = make_model(debug=False)
 
-    # 两条轨迹
+    # Two trajectories
     B, N, H, A = 2, 3, model.action_horizon, model.action_dim
     obs = make_obs(B=B, N=N, H=H, A=A)
 
-    # 固定 noise / t
+    # Fix noise / t
     key = jax.random.PRNGKey(7)
     key_n, key_t = jax.random.split(key)
     noise = jnp.full((B, N, H, A), 0.123, dtype=jnp.float32)
     t = jnp.full((B, N), 0.5, dtype=jnp.float32)
 
-    # v_t 对比
+    # Compare v_t outputs
     vt_seq  = model.forward_vt_sequence(obs, noise, t)
     vt_loop = model.forward_vt_stepwise(obs, noise, t)
     assert vt_seq.shape  == (B, N, H, A)
@@ -157,7 +157,7 @@ def test_sequence_vs_stepwise_forward_and_loss(monkeypatch):
     assert jnp.allclose(vt_seq, vt_loop, rtol=1e-5, atol=1e-6)
     print("vt_seq:",vt_seq.shape,vt_seq)
 
-    # loss 对比
+    # Compare losses
     loss_seq  = model.compute_loss_sequence(None, obs, None, noise=noise, t=t)
     loss_loop = model.compute_loss_stepwise(None, obs, None, noise=noise, t=t)
     assert loss_seq.shape  == (B, N, H)

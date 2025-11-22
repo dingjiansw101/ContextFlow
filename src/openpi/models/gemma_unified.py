@@ -319,14 +319,14 @@ class Embedder(nn.Module):
 class Attention(nn.Module):
     """Attention module with Knowledge Insulation (KI) for π0.5.
 
-    与原 Attention 完全同参/同接口：
-    - configs: Sequence[Config]（多专家；第 0 个为主干 backbone，后续为动作专家）
-    - __call__(xs, positions, attn_mask, kv_cache) 返回 `[out_0, out_1, ...], (k_cache, v_cache)`
+    Same parameters/interfaces as the original Attention:
+    - configs: Sequence[Config] (multiple experts; index 0 is the backbone, remaining are action experts)
+    - __call__(xs, positions, attn_mask, kv_cache) returns `[out_0, out_1, ...], (k_cache, v_cache)`
 
-    关键改动（论文 Eq.(5)/(6)）:
-      • Eq.(5): 仅在 a->b 的 logits 用 stop_grad(K_b)
-      • Eq.(6): 仅在 a->b 的值聚合项用 stop_grad(V_b)
-    其它保持不变（RoPE 只作用 q/k；KV-cache 逻辑不变；LoRA/命名/形状均不变）。
+    Key changes (paper Eq.(5)/(6)):
+      • Eq.(5): use stop_grad(K_b) only for a->b logits
+      • Eq.(6): use stop_grad(V_b) only for a->b value aggregation
+    Everything else stays the same (RoPE only on q/k; KV-cache logic unchanged; LoRA/naming/shapes unchanged).
     """
 
     configs: Sequence[Config]
@@ -340,7 +340,7 @@ class Attention(nn.Module):
 
         dtype = next(x.dtype for x in xs if x is not None)  # original dtype, could be half-precision
 
-        # === 1) Per-expert Q/K/V 投影（保持你原来的 LoRA Einsum 逻辑） ===
+        # === 1) Per-expert Q/K/V projection (keep existing LoRA Einsum logic) ===
         qkvs = []
         for i, (x, config) in enumerate(zip(xs, self.configs, strict=True)):
             if x is None:
@@ -370,51 +370,51 @@ class Attention(nn.Module):
                 k, v = kv_einsum("BSD,2KDH->2BSKH", x)
                 qkvs.append((q, k, v))
 
-        # 拼接多个专家段（沿序列维 axis=1）
+        # Concatenate segments from multiple experts along sequence axis
         q, k, v = (jnp.concatenate(y, axis=1) for y in zip(*qkvs, strict=True))
-        # 记录主干段长度 Tb：第 0 专家长度
+        # Track backbone length Tb: length of expert 0
         Tb = 0
         if xs and xs[0] is not None:
             Tb = xs[0].shape[1]  # [B, Tb, D_backbone]
         T_total = q.shape[1]
 
-        # === 2) RoPE on q/k + 缩放 ===
+        # === 2) RoPE on q/k + scaling ===
         q = _apply_rope(q, positions=positions)
         q *= self.configs[0].head_dim ** -0.5
         k = _apply_rope(k, positions=positions)
 
-        # === 3) KV-cache 一致保持 ===
+        # === 3) Keep KV-cache consistent ===
         if kv_cache is not None:
             cache_k, cache_v = kv_cache
             k = jnp.concatenate([cache_k, k], axis=1)
             v = jnp.concatenate([cache_v, v], axis=1)
 
-        # 变形为多头结构
+        # Reshape to multi-head structure
         q = einops.rearrange(q, "B T (K G) H -> B T K G H", K=self.configs[0].num_kv_heads)
-        # 先整体算一份 logits（数值更稳）
+        # Compute logits once for numerical stability
         logits = jnp.einsum("BTKGH,BSKH->BKGTS", q, k, preferred_element_type=jnp.float32)
 
-        # attn_mask 形状检查（与原版一致）：[B, 1, T, S]
+        # attn_mask shape check (same as original): [B, 1, T, S]
         if attn_mask.shape != (q.shape[0], 1, q.shape[1], k.shape[1]):
             raise ValueError(
                 f"Attention mask with shape {attn_mask.shape} but shapes for q and k are: {q.shape} and {k.shape}"
             )
 
-        # === 4) KI · Eq.(5)：仅替换 a->b 的 logits，用 stop_grad(K_b) ===
+        # === 4) KI Eq.(5): replace only a->b logits using stop_grad(K_b) ===
         if 0 < Tb < T_total:
             q_a    = q[:, Tb:, ...]                       # [B, Ta, K, G, H]
             k_b_sg = jax.lax.stop_gradient(k[:, :Tb, ...])  # [B, Tb, K, H]
             logits_ab = jnp.einsum("BTKGH,BSKH->BKGTS", q_a, k_b_sg,
                                    preferred_element_type=jnp.float32)  # [B,K,G,Ta,Tb]
-            logits = logits.at[:, :, :, Tb:, :Tb].set(logits_ab)         # 仅 a->b 小块替换
+            logits = logits.at[:, :, :, Tb:, :Tb].set(logits_ab)         # Replace only the a->b block
 
-        # === 5) 加 mask & softmax（概率 P） ===
-        # big_neg 与原版保持一致，避免半精度下 -inf 带来 NaN
+        # === 5) Apply mask & softmax (probabilities P) ===
+        # big_neg matches the original to avoid NaNs in half precision
         big_neg = -2.3819763e38
         masked_logits = jnp.where(attn_mask[:, :, None, :, :], logits, big_neg)
         probs = jax.nn.softmax(masked_logits, axis=-1).astype(dtype)     # [B,K,G,T,S]
 
-        # === 6) KI · Eq.(6)：仅 a->b 的值项用 stop_grad(V_b) ===
+        # === 6) KI Eq.(6): use stop_grad(V_b) only for a->b value terms ===
         if 0 < Tb < T_total:
             v_b_sg = jax.lax.stop_gradient(v[:, :Tb, ...])               # [B, Tb, K, H]
             # b-queries：P_bb @ V_b
@@ -427,13 +427,13 @@ class Attention(nn.Module):
             y_aa   = jnp.einsum("BKGTS,BSKH->BTKGH", P_aa, v[:, Tb:, ...])
             encoded = jnp.concatenate([y_b, y_ab + y_aa], axis=1)         # [B,T,K,G,H]
         else:
-            # 单一专家（全是 backbone 或全是 action）时，降级为常规路径
+            # Single-expert case (all backbone or all action) falls back to the standard path
             encoded = jnp.einsum("BKGTS,BSKH->BTKGH", probs, v)           # [B,T,K,G,H]
 
-        # 回到 [B,T,(K·G),H]
+        # Convert back to [B,T,(K·G),H]
         encoded = einops.rearrange(encoded, "B T K G H -> B T (K G) H")
 
-        # === 7) 各专家各自的输出投影（保持原版逻辑不变） ===
+        # === 7) Per-expert output projections (same logic as original) ===
         out = []
         start = 0
         for i, (x, config) in enumerate(zip(xs, self.configs, strict=True)):

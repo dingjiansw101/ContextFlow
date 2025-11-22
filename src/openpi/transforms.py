@@ -168,7 +168,7 @@ class InjectDemoIndexes(DataTransformFn):
     # XJ(stage-wise prompt)
     all_episode_stage: Optional[str] = None # json path or None
     override_index: Optional[bool] = False # only used when sample_frames == 2
-    provided_stage_key: str = "stage_rank"   # <- 新增：从 data 里读取的键名
+    provided_stage_key: str = "stage_rank"   # new: key name to read from data
 
 
     def __post_init__(self):
@@ -199,16 +199,16 @@ class InjectDemoIndexes(DataTransformFn):
         # XJ(stage-wise prompt)
         # ---- XJ: filter task_to_episode only when all_episode_stage is not None ----
         if self.all_episode_stage is not None and self.train_episode_index_list is not None:
-            # 1) 允许集合：白名单 ∩ episode_to_indexes 中“存在且帧数>0”的 episode
+            # 1) Allowed set: whitelist ∩ episodes present in episode_to_indexes with >0 frames
             allowed_from_list = {int(x) for x in self.train_episode_index_list}
             available_eps = {
                 int(ep)
                 for ep, idxs in episode_to_indexes.items()
                 if isinstance(idxs, list) and len(idxs) > 0
             }
-            allowed = allowed_from_list & available_eps  # 关键：与可用键做交集
+            allowed = allowed_from_list & available_eps  # Key: intersect with available keys
 
-            # 2) 过滤 task_to_episode（运行时类型统一到 int）
+            # 2) Filter task_to_episode (normalize runtime types to int)
             filtered_task_to_episode = {
                 int(task): [
                     int(ep) for ep in (eps or [])
@@ -461,8 +461,8 @@ def tree_stack_np(list_of_trees, axis=0):
 @dataclasses.dataclass(frozen=True)
 class AddCurrentFramesSequenceTransform(DataTransformFn):
     """
-    给“当前样本”补上同 episode 的 N 帧序列（图像/状态/动作），
-    并把 actions 从 [H,A] 改成 [N,H,A]，供 fused loss 使用。
+    Augment the current sample with an N-frame sequence from the same episode (images/state/actions),
+    and reshape actions from [H,A] to [N,H,A] for fused loss.
     """
     dataset: any
     episode_to_indexes_file: Optional[str] = "metadata/libero/episode_to_indexes.json"
@@ -470,16 +470,16 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
     sampling: str = "random"       # "uniform" | "around" | "random" | "random_stratified"
     train_episode_index_list: Optional[List[int]] = None
 
-    # 采样细化参数（可选）
-    keep_anchor_when_random: bool = True          # random/random_stratified 下尽量包含 anchor
-    enforce_unique: bool = True                   # 是否强制采样索引唯一
-    debug_checks: bool = True                     # 是否启用强断言
+    # Sampling refinements (optional)
+    keep_anchor_when_random: bool = True          # Prefer to include anchor for random/random_stratified
+    enforce_unique: bool = True                   # Whether to enforce unique sampled indices
+    debug_checks: bool = True                     # Whether to enable strict assertions
 
-    # 随机性控制：若不传，则用 numpy 全局 RNG（多进程下每 worker 会不同）
-    seed_base: Optional[int] = None               # 可给每个实例一个基种子，保证可复现（可选）
+    # Randomness control: defaults to numpy global RNG (differs per worker)
+    seed_base: Optional[int] = None               # Optional per-instance base seed for reproducibility
 
     def __post_init__(self):
-        # 读 episode->全局帧列表
+        # Read episode->global frame list
         epi2idx = None
         if self.episode_to_indexes_file is not None:
             p = Path(self.episode_to_indexes_file)
@@ -491,42 +491,42 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
                 else:
                     allowed = set(int(ep) for ep in self.train_episode_index_list)
                     filt = {int(k): v for k, v in raw.items() if int(k) in allowed}
-                    epi2idx = reindex_filtered_dict(filt)  # 你的已有逻辑
+                    epi2idx = reindex_filtered_dict(filt)  # reuse existing logic
         object.__setattr__(self, "_epi2idx", epi2idx)
 
-        # 内部 RNG（注意 dataclass frozen，需要用 object.__setattr__）
+        # Internal RNG (dataclass is frozen; use object.__setattr__)
         if self.seed_base is not None:
             rng = np.random.default_rng(int(self.seed_base))
         else:
             rng = np.random.default_rng()
         object.__setattr__(self, "_rng", rng)
 
-        # 基础参数校验
+        # Basic parameter validation
         if self.debug_checks:
-            assert self.n_frames >= 2, "n_frames 必须 >= 2 才有意义（否则请禁用本 transform 或走单帧）"
+            assert self.n_frames >= 2, "n_frames must be >= 2 to be meaningful (disable this transform or use single-frame otherwise)"
             assert self.sampling in {"uniform", "around", "random", "random_stratified"}, \
-                f"sampling 不支持：{self.sampling}"
+                f"Unsupported sampling: {self.sampling}"
 
     # -----------------------------
-    # 采样子程序
+    # Sampling helpers
     # -----------------------------
     def _ensure_unique(self, idxs: List[int]) -> List[int]:
         if not self.enforce_unique:
             return idxs
-        uniq = list(dict.fromkeys(int(x) for x in idxs))  # 稳定去重
+        uniq = list(dict.fromkeys(int(x) for x in idxs))  # stable deduplication
         if len(uniq) != len(idxs):
-            raise AssertionError(f"[AddCurrentFramesSequenceTransform] 采样索引存在重复：{idxs} -> {uniq}")
+            raise AssertionError(f"[AddCurrentFramesSequenceTransform] duplicate sampled indices: {idxs} -> {uniq}")
         return uniq
 
     def _rng_for_sample(self, ep_idx: int, anchor_local_idx: Optional[int]) -> np.random.Generator:
         """
-        为了 worker/epoch 稳定性，你也可以把 dataloader 的 global_step / epoch
-        混入 seed，这里先保持简单：实例级 RNG。
+        For worker/epoch stability you could mix in dataloader global_step/epoch;
+        keep it simple here with an instance-level RNG.
         """
         return self._rng
 
     def _pick_indices_uniform(self, n_total: int) -> List[int]:
-        # 均匀采样：linspace + 四舍五入（向下取整）
+        # Uniform sampling: linspace + floor
         loc = np.linspace(0, n_total - 1, num=self.n_frames, dtype=int).tolist()
         return [int(i) for i in loc]
 
@@ -540,35 +540,35 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
 
     def _pick_indices_random(self, n_total: int, anchor_local_idx: Optional[int], rng: np.random.Generator) -> List[int]:
         """
-        完全随机：不放回采样。若 keep_anchor_when_random=True 且给定 anchor，则包含 anchor。
+        Fully random: sample without replacement. Include anchor if keep_anchor_when_random=True and provided.
         """
         if self.n_frames > n_total:
-            raise ValueError(f"随机采样所需帧数 n_frames={self.n_frames} > 该 episode 总帧数 n_total={n_total}")
+            raise ValueError(f"Random sampling needs n_frames={self.n_frames} <= episode length n_total={n_total}")
         if self.keep_anchor_when_random and anchor_local_idx is not None and 0 <= anchor_local_idx < n_total:
-            # 先固定 anchor，再从余集合随机补齐
+            # Fix anchor first, then randomly fill the rest
             rest = np.delete(np.arange(n_total), anchor_local_idx)
             k = self.n_frames - 1
             choose = rng.choice(rest, size=k, replace=False)
             loc = np.concatenate([[anchor_local_idx], choose])
         else:
             loc = rng.choice(n_total, size=self.n_frames, replace=False)
-        loc = np.sort(loc)  # 保持时间顺序（可选）
+        loc = np.sort(loc)  # Keep chronological order (optional)
         return [int(i) for i in loc]
 
     def _pick_indices_random_stratified(self, n_total: int, anchor_local_idx: Optional[int],
                                         rng: np.random.Generator) -> List[int]:
         """
-        分段随机：把序列划分成 n_frames 个区段，每段均匀长度内随机取 1 帧，
-        同时尽量包含 anchor（若在某段内则把该段的随机点替换为 anchor）。
-        这样既随机，又避免长期偏向前/后端。
+        Stratified random: split sequence into n_frames segments, sample 1 frame per segment,
+        while trying to include the anchor (if inside a segment, replace that segment's sample with anchor).
+        This keeps randomness without long-term bias toward the start/end.
         """
         if self.n_frames > n_total:
-            raise ValueError(f"分段随机所需帧数 n_frames={self.n_frames} > n_total={n_total}")
-        bounds = np.linspace(0, n_total, num=self.n_frames + 1, dtype=int)  # 段边界，右开
+            raise ValueError(f"Stratified sampling needs n_frames={self.n_frames} <= n_total={n_total}")
+        bounds = np.linspace(0, n_total, num=self.n_frames + 1, dtype=int)  # segment boundaries, right-open
         loc = []
         anchor_used = False
         for s, e in zip(bounds[:-1], bounds[1:]):
-            e = max(e, s + 1)  # 防止空段
+            e = max(e, s + 1)  # prevent empty segment
             if (self.keep_anchor_when_random and
                 (anchor_local_idx is not None) and
                 (s <= anchor_local_idx < e) and
@@ -582,13 +582,13 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
 
     def _pick_indices(self, frame_list: List[int], anchor_local_idx: Optional[int]) -> List[int]:
         """
-        从“episode 内的局部索引”空间采样（返回局部索引），稍后会映射为全局帧索引。
+        Sample within the episode-local index space (returns local indices), later mapped to global frame indices.
         """
         n = len(frame_list)
         if n == 0 or self.n_frames <= 1:
-            raise ValueError("[AddCurrentFramesSequenceTransform] episode 为空或 n_frames <= 1。")
+            raise ValueError("[AddCurrentFramesSequenceTransform] episode is empty or n_frames <= 1.")
 
-        rng = self._rng_for_sample(ep_idx=-1, anchor_local_idx=anchor_local_idx)  # ep_idx 非必需
+        rng = self._rng_for_sample(ep_idx=-1, anchor_local_idx=anchor_local_idx)  # ep_idx not required
         if self.sampling == "uniform":
             loc = self._pick_indices_uniform(n)
         elif self.sampling == "around":
@@ -598,50 +598,50 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
         elif self.sampling == "random_stratified":
             loc = self._pick_indices_random_stratified(n, anchor_local_idx, rng)
         else:
-            raise ValueError(f"未知 sampling: {self.sampling}")
+            raise ValueError(f"Unknown sampling: {self.sampling}")
 
-        # 唯一性与范围断言
+        # Assertions for uniqueness and range
         loc = [int(i) for i in loc]
         if self.debug_checks:
-            assert len(loc) == self.n_frames, f"采样数量应等于 n_frames={self.n_frames}，got {len(loc)}"
+            assert len(loc) == self.n_frames, f"Sample count should equal n_frames={self.n_frames}, got {len(loc)}"
             if self.enforce_unique:
-                assert len(set(loc)) == len(loc), f"采样局部索引不唯一：{loc}"
-            assert all(0 <= i < n for i in loc), f"采样局部索引越界：{loc} with n={n}"
+                assert len(set(loc)) == len(loc), f"Sampled local indices not unique: {loc}"
+            assert all(0 <= i < n for i in loc), f"Sampled local indices out of range: {loc} with n={n}"
 
-        # 映射为全局帧索引
+        # Map to global frame indices
         chosen_global = [int(frame_list[i]) for i in loc]
         if self.debug_checks:
-            # 全局索引要能在 frame_list 中找到
+            # Global indices must be recoverable from frame_list
             back = [frame_list.index(g) for g in chosen_global]
-            assert all(0 <= b < n for b in back), f"全局索引无法回查局部：{chosen_global}"
+            assert all(0 <= b < n for b in back), f"Global indices not traceable back to local: {chosen_global}"
         return chosen_global
 
     # -----------------------------
-    # 主入口
+    # Main entrypoint
     # -----------------------------
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        # 仅训练启用；推理/验证保持单帧
+        # Enable only during training; keep single-frame for eval/inference
         split = data.get("split", "train")
         if split != "train" or self.n_frames <= 1:
             return data
 
-        # 基本字段断言
+        # Basic field assertions
         if self.debug_checks:
-            assert "episode_index" in data, "data 缺少 episode_index"
+            assert "episode_index" in data, "data is missing episode_index"
         ep_idx = int(data["episode_index"])
 
-        # anchor（局部帧号），仅在 around/random* 下用于“尽量包含”
+        # Anchor (local frame index), used to try to include under around/random*
         anchor_val = data.get("frame_index", None)
         anchor_val = int(anchor_val) if anchor_val is not None else None
 
-        # 取得 episode 的全局帧列表
+        # Fetch episode's global frame list
         if self._epi2idx is None or ep_idx not in self._epi2idx:
-            raise ValueError("[AddCurrentFramesSequenceTransform] 无法找到该 episode 的帧索引列表 "
-                             f"(ep={ep_idx})，请确认 episode_to_indexes_file 是否正确。")
+            raise ValueError("[AddCurrentFramesSequenceTransform] Missing frame index list for episode "
+                             f"(ep={ep_idx}); check episode_to_indexes_file.")
         frame_list = self._epi2idx[ep_idx]
         if self.debug_checks:
             assert isinstance(frame_list, list) and len(frame_list) >= self.n_frames, \
-                f"episode={ep_idx} 的帧数不足（{len(frame_list)} < n_frames={self.n_frames}）"
+                f"episode={ep_idx} has insufficient frames ({len(frame_list)} < n_frames={self.n_frames})"
 
         anchor_local = None
         anchor_global = None
@@ -667,7 +667,7 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
                 anchor_local = idx
             if anchor_local is None and self.debug_checks:
                 logging.warning(
-                    "[AddCurrentFramesSequenceTransform] 无法匹配 anchor frame (frame_index=%s, index=%s) 在 episode=%s 的索引列表中（len=%s）",
+                    "[AddCurrentFramesSequenceTransform] Could not match anchor frame (frame_index=%s, index=%s) in episode=%s index list (len=%s)",
                     anchor_val,
                     data.get("index"),
                     ep_idx,
@@ -676,7 +676,7 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
         if anchor_local is not None:
             anchor_global = frame_list[anchor_local]
 
-        # 采样全局帧索引
+        # Sample global frame indices
         chosen_global = self._pick_indices(frame_list, anchor_local)
 
         if anchor_global is not None and anchor_global not in chosen_global:
@@ -694,49 +694,49 @@ class AddCurrentFramesSequenceTransform(DataTransformFn):
                     merged.pop(drop_idx)
             chosen_global = merged
 
-        # 选取并堆叠
+        # Select and stack
         items = [self.dataset[int(i)] for i in chosen_global]
         if self.debug_checks:
-            assert len(items) == self.n_frames, f"items 数量异常：{len(items)} vs n_frames={self.n_frames}"
+            assert len(items) == self.n_frames, f"Unexpected item count: {len(items)} vs n_frames={self.n_frames}"
         if len(items) == 0:
             raise ValueError(f"[AddCurrentFramesSequenceTransform] empty chosen_global: {chosen_global}")
 
-        stacked = tree_stack_np(items)  # 要求返回每个叶子在前面新增 N 维
+        stacked = tree_stack_np(items)  # Each leaf should gain a leading N dimension
 
-        # 从 stacked 组织输出
-        # 约定：stacked["image"][cam] -> [N,H,W,3], stacked["image_mask"][cam] -> [N]
-        #      stacked["state"] -> [N,A], stacked["actions"] -> [N,H,A]
+        # Build outputs from stacked
+        # Convention: stacked["image"][cam] -> [N,H,W,3], stacked["image_mask"][cam] -> [N]
+        #            stacked["state"] -> [N,A], stacked["actions"] -> [N,H,A]
         images_seq = {name: arr for name, arr in stacked["image"].items()}
         masks_seq  = {name: arr for name, arr in stacked["image_mask"].items()}
         state_seq  = stacked["state"]
         act_seq    = stacked["actions"]
 
-        # 强断言（形状/类型）
+        # Strict assertions (shape/type)
         if self.debug_checks:
             N = self.n_frames
-            # 图像/掩码键一致
+            # Image/mask keys must match
             assert set(images_seq.keys()) == set(masks_seq.keys()), \
-                f"image 与 image_mask 视角键不一致：{images_seq.keys()} vs {masks_seq.keys()}"
-            # 形状检查
+                f"image and image_mask view keys differ: {images_seq.keys()} vs {masks_seq.keys()}"
+            # Shape checks
             for cam, arr in images_seq.items():
                 assert arr.ndim == 4 and arr.shape[0] == N, \
-                    f"images_seq[{cam}] 期望 [N,H,W,3]，got {arr.shape}"
+                    f"images_seq[{cam}] expected [N,H,W,3], got {arr.shape}"
             for cam, arr in masks_seq.items():
                 assert arr.ndim == 1 and arr.shape[0] == N and arr.dtype == np.bool_, \
-                    f"masks_seq[{cam}] 期望 [N] 且 bool，got {arr.shape}, {arr.dtype}"
+                    f"masks_seq[{cam}] expected [N] and bool, got {arr.shape}, {arr.dtype}"
             assert state_seq.ndim == 2 and state_seq.shape[0] == N, \
-                f"state_seq 期望 [N,A]，got {state_seq.shape}"
+                f"state_seq expected [N,A], got {state_seq.shape}"
             assert act_seq.ndim == 3 and act_seq.shape[0] == N, \
-                f"actions_seq 期望 [N,H,A]，got {act_seq.shape}"
-            # 单调性（按 chosen_global 排序应与时间一致）
+                f"actions_seq expected [N,H,A], got {act_seq.shape}"
+            # Monotonicity (chosen_global should be time-sorted)
             assert chosen_global == sorted(chosen_global), \
-                f"chosen_global 未按时间升序：{chosen_global}"
-            # 唯一性
+                f"chosen_global not in ascending temporal order: {chosen_global}"
+            # Uniqueness
             if self.enforce_unique:
                 assert len(set(chosen_global)) == len(chosen_global), \
-                    f"chosen_global 存在重复：{chosen_global}"
+                    f"chosen_global contains duplicates: {chosen_global}"
 
-        # 写回 data（下游 fused 会期望这些键）
+        # Write back to data (downstream fused expects these keys)
         data["current_images_seq"]       = images_seq
         data["current_image_masks_seq"]  = masks_seq
         data["current_state_seq"]        = state_seq.astype(np.float32, copy=False)
@@ -1073,15 +1073,15 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             if missing_state_eps:
                 sample = ", ".join(str(x) for x in missing_state_eps[:10])
                 raise AssertionError(
-                    f"[AddStatesActionsPromptTransform] 缺少状态缓存的 episode: {sample}"
+                    f"[AddStatesActionsPromptTransform] Missing state cache for episodes: {sample}"
                 )
             if missing_action_eps:
                 sample = ", ".join(str(x) for x in missing_action_eps[:10])
                 raise AssertionError(
-                    f"[AddStatesActionsPromptTransform] 缺少动作缓存的 episode: {sample}"
+                    f"[AddStatesActionsPromptTransform] Missing action cache for episodes: {sample}"
                 )
             print(
-                f"[AddStatesActionsPromptTransform] 已载入状态/动作缓存，共 {len(state_eps)} 个 episode，来源 {self.states_cache_path} / {self.actions_cache_path}"
+                f"[AddStatesActionsPromptTransform] Loaded state/action caches for {len(state_eps)} episodes from {self.states_cache_path} / {self.actions_cache_path}"
             )
 
         # ---- Build stage map: {episode_name -> segments} ----
@@ -1246,7 +1246,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         cur_ep_idx = data.get("episode_index", None)   # int episode index
         cur_frame_in_ep = data.get("frame_index", None)  # relative frame-in-episode
         
-        # if self._episode_stage_map is not None:  # 或用: if self.all_episode_stage is not None:
+        # if self._episode_stage_map is not None:  # Alternatively: if self.all_episode_stage is not None:
         #     if cur_ep_idx is None or cur_frame_in_ep is None:
         #         raise ValueError(
         #             "[Stage] Stage map provided but current sample lacks required keys: "
@@ -1293,7 +1293,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         for ep in eps:
             if ep not in self.episode_to_all_states or ep not in self.episode_to_all_first_actions:
                 raise KeyError(
-                    f"[AddStatesActionsPromptTransform] 缓存中缺少 episode={ep}，请检查 states/actions cache 是否覆盖任务子集。"
+                    f"[AddStatesActionsPromptTransform] episode={ep} missing from cache; check whether states/actions cache covers the task subset."
                 )
             all_states = self.episode_to_all_states[ep]             # [T, D_s]
             all_actions = self.episode_to_all_first_actions[ep]     # [T, D_a]
@@ -1320,10 +1320,10 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 
             # ---- XJ: sanity checks for stage usage ----
             # if self._episode_stage_map is not None:
-            #     # 必须找到 stage
+            #     # Must find a stage
             #     assert cur_stage is not None, \
             #         f"[Stage] Stage map provided but current sample (ep={cur_ep_idx}, frame={cur_frame_in_ep}) not mapped to any stage"
-            #     # 必须不是整段
+            #     # Must not sample the entire episode
             #     assert not (s_rel == 0 and e_rel == T), \
             #         f"[Stage] Stage map provided but sampling full episode for ep={ep}"
 

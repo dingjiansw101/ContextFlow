@@ -63,7 +63,7 @@ class _StubLLMWrapper:
         elif method == "decode_with_cache":
             return self._stub.decode_with_cache(**kwargs)
         elif method == "embed":
-            # text 已禁用，但若被调用，返回形状合法的 0
+            # Text prompts are disabled, but if called return zeros with a valid shape
             tokens = kwargs.get("embedded", None)
             return jnp.zeros_like(tokens) if tokens is not None else jnp.zeros((1, 1, 16), jnp.bfloat16)
         else:
@@ -83,20 +83,20 @@ class _StubIMGWrapper:
         return tokens, None
 
 def _to_nnx_stub(module_obj):
-    # 识别 Gemma
+    # Identify Gemma
     if hasattr(module_obj, "configs") and hasattr(module_obj, "embed_dtype"):
         try:
             c0 = module_obj.configs[0]
             return _StubLLMWrapper(depth=c0.depth, num_kv_heads=c0.num_kv_heads, head_dim=c0.head_dim)
         except Exception:
             return _StubLLMWrapper()
-    # 识别 SigLIP（你工程里的类为 openpi.models.siglip._Module，带 width/dtype_mm）
+    # Identify SigLIP (your class openpi.models.siglip._Module has width/dtype_mm)
     if hasattr(module_obj, "width") and hasattr(module_obj, "dtype_mm"):
         return _StubIMGWrapper(module_obj)
     raise RuntimeError(f"Unexpected module for ToNNX stub: {type(module_obj)}")
 
 
-# 预处理替换为恒等：不 resize、不增广、也不改变数据（避免随机性）
+# Replace preprocessing with identity: no resize/augment/changes (avoid randomness)
 def _mock_preprocess_observation_incontext_fused(rng, observation, *, train=False, **_):
     return observation
 
@@ -105,7 +105,7 @@ def _mock_preprocess_observation_incontext_fused(rng, observation, *, train=Fals
 # ---------------------------
 
 def _make_model(monkeypatch, *, siglip_variant="Ti/16", debug=False, seed=0):
-    # 在创建模型前打桩
+    # Stub before creating the model
     monkeypatch.setattr(pi0_mod.nnx_bridge, "ToNNX", _to_nnx_stub, raising=True)
     monkeypatch.setattr(_model, "preprocess_observation_incontext_fused",
                         _mock_preprocess_observation_incontext_fused, raising=True)
@@ -121,7 +121,7 @@ def _make_model(monkeypatch, *, siglip_variant="Ti/16", debug=False, seed=0):
         debug_fused_checks=debug,
     )
     model = cfg.create(jax.random.PRNGKey(seed))
-    # 关闭除图像外的 prompt，路径一致简单
+    # Disable non-image prompts to keep the path simple
     model.use_text_prompts = False
     model.use_action_state_prompts = False
     model.use_image_prompts = True
@@ -142,15 +142,15 @@ def _make_obs(
     seed=0,
 ):
     """
-    生成随机但可复现的 ObservationIncontext：
-    - 图像：U[0,1]（float32）
-    - state / actions：N(0, 0.1^2)（float32）
-    - masks：按 mask_ratio 独立采样 False；其余 True
+    Generate a random but reproducible ObservationIncontext:
+    - Images: U[0,1] (float32)
+    - state / actions: N(0, 0.1^2) (float32)
+    - masks: Bernoulli with mask_ratio for False; otherwise True
     """
     rng = np.random.default_rng(seed)
     cams = IMAGE_KEYS
 
-    # ---- 主观测（单帧） ----
+    # ---- Main observation (single frame) ----
     image = {
         nm: jnp.asarray(
             rng.random((B, H_img, W_img, C), dtype=np.float32),
@@ -158,14 +158,14 @@ def _make_obs(
         )
         for nm in cams
     }
-    # 单帧 mask 就设为全 True（这些不是“序列”，一般不测空帧）
+    # Single-frame masks set to all True (not sequences; usually no empty frames)
     image_mask = {nm: jnp.ones((B,), dtype=jnp.bool_) for nm in cams}
 
-    # robot state：零均值小噪声
+    # robot state: small zero-mean noise
     state = jnp.asarray(rng.normal(loc=0.0, scale=0.1, size=(B, A)), dtype=jnp.float32)
 
-    # ---- 当前序列（长度 N）----
-    # 图像序列：随机 U[0,1]
+    # ---- Current sequence (length N) ----
+    # Image sequence: random U[0,1]
     current_images_seq = {
         nm: jnp.asarray(
             rng.random((B, N, H_img, W_img, C), dtype=np.float32),
@@ -174,9 +174,9 @@ def _make_obs(
         for nm in cams
     }
 
-    # 图像序列 masks：独立伯努利，(1 - mask_ratio) 为 True 概率
+    # Image sequence masks: independent Bernoulli with True probability (1 - mask_ratio)
     def bernoulli_mask(shape):
-        # True 比例 ~ (1 - mask_ratio)
+        # True proportion ≈ (1 - mask_ratio)
         keep = rng.random(shape) >= mask_ratio
         return jnp.asarray(keep, dtype=jnp.bool_)
 
@@ -184,19 +184,19 @@ def _make_obs(
         nm: bernoulli_mask((B, N)) for nm in cams
     }
 
-    # state 序列：零均值小噪声
+    # State sequence: small zero-mean noise
     current_state_seq = jnp.asarray(
         rng.normal(loc=0.0, scale=0.1, size=(B, N, A)),
         dtype=jnp.float32,
     )
 
-    # actions 序列：零均值小噪声（形状 [B, N, H, A]）
+    # Actions sequence: small zero-mean noise (shape [B, N, H, A])
     actions_seq = jnp.asarray(
         rng.normal(loc=0.0, scale=0.1, size=(B, N, H, A)),
         dtype=jnp.float32,
     )
 
-    # ---- in-context 演示（最小合法）----
+    # ---- In-context demos (minimal valid) ----
     dem_prompt_images = {
         nm: jnp.asarray(
             rng.random((B, T_inctx, H_img, W_img, C), dtype=np.float32),
@@ -208,7 +208,7 @@ def _make_obs(
         nm: jnp.ones((B, T_inctx), dtype=jnp.bool_) for nm in cams
     }
 
-    # selected_episode：给定合法范围内的整数（这里就全 0 也行；保持原语义）
+    # selected_episode: integer within valid range (all zeros also fine to preserve semantics)
     selected_episode = jnp.asarray(
         rng.integers(low=0, high=max(1, B), size=(B, 1), dtype=np.int32),
         dtype=jnp.int32,
@@ -231,7 +231,7 @@ def _make_obs(
 def _fixed_noise_t(*, key=0, shape_vt=(2,3,4,6)):
     key = jax.random.PRNGKey(key)
     k1, k2 = jax.random.split(key)
-    noise = jnp.full(shape_vt, 0.123, dtype=jnp.float32)  # 常量最稳
+    noise = jnp.full(shape_vt, 0.123, dtype=jnp.float32)  # Constant for stability
     t = jnp.full(shape_vt[:2], 0.5, dtype=jnp.float32)
     return noise, t
 
@@ -239,7 +239,7 @@ def _allclose(a, b, *, rtol=1e-5, atol=5e-6):
     return bool(jnp.allclose(a, b, rtol=rtol, atol=atol))
 
 # ---------------------------
-# 1) 前向：一次性 vs 逐步
+# 1) Forward: single pass vs stepwise
 # ---------------------------
 
 def test_forward_vt_and_loss_equivalence(monkeypatch):
@@ -263,7 +263,7 @@ def test_forward_vt_and_loss_equivalence(monkeypatch):
     assert _allclose(loss_seq, loss_step)
 
 # ---------------------------
-# 2) 任意 chunk 拼接 vs 整段
+# 2) Arbitrary chunk concat vs full sequence
 # ---------------------------
 
 @pytest.mark.parametrize("N,chunk", [(5,1), (5,2), (5,3), (8,4), (3,3)])
@@ -275,11 +275,11 @@ def test_chunking_equivalence(monkeypatch, N, chunk):
 
     vt_all = model.forward_vt_sequence(obs_full, noise, t)
 
-    # 按 chunk 切 N 轴，逐段跑 forward_vt_sequence，再 concat
+    # Slice the N axis by chunk, run forward_vt_sequence per segment, then concat
     outs = []
     for s in range(0, N, chunk):
         e = min(N, s + chunk)
-        # 构造子 obs（只切 current_*_seq / actions_seq / masks 的 N 维）
+        # Build sub-observation (slice only the N dimension of current_*_seq / actions_seq / masks)
         def slc_kv(dct): return {k: v[:, s:e] for k, v in dct.items()}
         sub_dict = obs_full.to_dict()
         sub_dict["current_images_seq"] = slc_kv(sub_dict["current_images_seq"])
@@ -295,7 +295,7 @@ def test_chunking_equivalence(monkeypatch, N, chunk):
     assert _allclose(vt_all, vt_chunked)
 
 # ---------------------------
-# 3) 随机 mask & 全 False mask
+# 3) Random mask & all-False mask
 # ---------------------------
 
 def test_random_masks_equivalence(monkeypatch):
@@ -311,17 +311,17 @@ def test_random_masks_equivalence(monkeypatch):
 def test_all_false_masks_zeroish_loss(monkeypatch):
     model = _make_model(monkeypatch, debug=False, seed=3)
     B, N, H, A = 2, 4, model.action_horizon, model.action_dim
-    # 强制所有 current_image_masks_seq=False
+    # Force all current_image_masks_seq to False
     obs = _make_obs(B=B, N=N, H=H, A=A, seed=3, mask_ratio=1.0)
     noise, t = _fixed_noise_t(shape_vt=(B, N, H, A), key=9)
 
     loss_seq = model.compute_loss_sequence(None, obs, None, noise=noise, t=t)
-    # 如果你的实现用 mask 屏蔽该帧 loss，则应该接近 0；否则放宽断言
+    # If your implementation masks out loss for those frames, the mean should be near 0; otherwise loosen the assertion
     mean_loss = float(jnp.mean(loss_seq))
     assert mean_loss <= 1e-4 or math.isfinite(mean_loss)
 
 # ---------------------------
-# 4) 时间乱序/恢复 不变性
+# 4) Time shuffle/restore invariance
 # ---------------------------
 
 def test_time_order_invariance(monkeypatch):
@@ -330,10 +330,10 @@ def test_time_order_invariance(monkeypatch):
     obs = _make_obs(B=B, N=N, H=H, A=A, seed=4, mask_ratio=0.2)
     noise, t = _fixed_noise_t(shape_vt=(B, N, H, A), key=13)
 
-    # 原
+    # Original order
     vt_ref = model.forward_vt_sequence(obs, noise, t)
 
-    # 乱序
+    # Shuffled
     perm = np.random.default_rng(0).permutation(N)
     def permute_obs(o: ObservationIncontext):
         d = o.to_dict()
@@ -346,13 +346,13 @@ def test_time_order_invariance(monkeypatch):
     obs_perm = permute_obs(obs)
     vt_perm = model.forward_vt_sequence(obs_perm, noise[:, perm], t[:, perm])
 
-    # 恢复顺序
+    # Restored order
     inv = np.argsort(perm)
     vt_restored = vt_perm[:, inv]
     assert _allclose(vt_ref, vt_restored)
 
 # ---------------------------
-# 5) 确定性：重复两次一致
+# 5) Determinism: repeated runs match
 # ---------------------------
 
 def test_deterministic_repro(monkeypatch):
@@ -370,7 +370,7 @@ def test_deterministic_repro(monkeypatch):
     assert _allclose(l1, l2)
 
 # ---------------------------
-# 6) JVP / VJP 等价（标量 loss）
+# 6) JVP / VJP equivalence (scalar loss)
 # ---------------------------
 
 def _loss_seq_scalar(m, obs, noise, t):
@@ -381,13 +381,13 @@ def _loss_step_scalar(m, obs, noise, t):
 
 def test_jvp_vjp_equal(monkeypatch):
     model_seq = _make_model(monkeypatch, debug=False, seed=6)
-    model_stp = _make_model(monkeypatch, debug=False, seed=6)  # 同初始化
+    model_stp = _make_model(monkeypatch, debug=False, seed=6)  # Same initialization
 
     B, N, H, A = 2, 3, model_seq.action_horizon, model_seq.action_dim
     obs = _make_obs(B=B, N=N, H=H, A=A, seed=6)
     noise, t = _fixed_noise_t(shape_vt=(B, N, H, A), key=19)
 
-    # JVP：对所有 Param 做一次随机方向
+    # JVP: apply a random direction to all Params
     params = nnx.state(model_seq, nnx.Param)
     vec = jax.tree.map(lambda x: jnp.ones_like(x) * 1e-3, params)
 
@@ -403,7 +403,7 @@ def test_jvp_vjp_equal(monkeypatch):
     _, jvp_stp = jax.jvp(f_stp, (params,), (vec,))
     assert _allclose(jvp_seq, jvp_stp, rtol=5e-4, atol=1e-7)
 
-    # VJP：同一 cotangent
+    # VJP: use the same cotangent
     prim_seq, vjp_seq_fn = jax.vjp(f_seq, params)
     prim_stp, vjp_stp_fn = jax.vjp(f_stp, params)
     assert _allclose(prim_seq, prim_stp)
@@ -422,12 +422,12 @@ def test_jvp_vjp_equal(monkeypatch):
     tree_allclose(grad_seq, grad_stp)
 
 # ---------------------------
-# 7) 多步更新后参数等价
+# 7) Parameters equivalent after multiple updates
 # ---------------------------
 
 def test_multi_step_update_equal(monkeypatch):
     model_seq = _make_model(monkeypatch, debug=False, seed=7)
-    model_stp = _make_model(monkeypatch, debug=False, seed=7)  # 同初始化
+    model_stp = _make_model(monkeypatch, debug=False, seed=7)  # Same initialization
 
     B, N, H, A = 2, 3, model_seq.action_horizon, model_seq.action_dim
     obs = _make_obs(B=B, N=N, H=H, A=A, seed=7)
@@ -444,7 +444,7 @@ def test_multi_step_update_equal(monkeypatch):
         l_s, g_s = nnx.value_and_grad(loss_seq, argnums=diff_all)(model_seq)
         l_t, g_t = nnx.value_and_grad(loss_stp, argnums=diff_all)(model_stp)
 
-        # 梯度树一致
+        # Gradient trees match
         la, ta = jax.tree.flatten(g_s)
         lb, tb = jax.tree.flatten(g_t)
         assert ta == tb
@@ -459,7 +459,7 @@ def test_multi_step_update_equal(monkeypatch):
         nnx.update(model_seq, new_p_s)
         nnx.update(model_stp, new_p_t)
 
-    # K 步后参数一致
+    # Parameters match after K steps
     pa = nnx.state(model_seq, nnx.Param)
     pb = nnx.state(model_stp, nnx.Param)
     la, ta = jax.tree.flatten(pa)

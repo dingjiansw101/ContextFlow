@@ -497,7 +497,7 @@ def preprocess_observation_incontext_fused(
     image_keys: Sequence[str] = IMAGE_KEYS,
     image_resolution: tuple[int, int] = IMAGE_RESOLUTION,
 ) -> ObservationIncontext:
-    """和 preprocess_observation_incontext 一样，但额外支持 current_*_seq 的图像预处理。"""
+    """Same as preprocess_observation_incontext, but also preprocesses current_*_seq images."""
 
     def process_images_dict(imgs: dict[str, at.Array], *, h: int, w: int, train: bool, rng):
         out = {}
@@ -520,7 +520,7 @@ def preprocess_observation_incontext_fused(
                 transforms += [augmax.ColorJitter(brightness=0.3, contrast=0.4, saturation=0.5)]
                 sub_rngs = jax.random.split(rng, image01.shape[0]) if rng is not None else None
                 if sub_rngs is None:
-                    # 没 rng 就不做随机增强
+                    # Skip random augmentation if no rng is provided
                     pass
                 else:
                     image01 = jax.vmap(augmax.Chain(*transforms))(sub_rngs, image01)
@@ -529,7 +529,7 @@ def preprocess_observation_incontext_fused(
             out[key] = image
         return out
 
-    # —— 主帧：沿用原逻辑 ——
+    # Main frames: reuse existing logic
     if not set(image_keys).issubset(observation.images):
         raise ValueError(f"images dict missing keys: expected {image_keys}, got {list(observation.images)}")
     Bshape = observation.state.shape[:-1]
@@ -539,7 +539,7 @@ def preprocess_observation_incontext_fused(
                      else jnp.ones(Bshape, dtype=jnp.bool_))
                  for k in out_images}
 
-    # —— in-context 提示：沿用原逻辑（扁平化→处理→还原）——
+    # In-context prompts: reuse existing logic (flatten → process → restore)
     out_inctx_images = None
     out_inctx_masks  = None
     if observation.incontext_images is not None:
@@ -568,7 +568,7 @@ def preprocess_observation_incontext_fused(
             else:
                 out_inctx_masks[k] = jnp.asarray(observation.incontext_image_masks[k])
 
-    # —— 新增：当前样本的 N 帧序列（current_*_seq）——
+    # New: N-frame sequence for the current sample (current_*_seq)
     out_cur_images_seq = None
     out_cur_masks_seq  = None
     if observation.current_images_seq is not None:
@@ -590,7 +590,7 @@ def preprocess_observation_incontext_fused(
             else:
                 out_cur_masks_seq[k] = jnp.asarray(observation.current_image_masks_seq[k])
 
-    # —— 返回扩充后的 ObservationIncontext（其他字段原样透传）——
+    # Return expanded ObservationIncontext (other fields are passed through)
     return ObservationIncontext(
         images=out_images,
         image_masks=out_masks,
@@ -609,7 +609,7 @@ def preprocess_observation_incontext_fused(
         token_ar_mask=observation.token_ar_mask,
         token_loss_mask=observation.token_loss_mask,
 
-        # 新增四个序列字段（图像做了 resize/augment，state/actions 直接透传）
+        # Added four sequence fields (images resized/augmented; state/actions passed through)
         current_images_seq=out_cur_images_seq,
         current_image_masks_seq=out_cur_masks_seq,
         current_state_seq=observation.current_state_seq,

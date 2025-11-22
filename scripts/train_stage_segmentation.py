@@ -213,27 +213,27 @@ class MLP(nn.Module):
 # -----------------------------
 
 def train(args):
-    states_map = load_states_cache(args.states_cache)  # 已归一化
+    states_map = load_states_cache(args.states_cache)  # already normalized
     seg_list = load_segments_json(args.segments_json)
     seg_map_raw = build_segments_map(seg_list)
     eps_filter = load_episodes_filter(args.episodes_json)
 
-    # 过滤 seg_map 到白名单范围（若提供）
+    # Filter seg_map to whitelist if provided
     if eps_filter is not None:
         seg_map_raw = {ep: segs for ep, segs in seg_map_raw.items() if ep in eps_filter}
 
-    # 重映射类标
+    # Remap class labels
     seg_map, key2id, id2name = remap_labels_and_build_meta(seg_map_raw, args.use_label_name)
     num_classes = len(id2name)
     if num_classes < 2:
         raise ValueError(f"Need >=2 classes, got {num_classes}")
 
-    # 构建样本
+    # Build samples
     X, y = build_samples(states_map, seg_map, args.history, eps_filter)
     N, in_dim = X.shape
     print(f"[data] N={N}, in_dim={in_dim}, num_classes={num_classes}, history={args.history}")
 
-    # train/val split （按样本随机）
+    # Train/val split (random by sample)
     rng = np.random.RandomState(args.seed)
     idx = rng.permutation(N)
     n_val = max(2000, int(0.05 * N))
@@ -249,11 +249,11 @@ def train(args):
     model = MLP(in_dim, [int(h) for h in args.hidden.split(",")], num_classes, args.dropout).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
-    # 可选类别不平衡权重
+    # Optional class-imbalance weights
     if args.class_weight:
         counts = np.bincount(y, minlength=num_classes).astype(np.float32)
         w = (1.0 / np.maximum(counts, 1.0))
-        w = w * (num_classes / np.sum(w))  # 归一化到 ~1
+        w = w * (num_classes / np.sum(w))  # normalize to ~1
         loss_fn = nn.CrossEntropyLoss(weight=torch.from_numpy(w).to(device))
         print(f"[info] class weights = {w.tolist()}")
     else:
@@ -269,7 +269,7 @@ def train(args):
         "dropout": float(args.dropout),
         "num_classes": int(num_classes),
         "use_label_name": bool(args.use_label_name),
-        "id2name": id2name,     # index -> human name（若 use_label_name=False，这里是原 id 的字符串）
+        "id2name": id2name,     # index -> human-readable name (if use_label_name=False, this is the original id as string)
         "states_cache": str(Path(args.states_cache).resolve()),
     }
 
@@ -338,8 +338,8 @@ class StagePredictor:
 
     def _prep(self, states: np.ndarray) -> torch.Tensor:
         """
-        states: [D] or [H,D]; 若不足 H 帧会左侧复制第一帧补齐；多于 H 取最后 H 帧
-        如果提供了 norm_stats_json，视为 RAW 输入，这里做 z-score；否则视为已归一化输入
+        states: [D] or [H,D]; if fewer than H frames, left-pad by repeating the first frame; if more than H, take the last H frames.
+        If norm_stats_json is provided, treat input as raw and apply z-score; otherwise assume input is already normalized.
         """
         s = np.asarray(states, np.float32)
         if s.ndim == 1:
@@ -370,9 +370,9 @@ class StagePredictor:
 def infer_cli(args):
     pred = StagePredictor(args.load_dir, args.norm_stats)
 
-    # 输入：--state（单行）、--state_rows（多行；分号隔行）、--state_file（.npy）
+    # Inputs: --state (single row), --state_rows (multi-row; semicolon separated), --state_file (.npy)
     if args.state_file:
-        arr = np.load(args.state_file)  # [D] 或 [H,D]
+        arr = np.load(args.state_file)  # [D] or [H,D]
         states = arr
     elif args.state_rows:
         rows = []
@@ -404,9 +404,9 @@ def main():
     sub = ap.add_subparsers(dest="mode", required=True)
 
     pt = sub.add_parser("train")
-    pt.add_argument("--states_cache", required=True, help="episode_states_cache.json（已归一化的 state）")
-    pt.add_argument("--segments_json", required=True, help="包含 episode_name + segments 的 JSON")
-    pt.add_argument("--episodes_json", default=None, help="白名单：只用这里列出的 episode 文件名")
+    pt.add_argument("--states_cache", required=True, help="episode_states_cache.json (states already normalized)")
+    pt.add_argument("--segments_json", required=True, help="JSON containing episode_name + segments")
+    pt.add_argument("--episodes_json", default=None, help="Whitelist: only use the episode filenames listed here")
     pt.add_argument("--out_dir", required=True)
     pt.add_argument("--epochs", type=int, default=5)
     pt.add_argument("--bs", type=int, default=512)
@@ -415,19 +415,19 @@ def main():
     pt.add_argument("--hidden", default="256,256")
     pt.add_argument("--dropout", type=float, default=0.0)
     pt.add_argument("--history", type=int, default=1)
-    pt.add_argument("--use_label_name", action="store_true", help="用 segments.label 作为类别（跨 episode 共享语义）")
-    pt.add_argument("--class_weight", action="store_true", help="按 1/freq 做类别加权以缓解不平衡")
+    pt.add_argument("--use_label_name", action="store_true", help="Use segments.label as the class name (share semantics across episodes)")
+    pt.add_argument("--class_weight", action="store_true", help="Apply 1/freq class weighting to mitigate imbalance")
     pt.add_argument("--seed", type=int, default=0)
     pt.add_argument("--cpu", action="store_true")
 
     pi = sub.add_parser("infer")
-    pi.add_argument("--load_dir", required=True, help="训练输出目录（含 stage_head.pt）")
-    pi.add_argument("--norm_stats", default=None, help="若推理输入是 RAW state，提供训练期 norm_stats.json 做 z-score；如果输入已归一化，留空")
-    pi.add_argument("--probs", action="store_true", help="打印全类别概率")
-    # 三选一输入
-    pi.add_argument("--state", default=None, help="一行 state，用逗号分隔")
-    pi.add_argument("--state_rows", default=None, help="多行 state，用分号隔开每一行（历史 H 行）")
-    pi.add_argument("--state_file", default=None, help=".npy，形状 [D] 或 [H,D]")
+    pi.add_argument("--load_dir", required=True, help="Training output directory (contains stage_head.pt)")
+    pi.add_argument("--norm_stats", default=None, help="If inference input is raw state, provide training-time norm_stats.json for z-score; leave empty if already normalized")
+    pi.add_argument("--probs", action="store_true", help="Print probabilities for all classes")
+    # Choose exactly one input
+    pi.add_argument("--state", default=None, help="Single-line state, comma separated")
+    pi.add_argument("--state_rows", default=None, help="Multi-line state; separate rows with semicolons (history H rows)")
+    pi.add_argument("--state_file", default=None, help=".npy with shape [D] or [H,D]")
 
     args = ap.parse_args()
     if args.mode == "train":

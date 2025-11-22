@@ -68,17 +68,17 @@ class Args:
     seed: int = 7  # Random Seed (for reproducibility)
     
     use_stage_head: bool = True
-    stage_head_dir: str = "checkpoints/stage_head"           # 训练产出的目录（含 stage_head.pt）
-    stage_norm_stats: str | None = "assets/pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_train_split_v4/physical-intelligence/libero/norm_stats.json"  # 如果传 RAW state，需要与训练一致的 norm_stats.json
-    stage_print_probs: bool = True   # 调试用：是否打印概率向量
+    stage_head_dir: str = "checkpoints/stage_head"           # Training output directory (includes stage_head.pt)
+    stage_norm_stats: str | None = "assets/pi0_libero_incontextv12_low_mem_finetune_more_sample_frame_train_split_v4/physical-intelligence/libero/norm_stats.json"  # If passing RAW state, provide the same norm_stats.json used in training
+    stage_print_probs: bool = True   # Debug: whether to print probability vectors
 
 
 def _pack_state32_from_obs(obs: dict) -> np.ndarray:
     """
-    将环境观测打包为与训练时一致的 32 维 state：
+    Pack environment observation into the same 32-dim state used during training:
     [eef_pos(3), axisangle(3), gripper_qpos(2)] + zeros(24)
-    注意：如果你的训练 cache 中 32 维恰好就是这 8 维 + 全 0，这里就对齐了；
-          若你训练时 state 定义不同，请在这里同步修改顺序与维度。
+    Note: if your training cache used exactly these 8 dims plus zeros, this aligns;
+          if the training state definition differs, adjust the order/dimensions here accordingly.
     """
     eef = np.asarray(obs["robot0_eef_pos"], dtype=np.float32).reshape(-1)           # 3
     aa  = np.asarray(_quat2axisangle(obs["robot0_eef_quat"]), dtype=np.float32)     # 3
@@ -126,12 +126,12 @@ def eval_libero(args: Args) -> None:
 
     client = _websocket_client_policy.WebsocketClientPolicy(args.host, args.port)
     
-    # —— 可选：加载阶段分类器 —— 
+    # Optional: load stage classifier
     stage_pred = None
     stage_hist = None
     if args.use_stage_head:
         stage_pred = StagePredictor(args.stage_head_dir, args.stage_norm_stats)
-        stage_hist = collections.deque(maxlen=stage_pred.H)  # H 为训练时的 history
+        stage_hist = collections.deque(maxlen=stage_pred.H)  # H equals the training-time history length
         logging.info(f"[stage] loaded head: classes={len(stage_pred.id2name)} history={stage_pred.H} "
                      f"labels={stage_pred.id2name}")
 
@@ -202,9 +202,9 @@ def eval_libero(args: Args) -> None:
                         # Finished executing previous action chunk -- compute new chunk
                         # Prepare observations dict
                         if stage_pred is not None:
-                            s32 = _pack_state32_from_obs(obs)         # RAW state（未归一化）
+                            s32 = _pack_state32_from_obs(obs)         # RAW state (unnormalized)
                             stage_hist.append(s32)
-                            # 直接用历史窗口进行预测（内部自动左侧补齐）
+                            # Predict directly on the history window (internally pads on the left)
                             if args.stage_print_probs:
                                 idx, name, probs = stage_pred.predict(np.stack(stage_hist, axis=0), return_probs=True)
                                 logging.info(f"[stage] pred={idx} name={name} probs={probs.tolist()}")
@@ -224,7 +224,7 @@ def eval_libero(args: Args) -> None:
                             "prompt": str(task_description),
                             "task_index": task_description2index[task_description],
                             "split": "test",
-                            # 可选：把阶段 rank 发给服务端（若那边支持）
+                            # Optional: send stage rank to the server (if supported)
                             "stage_rank": int(idx),
                             "stage_name": name if name is not None else "",
                         }

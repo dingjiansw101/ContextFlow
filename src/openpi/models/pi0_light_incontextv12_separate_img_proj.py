@@ -81,9 +81,9 @@ def posemb_sincos(
 
 class AttnPoolOne(nnx.Module):
     """
-    将 [B, P, D] 的 patch tokens 压成 [B, 1, D] 的单图像 token。
-    - 使用可学习 query 向量 q 对每个 patch 打分（点积/√D），softmax 加权求和。
-    - 可选 mask: [B, P] 的 bool，False 的位置会被 -inf 屏蔽。
+    Collapse [B, P, D] patch tokens into a single image token [B, 1, D].
+    - Use a learnable query vector q to score each patch (dot/√D), then softmax-weighted sum.
+    - Optional mask: [B, P] bool; False positions are set to -inf.
     """
     def __init__(self, d_model: int, use_layernorm: bool = True, rngs: nnx.Rngs | None = None):
         dtype = jnp.bfloat16
@@ -103,11 +103,11 @@ class AttnPoolOne(nnx.Module):
         if mask is not None:
             scores = jnp.where(mask, scores, -jnp.inf)
 
-            # 防 NaN：若某个样本所有位置都被屏蔽，则令权重全 0，pooled 也置 0
+            # Avoid NaN: if all positions are masked for a sample, zero weights and pooled output
             all_masked = jnp.logical_not(jnp.any(mask, axis=1))          # [B]
-            # 先正常 softmax（可能有 -inf）
+            # Run softmax first (may include -inf)
             w = jax.nn.softmax(scores, axis=1)                           # [B, P]
-            # 将全屏蔽样本的 w 清零
+            # Zero weights for fully masked samples
             w = jnp.where(all_masked[:, None], jnp.zeros_like(w), w)
         else:
             w = jax.nn.softmax(scores, axis=1)
@@ -118,8 +118,8 @@ class AttnPoolOne(nnx.Module):
 
     def pool_bt(self, x: jnp.ndarray, mask: jnp.ndarray | None = None) -> jnp.ndarray:
         """
-        对 [B, T, P, D] 每一帧做单独池化 → [B, T, 1, D]
-        mask 若给出应为 [B, T] 或 [B, T, P]（若为 [B,T] 会自动广播到每帧的 P）
+        Pool each frame of [B, T, P, D] individually -> [B, T, 1, D].
+        If provided, mask should be [B, T] or [B, T, P] (a [B,T] mask is broadcast to each P).
         """
         B, T, P, D = x.shape
         x_bt = x.reshape(B*T, P, D)

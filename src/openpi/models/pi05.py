@@ -166,19 +166,19 @@ class Pi05(_model.BaseModel):
 
         # Flow-Matching noise and time
         B = actions.shape[0]
-        # 1) 噪声、时间、构造 x_t 与 u_t （与之前相同）
+        # 1) Sample noise/time and build x_t and u_t (same as before)
         noise = jax.random.normal(noise_rng, actions.shape)                     # [B, AH, AD]
         t     = jax.random.beta(time_rng, 1.5, 1, (B,)) * 0.999 + 0.001         # [B]
         x_t   = t[:,None,None] * noise + (1-t[:,None,None]) * actions           # [B, AH, AD]
         u_t   = noise - actions                                                 # [B, AH, AD]
 
-        # 2) 前缀（图像+文本），记录文本长度 L_txt
+        # 2) Prefix (image + text); record text length L_txt
         prefix_tokens, prefix_mask, prefix_ar, L_txt = self.embed_prefix(observation)
 
-        # 3) 后缀（动作专家）
+        # 3) Suffix (action expert)
         suffix_tokens, suffix_mask, suffix_ar, adarms_cond = self.embed_suffix(observation, x_t, t)
 
-        # 4) 拼接 mask/positions，并且 —— 只调这一次 LLM 前向！——
+        # 4) Concatenate masks/positions and make a single LLM forward pass
         input_mask = jnp.concatenate([prefix_mask, suffix_mask], axis=1)        # [B, N]
         ar_mask    = jnp.concatenate([prefix_ar,  suffix_ar],  axis=1)          # [B, N]
         attn_mask  = make_attn_mask(input_mask, ar_mask)                        # [B, N, N]
@@ -191,7 +191,7 @@ class Pi05(_model.BaseModel):
             adarms_cond=[None, adarms_cond],
         )
 
-        # 5) FAST / 语言 NLL —— 直接用 prefix_out 的文本段
+        # 5) FAST / language NLL — use the text slice from prefix_out
         h_text = prefix_out[:, -L_txt:, :]                                      # [B, L, D_vlm]
         logits = self.lm_head(h_text[:, :-1, :])                                # [B, L-1, V]
         logp   = jax.nn.log_softmax(logits, axis=-1)
@@ -202,7 +202,7 @@ class Pi05(_model.BaseModel):
         
         loss_fast = -(jnp.sum(targets * logp, axis=-1) * loss_mask).sum() / jnp.clip(loss_mask.sum(), 1)
 
-        # 6) Flow-Matching —— 用 suffix_out 的动作段
+        # 6) Flow-Matching — use the action slice from suffix_out
         v_t = self.action_out_proj(suffix_out[:, -self.action_horizon:, :])     # [B, AH, AD]
         return jnp.mean((v_t - u_t) ** 2, axis=-1) + loss_fast
         # per = jnp.mean((v_t - u_t) ** 2, axis=-1)                               # [B, AH]
@@ -212,10 +212,10 @@ class Pi05(_model.BaseModel):
         # else:
         #     loss_fm = per.mean()
 
-        # # 7) 总损失（论文 Eq.(4)；α≈1）
+        # # 7) Total loss (paper Eq.(4); α≈1)
         # loss_total = loss_fast + loss_fm
 
-        # # 8) 若你的 trainer 需要 [B, AH] 形状，就返回逐步 MSE + 平均 NLL 的广播项
+        # # 8) If your trainer expects [B, AH], return per-step MSE plus the broadcasted mean NLL
         # return per + (loss_fast / self.action_horizon)[:, None]
 
     # ----------------- Inference: same as pi0 (Euler step integration) -----------------

@@ -564,7 +564,7 @@ def build(api) -> list["api.TrainConfig"]:
             )
 
 
-    # 2) 直接返回本 child 的 TrainConfig 条目（可多个）
+    # 2) Return this child's TrainConfig entries directly (can be multiple)
     return [
 #
     # Fine-tuning Libero configs.

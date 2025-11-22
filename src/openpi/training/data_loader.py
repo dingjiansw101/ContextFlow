@@ -22,14 +22,14 @@ from openpi.training.custom_dataset import CustomLeRobotDataset, CustomLeRobotDa
 T_co = TypeVar("T_co", covariant=True)
 
 import dataclasses
-from typing import Any, Dict, Sequence as _Seq  # 不覆盖上面的 Sequence
+from typing import Any, Dict, Sequence as _Seq  # avoid shadowing the Sequence import above
 
 @dataclasses.dataclass
 class DebugProbe:
     tag: str = "probe"
     keys: _Seq[str] = ("episode_index", "frame_index", "index", "task_index")
-    max_print: int = 5       # 仅打印前 N 次
-    every_n: int = 0         # 或每 N 次打印一次；0 表示不开
+    max_print: int = 5       # Print only the first N times
+    every_n: int = 0         # Or print every N times; 0 disables periodic printing
 
     def __post_init__(self):
         self._count = 0
@@ -47,7 +47,7 @@ def _instrument_transforms(transforms: Sequence[_transforms.DataTransformFn],
                            prefix: str = "T",
                            keys: tuple[str, ...] = ("episode_index", "frame_index", "index", "task_index"),
                            max_print: int = 5) -> list[_transforms.DataTransformFn]:
-    """在每个 transform 前插入 DebugProbe(tag='prefix#idx:ClassName')。"""
+    """Insert DebugProbe before each transform (tag='prefix#idx:ClassName')."""
     out: list[_transforms.DataTransformFn] = []
     for i, t in enumerate(transforms):
         tag = f"{prefix}#{i}:{t.__class__.__name__}"
@@ -364,7 +364,7 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
             )
         norm_stats = data_config.norm_stats
-    # 先把原先的 transforms 串起来（不改变语义）
+    # Chain the existing transforms in order (semantics unchanged)
     seq: list[_transforms.DataTransformFn] = [
         *data_config.repack_transforms.inputs,
         *data_config.data_transforms.inputs,
@@ -376,7 +376,7 @@ def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip
         *data_config.model_transforms.inputs,
     ]
 
-    # 开关：DL_TRACE=1 时才注入探针（默认不打印）
+    # Toggle: inject probes only when DL_TRACE=1 (off by default)
     if os.environ.get("DL_TRACE", "0") == "1":
         seq = _instrument_transforms(seq, prefix="TF", keys=("episode_index", "frame_index", "index", "task_index"),
                                      max_print=int(os.environ.get("DL_TRACE_MAX", "20")))
@@ -495,7 +495,7 @@ def create_incontext_data_loader(
         dataset = TransformedDataset(dataset, [
             _transforms.AddCurrentFramesSequenceTransform(
                 dataset=dataset,
-                episode_to_indexes_file=config.data.episode_to_indexes_file,  # 你已有的 json
+                episode_to_indexes_file=config.data.episode_to_indexes_file,  # reuse the existing JSON mapping
                 n_frames=config.model.frame_sequence_length,
                 train_episode_index_list=getattr(data_config, "train_episode", None),
                 seed_base=config.seed,

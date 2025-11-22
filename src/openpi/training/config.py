@@ -602,9 +602,9 @@ class TrainConfig:
             raise ValueError("Cannot resume and overwrite at the same time.")
 
 def _discover_child_modules() -> list[str]:
-    """自动发现同目录下 config_*.py（排除 config.py 本身）"""
+    """Automatically discover config_*.py in the same directory (excluding config.py itself)."""
     pkg_dir = pathlib.Path(__file__).parent
-    base_pkg = __name__.rsplit(".", 1)[0]  # 例如 openpi.training
+    base_pkg = __name__.rsplit(".", 1)[0]  # e.g., openpi.training
     out = []
     for p in pkg_dir.glob("config_*.py"):
         if p.name == "config.py":
@@ -614,9 +614,9 @@ def _discover_child_modules() -> list[str]:
     return out
 
 def _load_fragments(module_names: list[str]) -> list[TrainConfig]:
-    """调用各子文件的 build(api) 汇总 TrainConfig 列表"""
+    """Call each child module's build(api) to collect the TrainConfig list."""
     out: list[TrainConfig] = []
-    api = sys.modules[__name__]  # 把当前模块对象传入
+    api = sys.modules[__name__]  # pass the current module object
     for m in module_names:
         mod = importlib.import_module(m)
         build = getattr(mod, "build", None)
@@ -629,7 +629,7 @@ _MODULES = _discover_child_modules()
 
 _CONFIGS: list[TrainConfig] = _load_fragments(_MODULES)
 
-# 重名保护
+# Protect against duplicate names
 _names = [c.name for c in _CONFIGS]
 _dups = {n for n in _names if _names.count(n) > 1}
 if _dups:

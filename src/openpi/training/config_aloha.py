@@ -32,7 +32,7 @@ def build(api) -> list["api.TrainConfig"]:
     g["Group"] = getattr(api, "_transforms").Group
     g["TrainConfig"] = getattr(api, "TrainConfig")
     
-    # 1) 在函数内定义 DataConfig 子类，继承父里的 DataConfigFactory（通过 api 取）
+    # 1) Define DataConfig subclasses inside this function, inheriting DataConfigFactory via api
     @dataclasses.dataclass(frozen=True)
     class LeRobotAlohaDataConfig(api.DataConfigFactory):
         # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
@@ -254,7 +254,7 @@ def build(api) -> list["api.TrainConfig"]:
         
         
 
-    # 2) 直接返回本 child 的 api.TrainConfig 条目（可多个）
+    # 2) Return this child's api.TrainConfig entries directly (can be multiple)
     return [
         #
     # In`fe`rence Aloha configs.
