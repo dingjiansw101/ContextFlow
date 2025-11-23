@@ -8,3 +8,4 @@
 [] optimize the cache building process
 [] organize the testing files
 [] merge the train scripts: train.py, train_incontext.py, etc
+[] remove third image for libero dataset
