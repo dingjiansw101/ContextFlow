@@ -3112,81 +3112,6 @@ def build(api) -> list["api.TrainConfig"]:
     # Xianjie:
     # Xianjie:
     #
-    # Pi0 Light
-    #
-    # Xianjie
-    # api.TrainConfig(
-    #     # no delta with split
-    #     name="pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
-    #     model=deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
-    #         prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-    #         sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
-    #     ),  
-    #     data=LeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-    #         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-
-    #     ),
-    #     weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
-    #     ),
-    #     num_train_steps=20_000,
-    #     freeze_filter=deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
-    #         prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-    #         sample_frames=2, sample_actions=32, random_select=True, 
-    #     ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=16,
-    #     # num_workers=1,
-    #     batch_size=32,
-    #     # wandb_enabled=False,
-    # ),
-    # api.TrainConfig(
-    #     # no delta with split
-    #     name="pi0light_libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_inference",
-    #     model=deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
-    #         prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-    #         sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
-    #     ),  
-    #     data=LeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #         # remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-    #         # episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-
-    #     ),
-    #     weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
-    #     ),
-    #     num_train_steps=20_000,
-    #     freeze_filter=deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
-    #         prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-    #         sample_frames=2, sample_actions=32, random_select=True, 
-    #     ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=16,
-    #     # num_workers=1,
-    #     batch_size=32,
-    #     # wandb_enabled=False,
-    # ),
-    
-    #
     # Fine-tuning Libero configs.
     #
     api.TrainConfig(
@@ -3294,8 +3219,8 @@ def build(api) -> list["api.TrainConfig"]:
     api.TrainConfig(
         # no delta with split
         name="libero_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
-        model=api.deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
-            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
+        model=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
             sample_frames=2, sample_actions=32, random_select=True, siglip_variant="Ti/16"
         ),  
         data=LeRobotLiberoIncontextDataConfig(
@@ -3316,9 +3241,9 @@ def build(api) -> list["api.TrainConfig"]:
             npz_path="gs://vit_models/augreg/Ti_16-i21k-300ep-lr_0.001-aug_none-wd_0.03-do_0.0-sd_0.0.npz", # Ti/16
         ),
         num_train_steps=5_000,
-        freeze_filter=api.deprecated_pi0light_incontextv12.Pi0LightIncontextConfigv12(
-            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-            sample_frames=2, sample_actions=32, random_select=True, 
+        freeze_filter=api.pi0_light_incontextv12.Pi0LightIncontextConfigv12(
+            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora",
+            sample_frames=2, sample_actions=32, random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=16,

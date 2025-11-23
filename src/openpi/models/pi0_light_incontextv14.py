@@ -765,9 +765,6 @@ class Pi0LightIncontextv14(_model.BaseModel):
 
         loss = jnp.mean(jnp.square(v_t - u_t), axis=-1)  # [B,N,H]
 
-        # Final shape assertions to confirm we are truly in the fused path
-        if has_multi:
-        else:
         return loss if has_multi else loss[:, 0, :]
 
 
