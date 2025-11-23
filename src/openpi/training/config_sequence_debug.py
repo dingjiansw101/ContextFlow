@@ -30,7 +30,6 @@ def build(api) -> list["api.TrainConfig"]:
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
         task_to_episode: str='metadata/libero/task_to_episode.json'
         episode_to_indexes_file: str='metadata/libero/episode_to_indexes.json'
-        libero_input_refactor: bool = False
 
         # Padding mode for AddStatesActionsPromptTransform
         padding_mode: str = "keep_all"
@@ -74,24 +73,14 @@ def build(api) -> list["api.TrainConfig"]:
             )
 
             # Convert images to uint8 numpy arrays, add masks
-            if self.libero_input_refactor:
-                data_transforms = data_transforms.push(
-                    inputs=[
-                        libero_incontext_policy.LiberoIncontextInputs_refactor(
-                            action_dim=model_config.action_dim, model_type=model_config.model_type
-                        )
-                    ],
-                    outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-                )
-            else:
-                data_transforms = data_transforms.push(
-                    inputs=[
-                        libero_incontext_policy.LiberoIncontextInputs(
-                            action_dim=model_config.action_dim, model_type=model_config.model_type
-                        )
-                    ],
-                    outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-                )
+            data_transforms = data_transforms.push(
+                inputs=[
+                    libero_incontext_policy.LiberoIncontextInputs_refactor(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
             
             # TODO: fix the bug of libero actions.
             # fix it and re-train on libero
@@ -125,7 +114,6 @@ def build(api) -> list["api.TrainConfig"]:
         episode_to_indexes_file: str = "metadata/libero_90/episode_to_indexes.json"
         tasks_split_path: str = "examples/libero_90/libero_robossm_kitchen_tasks.json"
         split: str = "train"  # "train" or "test"
-        libero_input_refactor: bool = False
         episode_json_path: str | None = None
         debug_prompt_cache: bool = False
 
@@ -218,24 +206,14 @@ def build(api) -> list["api.TrainConfig"]:
                 outputs=[],
             )
 
-            if self.libero_input_refactor:
-                data_transforms = data_transforms.push(
-                    inputs=[
-                        libero_incontext_policy.LiberoIncontextInputs_refactor(
-                            action_dim=model_config.action_dim, model_type=model_config.model_type
-                        )
-                    ],
-                    outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-                )
-            else:
-                data_transforms = data_transforms.push(
-                    inputs=[
-                        libero_incontext_policy.LiberoIncontextInputs(
-                            action_dim=model_config.action_dim, model_type=model_config.model_type
-                        )
-                    ],
-                    outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-                )
+            data_transforms = data_transforms.push(
+                inputs=[
+                    libero_incontext_policy.LiberoIncontextInputs_refactor(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
 
             if self.use_delta_joint_actions:
                 delta_action_mask = api._transforms.make_bool_mask(6, -1)
@@ -2265,7 +2243,6 @@ def build(api) -> list["api.TrainConfig"]:
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-            libero_input_refactor=True,
         ),
         vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
@@ -2309,7 +2286,6 @@ def build(api) -> list["api.TrainConfig"]:
             use_delta_joint_actions=False,
             states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            libero_input_refactor=True,
         ),
         vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
@@ -2356,7 +2332,6 @@ def build(api) -> list["api.TrainConfig"]:
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-            libero_input_refactor=True,
         ),
         vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
             npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16

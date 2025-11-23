@@ -151,7 +151,6 @@ def build(api) -> list["api.TrainConfig"]:
         actions_cache_path: str = "metadata/aloha_pen_uncap/episode_actions_first_cache.json"
         task_to_episode: str = "metadata/aloha_pen_uncap/task_to_episode.json"
         episode_to_indexes_file: str = "metadata/aloha_pen_uncap/episode_to_indexes.json"
-        libero_input_refactor: bool = False
         # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
         # Gripper dimensions will remain in absolute values.
         use_delta_joint_actions: bool = True
