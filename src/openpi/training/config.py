@@ -23,8 +23,6 @@ import openpi.models.pi0_light as pi0Light
 import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12
 import openpi.models.pi0_light_incontextv14 as pi0_light_incontextv14
 
-import openpi.models.pi0_light_incontextv12_separate_img_proj as pi0_light_incontextv12_separate_img_proj
-
 import openpi.models.tokenizer as _tokenizer
 
 import openpi.policies.droid_policy as droid_policy
