@@ -120,7 +120,7 @@ def build(api) -> list["api.TrainConfig"]:
             # Convert images to uint8 numpy arrays, add masks
             data_transforms = data_transforms.push(
                 inputs=[
-                    libero_incontext_policy.LiberoIncontextInputs_refactor(
+                    libero_incontext_policy.LiberoIncontextInputs(
                         action_dim=model_config.action_dim, model_type=model_config.model_type
                     )
                 ],
@@ -508,7 +508,7 @@ def build(api) -> list["api.TrainConfig"]:
             # Convert images to uint8 numpy arrays, add masks
             data_transforms = data_transforms.push(
                 inputs=[
-                    libero_incontext_policy.LiberoIncontextInputs_refactor(
+                    libero_incontext_policy.LiberoIncontextInputs(
                         action_dim=model_config.action_dim, model_type=model_config.model_type
                     )
                 ],
