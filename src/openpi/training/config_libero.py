@@ -3330,29 +3330,6 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=4,
         use_custom_dataloader=True,
     ),
-        #
-    # XJ libero_with_depth: just to pull newly generated libero dataset with depth image but with more episodes
-    #
-    # api.TrainConfig(
-    #     name="pi0_depth_libero_low_mem_finetune",
-    #     model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
-    #     data=LeRobotLiberoDataConfig(
-    #         repo_id="daixianjie/libero_with_depth",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #     ),
-    #     weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     # num_train_steps=30_000,
-    #     num_train_steps=40_000,
-    #     freeze_filter=api.pi0.Pi0Config(
-    #         paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
-    #     ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=4,
-    #     batch_size=36,
-    # ),
     
     ## rebuttal exp
     # InSpire Training Setting
@@ -3410,9 +3387,4 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=32,
     ),
     
-    # more incontext images
-    # totally initialized ICFM (ViT-B-16) deprecated: shouldn't be using lora since it's random
-    # total init without lora:
-
-    # Test config for cache generation validation
     ]
