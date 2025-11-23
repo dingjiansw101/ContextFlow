@@ -439,15 +439,11 @@ def create_incontext_data_loader(
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
                                                                 actions_cache_path=config.data.actions_cache_path,
-                                                                episode_to_indexes_file=config.data.episode_to_indexes_file,
-                                                                all_episode_stage=getattr(config.data, "all_episode_stage", None),
-                                                                )
+                                                                episode_to_indexes_file=config.data.episode_to_indexes_file)
         else:
             add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
                                                                 states_cache_path=config.data.states_cache_path,
-                                                                actions_cache_path=config.data.actions_cache_path,
-                                                                all_episode_stage=getattr(config.data, "all_episode_stage", None),
-                                                                )
+                                                                actions_cache_path=config.data.actions_cache_path)
         dataset = TransformedDataset(dataset, [add_demo_transform])
     
     if getattr(config.model, "use_frame_sequence_transform", False):

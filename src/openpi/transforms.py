@@ -164,12 +164,6 @@ class InjectDemoIndexes(DataTransformFn):
     random_select: bool = True
     sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None
-    
-    # XJ(stage-wise prompt)
-    all_episode_stage: Optional[str] = None # json path or None
-    override_index: Optional[bool] = False # only used when sample_frames == 2
-    provided_stage_key: str = "stage_rank"   # new: key name to read from data
-
 
     def __post_init__(self):
         task_to_episode_path = Path(self.task_to_episode)
@@ -195,86 +189,16 @@ class InjectDemoIndexes(DataTransformFn):
             # so we can simple reindex the frame index in the following way:
             episode_to_indexes = reindex_filtered_dict(episode_to_indexes)#, self.train_episode_index_list)
 
-        # XJ(stage-wise prompt)
-        # ---- XJ: filter task_to_episode only when all_episode_stage is not None ----
-        if self.all_episode_stage is not None and self.train_episode_index_list is not None:
-            # 1) Allowed set: whitelist ∩ episodes present in episode_to_indexes with >0 frames
-            allowed_from_list = {int(x) for x in self.train_episode_index_list}
-            available_eps = {
-                int(ep)
-                for ep, idxs in episode_to_indexes.items()
-                if isinstance(idxs, list) and len(idxs) > 0
-            }
-            allowed = allowed_from_list & available_eps  # Key: intersect with available keys
-
-            # 2) Filter task_to_episode (normalize runtime types to int)
-            filtered_task_to_episode = {
-                int(task): [
-                    int(ep) for ep in (eps or [])
-                    if int(ep) in allowed
-                ]
-                for task, eps in task_to_episode.items()
-            }
-            task_to_episode = filtered_task_to_episode
-
-    
         # Store these dictionaries on the frozen dataclass
         object.__setattr__(self, "task_to_episode", task_to_episode)
         object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
-        
-        # XJ(stage-wise prompt)
-        # ---- XJ: preprocess all_episode_stage（list -> dict index）----
-        stage_map: Optional[Dict[str, List[Dict[str, Any]]]] = None
-        if self.all_episode_stage is not None:
-            with Path(self.all_episode_stage).open("r") as f:
-                stage_list = json.load(f)  # a list, each element of which is dict（including episode_name, segments）
-
-            # build a lookup table of {episode_name -> segments(list of dict)} 
-            tmp = {}
-            for entry in stage_list:
-                name = entry.get("episode_name")
-                segments = entry.get("segments")
-                if isinstance(name, str) and isinstance(segments, list):
-                    # segment
-                    norm = []
-                    for i, seg in enumerate(segments):
-                        if not isinstance(seg, dict):
-                            continue
-                        s = int(seg.get("start", 0))
-                        e = int(seg.get("end", 0))
-                        if e > s:  # left close right open interval: [s, e)
-                            norm.append({
-                                "id": int(seg.get("id", i)),
-                                "start": s,
-                                "end": e,
-                                "label": str(seg.get("label", "")),
-                            })
-                    if norm:
-                        tmp[name] = norm
-            stage_map = tmp if tmp else None
-        object.__setattr__(self, "_episode_stage_map", stage_map)
 
         # XJ: Initialize inference cache
         object.__setattr__(self, "_cache", {
             "task_index": None,  # type: Optional[int]
             "selected_episode": None,  # type: Optional[np.ndarray]
             "dem_prompt_indexes": None,  # type: Optional[List[List[int]]]
-            "provided_stage_rank": None,
         })
-        
-    # XJ(stage-wise prompt): casr episode_index（e.g: 47426）to standard file name
-    @staticmethod
-    def _index_to_episode_name(ep_idx: int) -> str:
-        return f"episode_{ep_idx:06d}.parquet"
-
-    # XJ(stage-wise prompt): based on frame_idx_in_episode, find the stage in segments
-    @staticmethod
-    def _find_stage(segments: List[Dict[str, Any]], frame_idx_in_episode: int) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
-        for rank, seg in enumerate(segments):
-            s, e = seg["start"], seg["end"]
-            if s <= frame_idx_in_episode < e:
-                return rank, seg
-        return None, None
 
     def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -286,11 +210,7 @@ class InjectDemoIndexes(DataTransformFn):
         episodes_for_task = self.task_to_episode.get(task_index, [])
 
         split = data.get("split", "train")
-        
-        # XJ(stage-wise prompt)
-        # provided_rank = data.get(self.provided_stage_key, None) 
 
-        
         # === XJ: Inference cache hit ===
         if self._cache["task_index"] == task_index and split == "test":
             data["selected_episode"] = self._cache["selected_episode"]
@@ -333,33 +253,7 @@ class InjectDemoIndexes(DataTransformFn):
 
         # 2) choose frames per episode
         dem_prompt_indexes: List[List[int]] = []
-        # pos_list: List[List[int]] = []
-        
-        # XJ(stage-wise prompt)
-        cur_ep_idx = data.get("episode_index", None)
-        cur_frame_in_ep = data.get("frame_index", None)  
-        # if override，with missing key，raise error
-        if self.all_episode_stage is not None and self.override_index and self.sample_frames == 2:
-            if cur_ep_idx is None or cur_frame_in_ep is None:
-                raise ValueError(
-                    "InjectDemoIndexes override needs both `episode_index` (int) and `frame_index` (int) in `data`."
-                )
-        # XJ(stage-wise prompt): find the stage number for current training sample
-        cur_rank = None
-        cur_stage = None
-        if self.all_episode_stage is not None and self.override_index and self.sample_frames == 2 and self._episode_stage_map is not None:
-            try:
-                # cast the episode index to actual episode name
-                cur_ep_name = self._index_to_episode_name(int(cur_ep_idx))
-                segments = self._episode_stage_map.get(cur_ep_name, None)
-                if segments:
-                    cur_rank, cur_stage = self._find_stage(segments, int(cur_frame_in_ep))
-            except Exception:
-                # error
-                raise ValueError("InjectDemoIndexes (XJ): cannot find the accurate stage number for current training sample")
-                # cur_rank, cur_stage = None, None
-                
-                
+
         for ep in selected_episodes:
             frame_idxs = self.episode_to_indexes.get(int(ep), [])
             n = len(frame_idxs)
@@ -383,26 +277,6 @@ class InjectDemoIndexes(DataTransformFn):
                     f"InjectDemoIndexes: episode {ep} for task {task_index} has no frames available"
                 )
 
-        # XJ(stage-wise prompt): override dem_prompt_indexes only when sample 2 frames
-            if self.all_episode_stage is not None and self.override_index and self.sample_frames == 2 and self._episode_stage_map is not None:
-                if cur_stage is not None:
-                    # override "chosen" by the first and last frames of the current stage (map to the frame doamin of selected demo-episode) 
-                    s_rel = int(cur_stage["start"])
-                    e_rel = int(cur_stage["end"]) - 1  # last frame = end-1
-                    if e_rel < s_rel:
-                        e_rel = s_rel
-
-                    # clip frame index to the frame domain of the selected demo-episode: [0, n-1]
-                    def _clip(i: int) -> int:
-                        return min(max(i, 0), n - 1)
-
-                    s_rel = _clip(s_rel)
-                    e_rel = _clip(e_rel)
-
-                    # IMPORTANT!：episode_to_indexes[ep] cast lcoal frame index to global frame index 
-                    chosen = [int(frame_idxs[s_rel]), int(frame_idxs[e_rel])]
-                
-                
             dem_prompt_indexes.append(chosen)
 
         # 3) attach to data
@@ -941,7 +815,6 @@ class AddImagePromptTransform(DataTransformFn):
 class AddStatesActionsPromptTransform(DataTransformFn):
     """
     Adds state/action sequences for multiple episodes.
-    Stage-aware (windowed) sampling strictly by stage rank if stage JSON is provided.
     """
     dataset: any  # the underlying dataset from which to fetch demo items
 
@@ -953,9 +826,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
     episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
-
-    # Stage JSON (list of dicts; each entry has "episode_name" and "segments":[{start,end,label,id}, ...])
-    all_episode_stage: Optional[str] = None
 
     # Padding mode: how to sample/pad when episode length differs from max_len
     # "keep_all": Keep all L frames when L < max_len, then pad with last frame (current behavior)
@@ -1000,41 +870,9 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         object.__setattr__(self, "episode_to_all_states", states)
         object.__setattr__(self, "episode_to_all_first_actions", actions)
 
-        # ---- Build stage map: {episode_name -> segments} ----
-        stage_map: Optional[Dict[str, List[Dict[str, Any]]]] = None
-        if self.all_episode_stage is not None:
-            with Path(self.all_episode_stage).open("r") as f:
-                stage_list = json.load(f)  # list of dicts
-
-            tmp: Dict[str, List[Dict[str, Any]]] = {}
-            for entry in stage_list:
-                name = entry.get("episode_name")
-                segments = entry.get("segments")
-                if isinstance(name, str) and isinstance(segments, list):
-                    norm = []
-                    for i, seg in enumerate(segments):
-                        if not isinstance(seg, dict):
-                            continue
-                        s = int(seg.get("start", 0))
-                        e = int(seg.get("end", 0))
-                        if e > s:  # half-open [s, e)
-                            norm.append({
-                                "id": int(seg.get("id", i)),
-                                "start": s,
-                                "end": e,
-                                "label": str(seg.get("label", "")),
-                            })
-                    if norm:
-                        tmp[name] = norm
-            stage_map = tmp if tmp else None
-
-        object.__setattr__(self, "_episode_stage_map", stage_map)
-
         # ---- Inference cache ----
         object.__setattr__(self, "_cache", {
             "selected_episode": None,
-            "cur_ep_idx": None,
-            "cur_frame_in_ep": None,
             "states": None,
             "states_mask": None,
             "actions": None,
@@ -1042,20 +880,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         })
 
     # ---------- helpers ----------
-    @staticmethod
-    def _index_to_episode_name(ep_idx: int) -> str:
-        # LIBERO-style naming
-        return f"episode_{ep_idx:06d}.parquet"
-
-    @staticmethod
-    def _find_stage_by_frame(segments: List[Dict[str, Any]], frame_idx_in_episode: int) -> Tuple[Optional[int], Optional[Dict[str, Any]]]:
-        """Return (rank, segment) where segment satisfies [start, end) covering frame_idx."""
-        for rank, seg in enumerate(segments):
-            s, e = seg["start"], seg["end"]
-            if s <= frame_idx_in_episode < e:
-                return rank, seg
-        return None, None
-
     @staticmethod
     def _even_sample_len(T: int, max_len: int) -> np.ndarray:
         """linspace indices in [0, T-1], length=max_len; assume T>=1."""
@@ -1145,37 +969,14 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 mask[:L] = True
         return sampled, mask
 
-    @staticmethod
-    def _pick_segment_by_rank(segments: List[Dict[str, Any]], rank: int) -> Dict[str, Any]:
-        """Rank-only alignment: pick segment by rank; fallback to last if out-of-range."""
-        if not segments:
-            raise ValueError("segments is empty")
-        if 0 <= rank < len(segments):
-            return segments[rank]
-        return segments[-1]
-
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
         eps: List[int] = data.get("selected_episode", [])
         split = data.get("split", "train")
 
-        # Current sample's (episode, frame) to locate current stage rank
-        cur_ep_idx = data.get("episode_index", None)   # int episode index
-        cur_frame_in_ep = data.get("frame_index", None)  # relative frame-in-episode
-        
-        # if self._episode_stage_map is not None:  # Alternatively: if self.all_episode_stage is not None:
-        #     if cur_ep_idx is None or cur_frame_in_ep is None:
-        #         raise ValueError(
-        #             "[Stage] Stage map provided but current sample lacks required keys: "
-        #             f"episode_index={cur_ep_idx}, frame=(frame_index/index)={cur_frame_in_ep}. "
-        #             "Fix upstream repack (map 'index' to 'frame_index') or disable stage mode."
-        #         )
-        
         # ---- Cache hit for test split ----
         if (
             split == "test"
             and self._cache["selected_episode"] == list(eps)
-            and self._cache["cur_ep_idx"] == cur_ep_idx
-            and self._cache["cur_frame_in_ep"] == cur_frame_in_ep
         ):
             if len(eps) == 1:
                 data["dem_prompt_all_states"] = self._cache["states"][0]
@@ -1189,21 +990,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 data["dem_prompt_all_actions_mask"] = self._cache["actions_mask"]
             return data
 
-        # XJ(stage-wise prompt): ---- Determine current stage rank (if available) ----
-        cur_rank: Optional[int] = None
-        cur_stage: Optional[Dict[str, Any]] = None
-        if self._episode_stage_map is not None and cur_ep_idx is not None and cur_frame_in_ep is not None:
-            # assert (s_rel != 0 or e_rel != T), "[Stage] stage map present but sampling full episode; expected stage window."
-
-            try:
-                cur_ep_name = self._index_to_episode_name(int(cur_ep_idx))
-                segments = self._episode_stage_map.get(cur_ep_name, None)
-                if segments:
-                    cur_rank, cur_stage = self._find_stage_by_frame(segments, int(cur_frame_in_ep))
-            except Exception:
-                raise NotImplementedError
-                # cur_rank, cur_stage = None, None
-
         states_b, states_mask_b, actions_b, actions_mask_b = [], [], [], []
 
         for ep in eps:
@@ -1215,33 +1001,8 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             all_actions = self.episode_to_all_first_actions[ep]     # [T, D_a]
             T = all_states.shape[0]
 
-            # Default window: whole episode
+            # Sample whole episode
             s_rel, e_rel = 0, T
-
-            # XJ(stage-wise prompt): If we have current stage rank and demo segments, align strictly by rank
-            if self._episode_stage_map is not None and cur_stage is not None and cur_rank is not None:
-                demo_name = self._index_to_episode_name(int(ep))
-                demo_segments = self._episode_stage_map.get(demo_name, None)
-
-                if demo_segments:
-                    seg = self._pick_segment_by_rank(demo_segments, int(cur_rank))
-                    s_rel, e_rel = int(seg["start"]), int(seg["end"])
-                else:
-                    # No segments for this demo episode: map current stage window as-is
-                    s_rel, e_rel = int(cur_stage["start"]), int(cur_stage["end"])
-
-                # Clip to [0, T] with at least one frame
-                s_rel = max(0, min(s_rel, T))
-                e_rel = max(s_rel + 1, min(e_rel, T))
-                
-            # ---- XJ: sanity checks for stage usage ----
-            # if self._episode_stage_map is not None:
-            #     # Must find a stage
-            #     assert cur_stage is not None, \
-            #         f"[Stage] Stage map provided but current sample (ep={cur_ep_idx}, frame={cur_frame_in_ep}) not mapped to any stage"
-            #     # Must not sample the entire episode
-            #     assert not (s_rel == 0 and e_rel == T), \
-            #         f"[Stage] Stage map provided but sampling full episode for ep={ep}"
 
             # Sample / pad within window
             sampled_states, state_mask = self._window_sample_and_pad(all_states, s_rel, e_rel)
@@ -1261,17 +1022,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         # DEBUG: Print loaded state/action prompt info
         # print("\n" + "="*80)
         # print("LOADED STATE/ACTION PROMPTS:")
-        # # Print the text prompt if available
-        # if "prompt" in data:
-        #     prompt_str = data["prompt"].item() if hasattr(data["prompt"], 'item') else str(data["prompt"])
-        #     print(f"  Text prompt: '{prompt_str}'")
-        # print(f"  Demo episodes: {eps}")
-        # print(f"  States shape: {stacked_states.shape}, dtype={stacked_states.dtype}")
-        # print(f"  Actions shape: {stacked_actions.shape}, dtype={stacked_actions.dtype}")
-        # if cur_stage is not None and cur_rank is not None:
-        #     print(f"  Current stage: rank={cur_rank}, label='{cur_stage.get('label', '')}', frames=[{cur_stage['start']}, {cur_stage['end']})")
-        # print("="*80 + "\n")
-
         # Single-episode squeeze
         if len(eps) == 1:
             data["dem_prompt_all_states"] = stacked_states[0]
@@ -1287,8 +1037,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         # ---- Update cache for test split ----
         if split == "test":
             self._cache["selected_episode"] = list(eps)
-            self._cache["cur_ep_idx"] = cur_ep_idx
-            self._cache["cur_frame_in_ep"] = cur_frame_in_ep
             self._cache["states"] = stacked_states
             self._cache["states_mask"] = stacked_states_mask
             self._cache["actions"] = stacked_actions

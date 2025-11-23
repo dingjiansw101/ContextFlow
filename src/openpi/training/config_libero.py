@@ -471,8 +471,6 @@ def build(api) -> list["api.TrainConfig"]:
         task_to_episode: str='metadata/libero/task_to_episode.json'
         episode_to_indexes_file: str='metadata/libero/episode_to_indexes.json'
         libero_input_refactor: bool = False
-        # white list: a list of training episodes
-        all_episode_stage: Optional[Union[str, Path, List[str]]] = None
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
@@ -510,13 +508,12 @@ def build(api) -> list["api.TrainConfig"]:
             # Prepare data for policy training
             # inject the indexes of demo prompt, TODO: provide json file_paths here
             data_transforms = api._transforms.Group(
-                inputs=[api._transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames, 
+                inputs=[api._transforms.InjectDemoIndexes(sample_frames=model_config.sample_frames,
                                                     random_select=model_config.random_select,
                                                     sample_episodes=model_config.sample_episodes,
                                                     task_to_episode=self.task_to_episode,
                                                     episode_to_indexes=self.episode_to_indexes_file,
-                                                    train_episode_index_list=train_epi,
-                                                    all_episode_stage = self.all_episode_stage)],
+                                                    train_episode_index_list=train_epi)],
                 outputs=[],
             )
 
@@ -4736,70 +4733,6 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=16,
         batch_size=32,
-    ),
-    
-    # stage-wise incontext 
-    api.TrainConfig(
-        name="pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
-            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-            sample_frames=2, sample_actions=32, random_select=True, 
-        ),
-        data=LeRobotLiberoStageIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            keep_episode_filename_list="examples/libero/all_stage_clean.json",
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-            all_episode_stage = "examples/libero/all_segments_summary.json",
-
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
-            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-            sample_frames=2, sample_actions=32, random_select=True, 
-        ).get_freeze_filter(),
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        # wandb_enabled=False,
-    ),
-    api.TrainConfig(
-        name="pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
-            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-            sample_frames=2, sample_actions=32, random_select=True, 
-        ),
-        data=LeRobotLiberoStageIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-                prompt_from_task=True,
-            ),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            keep_episode_filename_list="/home/dingj0b/dingjian/openpi_explore/project/openpi/examples/libero/all_stage_noisy.json",
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-            all_episode_stage = "examples/libero/all_segments_summary.json",
-
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
-            prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
-            sample_frames=2, sample_actions=32, random_select=True, 
-        ).get_freeze_filter(),
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        # wandb_enabled=False,
     ),
 
     # Test config for cache generation validation

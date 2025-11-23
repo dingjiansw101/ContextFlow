@@ -50,10 +50,6 @@ class EnvMode(enum.Enum):
     GET_VIDEO = "pi0_libero_incontextv12_1_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split"
     RANDOM_INIT_NO_LORA = "pi0_libero_incontextv12_random_init_train_split"
 
-    # new
-    CLEAN_INFERENCE = "pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all"
-    NOISY_INFERENCE = "pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all"
-
     # cvpr
     SEQUENCE_DEBUG = "sequence_debug_pi0_libero_incontextv14_train_split_v3"
     SEQUENCE_DEBUG_PI0MINI_INCONTEXTV14_LIBEROV1 = "sequence_debug_pi0mini_libero_incontextv14_train_split_v1"
@@ -258,17 +254,7 @@ DEFAULT_CHECKPOINT: dict[EnvMode, Checkpoint] = {
         config="pi0_libero_incontextv12_random_init_inference",
         dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_random_init_train_split/pi0_libero_incontextv12_random_init_train_split/19999"
     ),
-    
-    ## new
-    EnvMode.CLEAN_INFERENCE: Checkpoint(
-        config="pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all/pi0_libero_incontextv12_low_mem_finetune_clean_stage_wise_prompt_train_all/19999"
-    ),
-    EnvMode.NOISY_INFERENCE: Checkpoint(
-        config="pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all",
-        dir="/home/dingj0b/dingjian/openpi_explore/project/openpi/checkpoints/pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all/pi0_libero_incontextv12_low_mem_finetune_noisy_stage_wise_prompt_train_all/19999"
-    ),
-    
+
     # cvpr
     EnvMode.SEQUENCE_DEBUG: Checkpoint(
         config="sequence_debug_pi0_libero_incontextv14_inference",
