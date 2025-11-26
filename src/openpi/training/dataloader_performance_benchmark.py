@@ -135,20 +135,11 @@ def benchmark_loader(
 
     # Determine which create function to use
     if config.use_custom_dataloader:
-        # Check custom dataloader version
-        version = getattr(config.data, 'custom_dataloader_version', 'v1')
-        if version == "v2":
-            data_loader = _data_loader.create_custom_incontext_data_loaderv2(
-                config,
-                skip_norm_stats=skip_norm_stats,
-                num_batches=num_batches,
-            )
-        else:  # v1 or default
-            data_loader = _data_loader.create_custom_incontext_data_loader(
-                config,
-                skip_norm_stats=skip_norm_stats,
-                num_batches=num_batches,
-            )
+        data_loader = _data_loader.create_custom_incontext_data_loader(
+            config,
+            skip_norm_stats=skip_norm_stats,
+            num_batches=num_batches,
+        )
     else:
         data_loader = _data_loader.create_incontext_data_loader(
             config,

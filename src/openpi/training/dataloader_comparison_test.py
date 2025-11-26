@@ -269,20 +269,11 @@ def compare_dataloaders(
         )
 
     if config1.use_custom_dataloader:
-        # Check custom dataloader version
-        version = getattr(config1.data, 'custom_dataloader_version', 'v1')
-        if version == "v2":
-            loader1 = _data_loader.create_custom_incontext_data_loaderv2(
-                config1,
-                skip_norm_stats=False,
-                num_batches=num_batches,
-            )
-        else:  # v1 or default
-            loader1 = _data_loader.create_custom_incontext_data_loader(
-                config1,
-                skip_norm_stats=False,
-                num_batches=num_batches,
-            )
+        loader1 = _data_loader.create_custom_incontext_data_loader(
+            config1,
+            skip_norm_stats=False,
+            num_batches=num_batches,
+        )
     else:
         loader1 = _data_loader.create_incontext_data_loader(
             config1,
@@ -310,20 +301,11 @@ def compare_dataloaders(
         )
 
     if config2.use_custom_dataloader:
-        # Check custom dataloader version
-        version = getattr(config2.data, 'custom_dataloader_version', 'v1')
-        if version == "v2":
-            loader2 = _data_loader.create_custom_incontext_data_loaderv2(
-                config2,
-                skip_norm_stats=False,
-                num_batches=num_batches,
-            )
-        else:  # v1 or default
-            loader2 = _data_loader.create_custom_incontext_data_loader(
-                config2,
-                skip_norm_stats=False,
-                num_batches=num_batches,
-            )
+        loader2 = _data_loader.create_custom_incontext_data_loader(
+            config2,
+            skip_norm_stats=False,
+            num_batches=num_batches,
+        )
     else:
         loader2 = _data_loader.create_incontext_data_loader(
             config2,
