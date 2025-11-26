@@ -4,13 +4,19 @@ import abc
 from collections.abc import Sequence
 import dataclasses
 import difflib
+import importlib
+import json
 import logging
+import os
 import pathlib
-from typing import Any, Protocol, TypeAlias, Optional, List, Union, Iterable
-import os, re, json, jsonlines, sys, importlib
+from pathlib import Path
+import re
+import sys
+from typing import Any, Protocol, TypeAlias
 
 import etils.epath as epath
 import flax.nnx as nnx
+import jsonlines
 from typing_extensions import override
 import tyro
 
@@ -19,111 +25,102 @@ import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.pi0_incontextv12 as pi0_incontextv12
 import openpi.models.pi0_incontextv18 as pi0_incontextv18
-import openpi.models.pi0_light as pi0Light
-import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12
-import openpi.models.pi0_light_incontextv14 as pi0_light_incontextv14
-
 import openpi.models.tokenizer as _tokenizer
-
 import openpi.policies.droid_policy as droid_policy
-
-
-
-
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.optimizer as _optimizer
 import openpi.training.weight_loaders as weight_loaders
 import openpi.transforms as _transforms
 
-from pathlib import Path
-
 ModelType: TypeAlias = _model.ModelType
 # Work around a tyro issue with using nnx.filterlib.Filter directly.
 Filter: TypeAlias = nnx.filterlib.Filter
-_NAME_RE = re.compile(r"(\d+)") 
+_NAME_RE = re.compile(r"(\d+)")
 
-from pathlib import Path
 
 def get_project_root() -> Path:
     if "OPENPI_PROJECT_ROOT" in os.environ:
         return Path(os.environ["OPENPI_PROJECT_ROOT"]).expanduser().resolve()
     return Path(__file__).resolve().parents[3]
 
+
 PROJECT_ROOT = get_project_root()
 
-DEFAULT_LIBERO_EPISODE_JSON = str(Path("~/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl").expanduser())
-#"/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
+DEFAULT_LIBERO_EPISODE_JSON = str(
+    Path("~/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl").expanduser()
+)
+# "/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
 
 DEFAULT_LIBERO_TEST_TASK = [
-        # 10
-        "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-        "put both the alphabet soup and the tomato sauce in the basket",
-        # goal
-        "put the bowl on the plate",
-        "put the bowl on the stove",
-        # object
-        "pick up the milk and place it in the basket",
-        "pick up the tomato sauce and place it in the basket",
-        # spatial
-        "pick up the black bowl on the cookie box and place it on the plate",
-        "pick up the black bowl next to the plate and place it on the plate",
+    # 10
+    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+    "put both the alphabet soup and the tomato sauce in the basket",
+    # goal
+    "put the bowl on the plate",
+    "put the bowl on the stove",
+    # object
+    "pick up the milk and place it in the basket",
+    "pick up the tomato sauce and place it in the basket",
+    # spatial
+    "pick up the black bowl on the cookie box and place it on the plate",
+    "pick up the black bowl next to the plate and place it on the plate",
 ]
 DEFAULT_LIBERO_TEST_TASK_V2 = [
-        # 10
-        "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-        "pick up the book and place it in the back compartment of the caddy",
-        # goal
-        "turn on the stove",
-        "open the middle drawer of the cabinet",
-        # object
-        "pick up the milk and place it in the basket",
-        "pick up the tomato sauce and place it in the basket",
-        # spatial
-        "pick up the black bowl on the cookie box and place it on the plate",
-        "pick up the black bowl next to the plate and place it on the plate",
+    # 10
+    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+    "pick up the book and place it in the back compartment of the caddy",
+    # goal
+    "turn on the stove",
+    "open the middle drawer of the cabinet",
+    # object
+    "pick up the milk and place it in the basket",
+    "pick up the tomato sauce and place it in the basket",
+    # spatial
+    "pick up the black bowl on the cookie box and place it on the plate",
+    "pick up the black bowl next to the plate and place it on the plate",
 ]
 
 DEFAULT_LIBERO_TEST_TASK_V3 = [
-        # 10
-        "turn on the stove and put the moka pot on it",
-        "put both the cream cheese box and the butter in the basket",
-        # goal
-        "put the wine bottle on the rack",
-        "put the cream cheese in the bowl",
-        # object
-        "pick up the ketchup and place it in the basket",
-        "pick up the bbq sauce and place it in the basket",
-        # spatial
-        "pick up the black bowl on the stove and place it on the plate",
-        "pick up the black bowl next to the ramekin and place it on the plate",
+    # 10
+    "turn on the stove and put the moka pot on it",
+    "put both the cream cheese box and the butter in the basket",
+    # goal
+    "put the wine bottle on the rack",
+    "put the cream cheese in the bowl",
+    # object
+    "pick up the ketchup and place it in the basket",
+    "pick up the bbq sauce and place it in the basket",
+    # spatial
+    "pick up the black bowl on the stove and place it on the plate",
+    "pick up the black bowl next to the ramekin and place it on the plate",
 ]
 DEFAULT_LIBERO_TEST_TASK_V4 = [
-        # 10
-        "put both the alphabet soup and the cream cheese box in the basket",
-        "put both moka pots on the stove",
-        # goal
-        "open the top drawer and put the bowl inside",
-        "put the wine bottle on top of the cabinet",
-        # object
-        "pick up the butter and place it in the basket",
-        "pick up the salad dressing and place it in the basket",
-        # spatial
-        "pick up the black bowl on the wooden cabinet and place it on the plate",
-        "pick up the black bowl from table center and place it on the plate",
+    # 10
+    "put both the alphabet soup and the cream cheese box in the basket",
+    "put both moka pots on the stove",
+    # goal
+    "open the top drawer and put the bowl inside",
+    "put the wine bottle on top of the cabinet",
+    # object
+    "pick up the butter and place it in the basket",
+    "pick up the salad dressing and place it in the basket",
+    # spatial
+    "pick up the black bowl on the wooden cabinet and place it on the plate",
+    "pick up the black bowl from table center and place it on the plate",
 ]
 
 
 # correspond to v4 in google sheet
 DEFAULT_LIBERO_TEST_TASK_V5 = [
-        "pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate",
-        "pick up the black bowl on the ramekin and place it on the plate",
-        "pick up the chocolate pudding and place it in the basket",
-        "pick up the orange juice and place it in the basket",
-        "put the wine bottle on the rack",
-        "put the bowl on top of the cabinet",
-        "put the yellow and white mug in the microwave and close it",
-        "put the black bowl in the bottom drawer of the cabinet and close it",
+    "pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate",
+    "pick up the black bowl on the ramekin and place it on the plate",
+    "pick up the chocolate pudding and place it in the basket",
+    "pick up the orange juice and place it in the basket",
+    "put the wine bottle on the rack",
+    "put the bowl on top of the cabinet",
+    "put the yellow and white mug in the microwave and close it",
+    "put the black bowl in the bottom drawer of the cabinet and close it",
 ]
 
 
@@ -131,8 +128,10 @@ DEFAULT_LIBERO_TEST_TASK_V5 = [
 def _basename(x: str) -> str:
     return os.path.basename(str(x)).strip()
 
+
 def _stem(x: str) -> str:
     return os.path.splitext(_basename(x))[0]
+
 
 def _normalize_episode_name(x: str) -> str:
     """
@@ -142,7 +141,8 @@ def _normalize_episode_name(x: str) -> str:
     base = os.path.basename(x).strip()
     return base
 
-def _name_to_index(name: str) -> Optional[int]:
+
+def _name_to_index(name: str) -> int | None:
     """
     get int from file name:
       'episode_000012.parquet' -> 12
@@ -157,7 +157,8 @@ def _name_to_index(name: str) -> Optional[int]:
     except Exception:
         return None
 
-def _load_name_whitelist(src: Union[str, Path, List[str]]) -> List[str]:
+
+def _load_name_whitelist(src: str | Path | list[str]) -> list[str]:
     if isinstance(src, list):
         names = src
     else:
@@ -180,13 +181,14 @@ def _load_name_whitelist(src: Union[str, Path, List[str]]) -> List[str]:
             raise ValueError(f"Unsupported keep list suffix: {p.suffix}")
     return [str(n).strip() for n in names if str(n).strip()]
 
+
 def get_kept_episode_indices(
-    episodes_jsonl_path: Union[str, Path],
-    exclude_task_language: Optional[List[str]],
-    include_episode_filenames: Optional[Union[str, Path, List[str]]] = None,
+    episodes_jsonl_path: str | Path,
+    exclude_task_language: list[str] | None,
+    include_episode_filenames: str | Path | list[str] | None = None,
     *,
     verbose: bool = True,
-) -> Optional[List[int]]:
+) -> list[int] | None:
     if episodes_jsonl_path is None:
         return None
 
@@ -194,7 +196,7 @@ def get_kept_episode_indices(
     if not ep_path.exists():
         raise FileNotFoundError(f"episodes.jsonl file not found at: {ep_path}")
 
-    kept: List[int] = []
+    kept: list[int] = []
 
     if include_episode_filenames is not None:
         raw_names = _load_name_whitelist(include_episode_filenames)
@@ -209,7 +211,9 @@ def get_kept_episode_indices(
         if verbose:
             print(f"[whitelist] loaded {len(raw_names)} names -> {len(idx_whitelist)} indices.")
             if bad_names:
-                print(f"[whitelist][warn] failed to parse indices from {len(bad_names)} names (show up to 5): {bad_names[:5]}")
+                print(
+                    f"[whitelist][warn] failed to parse indices from {len(bad_names)} names (show up to 5): {bad_names[:5]}"
+                )
 
         found_indices = set()
         with jsonlines.open(ep_path, mode="r") as reader:
@@ -229,7 +233,9 @@ def get_kept_episode_indices(
             print(f"[whitelist] matched {len(kept)} episodes by index.")
             if len(found_indices) < len(idx_whitelist):
                 missing = sorted(idx_whitelist - found_indices)
-                print(f"[whitelist][diagnose] {len(idx_whitelist)-len(found_indices)} indices from keep list not found in jsonl (up to 10): {missing[:10]}")
+                print(
+                    f"[whitelist][diagnose] {len(idx_whitelist)-len(found_indices)} indices from keep list not found in jsonl (up to 10): {missing[:10]}"
+                )
 
         return kept
 
@@ -238,7 +244,7 @@ def get_kept_episode_indices(
     if not isinstance(exclude_task_language, list) or not all(isinstance(t, str) for t in exclude_task_language):
         raise TypeError("exclude_task_language must be a list of strings.")
 
-    with jsonlines.open(ep_path, mode='r') as reader:
+    with jsonlines.open(ep_path, mode="r") as reader:
         for entry in reader:
             if "episode_index" not in entry or "tasks" not in entry:
                 raise ValueError(f"Invalid entry (missing 'episode_index' or 'tasks'): {entry}")
@@ -252,10 +258,10 @@ def get_kept_episode_indices(
         print(f"[exclude-by-task] kept {len(kept)} episodes.")
     return kept
 
+
 def deprecated_get_kept_episode_indices(
-    episodes_jsonl_path: Union[str, Path],
-    exclude_task_language: List[str]
-) -> Optional[List[int]]:
+    episodes_jsonl_path: str | Path, exclude_task_language: list[str]
+) -> list[int] | None:
     """
     Filters episode indices from a episodes.jsonl file by excluding those
     whose task descriptions match any entry in the given exclude list.
@@ -277,7 +283,7 @@ def deprecated_get_kept_episode_indices(
     # Type checks
     if not isinstance(exclude_task_language, list) or not all(isinstance(t, str) for t in exclude_task_language):
         raise TypeError("exclude_task_language must be a list of strings.")
-    
+
     if not isinstance(episodes_jsonl_path, (str, Path)):
         raise TypeError("episodes_jsonl_path must be a string or Path.")
 
@@ -285,10 +291,10 @@ def deprecated_get_kept_episode_indices(
     if not episodes_jsonl_path.exists():
         raise FileNotFoundError(f"episodes.jsonl file not found at: {episodes_jsonl_path}")
 
-    kept_indices: List[int] = []
+    kept_indices: list[int] = []
 
     # Read and filter
-    with jsonlines.open(episodes_jsonl_path, mode='r') as reader:
+    with jsonlines.open(episodes_jsonl_path, mode="r") as reader:
         for entry in reader:
             if "episode_index" not in entry or "tasks" not in entry:
                 raise ValueError(f"Invalid entry (missing 'episode_index' or 'tasks'): {entry}")
@@ -365,7 +371,7 @@ class DataConfig:
     # Xianjie: add additioanl episode field to enable train-test split
     # the episode arg will be passed to LeRobotDataset.episodes
     train_episode: list[int] | None = None
-    
+
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
@@ -432,14 +438,13 @@ class DataConfigFactory(abc.ABC):
 
     # Xianjie: train-test spli config parameters
     # remove_task_list: a list of tasks that need to be removed from training (for test)
-    remove_task_list: tyro.conf.Suppress[Optional[List[str]]] = None
+    remove_task_list: tyro.conf.Suppress[list[str] | None] = None
     # episode_json_path: a json that contains the episode index and task name
-    episode_json_path: tyro.conf.Suppress[Optional[str]] = None
-    task_to_episode: tyro.conf.Suppress[Optional[str]] = None
-    episode_to_indexes_file: tyro.conf.Suppress[Optional[str]] = None
+    episode_json_path: tyro.conf.Suppress[str | None] = None
+    task_to_episode: tyro.conf.Suppress[str | None] = None
+    episode_to_indexes_file: tyro.conf.Suppress[str | None] = None
     # white list: a josn path that contains all training episodes
-    keep_episode_filename_list: tyro.conf.Suppress[Optional[Union[str, Path, List[str]]]] = None
-
+    keep_episode_filename_list: tyro.conf.Suppress[str | Path | list[str] | None] = None
 
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
@@ -499,8 +504,6 @@ class SimpleDataConfig(DataConfigFactory):
         )
 
 
-
- 
 @dataclasses.dataclass(frozen=True)
 class TrainConfig:
     # Name of the config. Must be unique. Will be used to reference this config.
@@ -518,7 +521,9 @@ class TrainConfig:
     # A weight loader can optionally load (possibly partial) weights from disk after the model is initialized.
     weight_loader: weight_loaders.WeightLoader = dataclasses.field(default_factory=weight_loaders.NoOpWeightLoader)
     # XJ: for cunstomizer image encoder
-    vision_weight_loader: weight_loaders.WeightLoader = dataclasses.field(default_factory=weight_loaders.NoOpWeightLoader)
+    vision_weight_loader: weight_loaders.WeightLoader = dataclasses.field(
+        default_factory=weight_loaders.NoOpWeightLoader
+    )
 
     lr_schedule: _optimizer.LRScheduleConfig = dataclasses.field(default_factory=_optimizer.CosineDecaySchedule)
     optimizer: _optimizer.OptimizerConfig = dataclasses.field(default_factory=_optimizer.AdamW)
@@ -533,7 +538,7 @@ class TrainConfig:
     # Base directory for config assets (e.g., norm stats).
     assets_base_dir: str = "./assets"
     # Base directory for checkpoints.
-    checkpoint_base_dir: str = "./checkpoints" #"/ibex/tmp/c2090/openpi_explore_storage/checkpoints" 
+    checkpoint_base_dir: str = "./checkpoints"  # "/ibex/tmp/c2090/openpi_explore_storage/checkpoints"
 
     # Random seed that will be used by random generators during training.
     seed: int = 42
@@ -570,17 +575,17 @@ class TrainConfig:
     # eg. if total device is 4 and fsdp devices is 2; then the model will shard to 2 devices and run
     # data parallel between 2 groups of devices.
     fsdp_devices: int = 1
-    
+
     model_summary_json: str | None = None
     # XJ: add override assets dir to avoid creating redundant assets folders/files
     assets_repo_override: str | None = None
-    
+
     @property
     def assets_dirs(self) -> pathlib.Path:
         if self.assets_repo_override is not None:
             return (pathlib.Path(self.assets_base_dir) / self.assets_repo_override).resolve()
         return (pathlib.Path(self.assets_base_dir) / self.name).resolve()
-    
+
     @property
     def checkpoint_dir(self) -> pathlib.Path:
         """Get the checkpoint directory for this config."""
@@ -597,6 +602,7 @@ class TrainConfig:
         if self.resume and self.overwrite:
             raise ValueError("Cannot resume and overwrite at the same time.")
 
+
 def _discover_child_modules() -> list[str]:
     """Automatically discover config_*.py in the same directory (excluding config.py itself)."""
     pkg_dir = pathlib.Path(__file__).parent
@@ -609,6 +615,7 @@ def _discover_child_modules() -> list[str]:
     out.sort()
     return out
 
+
 def _load_fragments(module_names: list[str]) -> list[TrainConfig]:
     """Call each child module's build(api) to collect the TrainConfig list."""
     out: list[TrainConfig] = []
@@ -619,6 +626,7 @@ def _load_fragments(module_names: list[str]) -> list[TrainConfig]:
         if callable(build):
             out.extend(build(api))
     return out
+
 
 # Use `get_config` if you need to get a config by name in your code.
 _MODULES = _discover_child_modules()
