@@ -3,6 +3,7 @@ import functools
 import logging
 import platform
 from typing import Any
+import copy
 
 import flax
 import etils.epath as epath

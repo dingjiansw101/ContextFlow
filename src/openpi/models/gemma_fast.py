@@ -34,6 +34,23 @@ Variant = Literal["gemma_2b", "gemma_2b_lora"]
 
 def get_config(variant):
     """Returns config for specified gemma variant."""
+    if variant == "gemma_incontextv12_fast":
+        # Single-expert PaLiGemma trunk that mirrors the v12 prompt expert sizing.
+        return ml_collections.ConfigDict(
+            {
+                "variant": variant,
+                "width": 2048,
+                "depth": 18,
+                "mlp_dim": 4_096,
+                "num_heads": 8,
+                "num_kv_heads": 1,
+                "head_dim": 256,
+                "norm_eps": 1e-6,
+                "vocab_size": 257_152,
+                "scan": True,
+                "remat_policy": "nothing_saveable",
+            }
+        )
     if variant == "gemma_2b":
         return ml_collections.ConfigDict(
             {

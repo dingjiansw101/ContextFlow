@@ -532,3 +532,74 @@ class EmptyLoader(WeightLoader):
             logger.info(f"[InputEmbedderLoader] Total matched keys: {len(matched)}")
 
         return flax.traverse_util.unflatten_dict(matched, sep="/")
+
+@dataclasses.dataclass(frozen=True)
+class InputEmbedderAndSiglipLoader(WeightLoader):
+    """
+    Loads both llm/embedder and SigLIP vision encoder params from a checkpoint.
+    Useful when a single params file already contains both subtrees (e.g. Pi0 checkpoints).
+    """
+
+    params_path: str
+    embedder_substring: str = "llm/embedder"
+    siglip_substring: str = "PaliGemma/img"
+    strict: bool = True
+    verbose: bool = False
+
+    def load(self, params: at.Params) -> at.Params:
+        import jax.numpy as jnp
+
+        try:
+            raw = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
+        except Exception as e:
+            raise ValueError(f"Failed to load .npz from {self.params_path}: {e}")
+
+        flat_params = flax.traverse_util.flatten_dict(raw, sep="/")
+        flat_expected = flax.traverse_util.flatten_dict(params, sep="/")
+
+        # Start from the exact structure of params_shape so structural checks pass even if we only
+        # overwrite a subset of keys (embedder/img); untouched entries remain ShapeDtypeStruct.
+        result = dict(flat_expected)
+        substrings = (self.embedder_substring, self.siglip_substring)
+        matched_any = False
+        for key, value in flat_params.items():
+            if not any(sub in key for sub in substrings):
+                continue
+
+            expected = flat_expected.get(key)
+            if expected is None:
+                if self.strict:
+                    raise KeyError(
+                        f"[InputEmbedderAndSiglipLoader] Key '{key}' not found in target params "
+                        f"(substrings={substrings})."
+                    )
+                if self.verbose:
+                    logger.warning(
+                        "[InputEmbedderAndSiglipLoader] Skipping unmatched key %s; not present in target tree.", key
+                    )
+                continue
+
+            if not isinstance(value, np.ndarray):
+                raise TypeError(f"[InputEmbedderAndSiglipLoader] Key '{key}' has unexpected type {type(value)}")
+
+            array = jnp.asarray(value)
+            if expected is not None:
+                array = array.astype(expected.dtype)
+            result[key] = array
+            matched_any = True
+            if self.verbose:
+                logger.info(
+                    "[InputEmbedderAndSiglipLoader] Loaded %s: shape=%s dtype=%s",
+                    key,
+                    array.shape,
+                    array.dtype,
+                )
+
+        if not matched_any:
+            raise ValueError(
+                f"[InputEmbedderAndSiglipLoader] No keys found containing substrings {substrings}. "
+                "Check that the checkpoint includes both embedder and vision encoder weights."
+            )
+
+        return flax.traverse_util.unflatten_dict(result, sep="/")
+    

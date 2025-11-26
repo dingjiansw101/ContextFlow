@@ -471,13 +471,10 @@ def create_incontext_data_loader(
         fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
         dataset = TransformedDataset(
             dataset,
-            _wrap_transforms_with_profiler(
-                [_transforms.TokenizeFASTIncontextInputs(
-                    tokenizer=fast_tokenizer,
-                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
-                    )],
-                "model_tokenize_fast_incontext",
-            ),
+            [_transforms.TokenizeFASTIncontextInputs(
+                tokenizer=fast_tokenizer,
+                max_incontext_steps=getattr(config.model, "sample_actions", 0),
+            )]
         )
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
