@@ -505,16 +505,16 @@ def create_incontext_data_loader(
             self._data_config = data_config
             self._data_loader = data_loader
             self._dataset = dataset
+            self._observation_cls = obs_cls
 
         def data_config(self) -> _config.DataConfig:
             return self._data_config
 
         def __iter__(self):
             for batch in self._data_loader:
-                # yield _model.Observation.from_dict(batch), batch["actions"]
-                yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
+                yield self._observation_cls.from_dict(batch), batch["actions"]
 
-    return DataLoaderImpl(data_config, data_loader, dataset)
+    return DataLoaderImpl(data_config, data_loader, dataset, observation_cls)
 
 
 def create_custom_incontext_data_loader(
