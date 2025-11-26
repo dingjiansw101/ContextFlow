@@ -162,7 +162,7 @@ def build(api) -> list[api.TrainConfig]:
         use_delta_joint_actions: bool = False
 
         # CustomLeRobotDataset specific parameters
-        custom_dataloader_version: str = "v1"  # Version of custom dataloader to use ("v1" or "v2")
+        custom_dataloader_version: str = "v1"  # Version of custom dataloader to use
         frame_sequence_length: int = 1  # Number of consecutive frames for main context
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
