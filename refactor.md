@@ -18,3 +18,7 @@ optimize the code
 [] merge pi0-incontextv12 and pi0-incontextv18
 [] merge the light versions
 [] simplify the data preparation process
+
+[] remove old incontext data loader
+[] update aloha with custom incontext data loader
+[] modify the inference code to use customdataconfig
