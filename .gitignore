@@ -17,6 +17,7 @@ __pycache__/
 
 saved_demo_frames/
 # XJ's ignored files
+visualized_keyframes/
 dcgm/
 train_inference_transform_check.py
 get_train_video.py
