@@ -1050,7 +1050,7 @@ def build(api) -> list[api.TrainConfig]:
                 random_select=True,
             ).get_freeze_filter(),
             ema_decay=None,
-            num_workers=2,
+            num_workers=80,
             batch_size=32,
             use_custom_dataloader=True,
         ),
