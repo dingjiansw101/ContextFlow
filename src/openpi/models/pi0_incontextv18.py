@@ -68,6 +68,7 @@ def posemb_sincos(
 class Pi0IncontextConfigv18(_model.BaseModelConfig):
     # The version without using vlm
     dtype: str = "bfloat16"
+    paligemma_variant: _gemma.Variant | None = None
     prompt_expert_variant: _gemma.Variant = "gemma_300m_v2"
     action_expert_variant: _gemma.Variant = "gemma_300m"
 
@@ -158,7 +159,9 @@ class Pi0IncontextConfigv18(_model.BaseModelConfig):
         has_lora = False
         gemma_params_filter = nnx_utils.PathRegex(".*llm.*")
         action_expert_params_filter = nnx_utils.PathRegex(".*llm.*_1.*")
-        if "lora" in self.prompt_expert_variant:
+        # Check paligemma_variant if set, otherwise fall back to prompt_expert_variant
+        prompt_variant = self.paligemma_variant if self.paligemma_variant is not None else self.prompt_expert_variant
+        if "lora" in prompt_variant:
             filters.append(
                 gemma_params_filter,
             )
@@ -323,7 +326,10 @@ class Pi0Incontextv18(_model.BaseModel):
     def __init__(self, config: Pi0IncontextConfigv18, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
-        prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
+        if config.paligemma_variant is not None:
+            prompt_expert_config = _gemma.get_config(config.paligemma_variant)
+        else:
+            prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")
         self.use_image_prompts = config.use_image_prompts
         self.use_text_prompts = config.use_text_prompts
         self.use_action_state_prompts = config.use_action_state_prompts

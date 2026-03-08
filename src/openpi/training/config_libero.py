@@ -1017,7 +1017,7 @@ def build(api) -> list[api.TrainConfig]:
             name="pi0_libero_incontextv18_gemma2b_low_mem_finetune_sample_frames8",
             assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
             model=api.pi0_incontextv18.Pi0IncontextConfigv18(
-                prompt_expert_variant="gemma_2b",
+                paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
                 sample_actions=128,
@@ -1043,7 +1043,7 @@ def build(api) -> list[api.TrainConfig]:
             ),
             num_train_steps=30_000,
             freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
-                prompt_expert_variant="gemma_2b",
+                paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
                 sample_actions=128,
@@ -1058,7 +1058,7 @@ def build(api) -> list[api.TrainConfig]:
             name="pi0_libero_incontextv18_gemma2b_low_mem_finetune_sample_frames8_inference",
             assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
             model=api.pi0_incontextv18.Pi0IncontextConfigv18(
-                prompt_expert_variant="gemma_2b",
+                paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
                 sample_actions=128,
@@ -1081,7 +1081,7 @@ def build(api) -> list[api.TrainConfig]:
             ),
             num_train_steps=30_000,
             freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
-                prompt_expert_variant="gemma_2b",
+                paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
                 sample_actions=128,
