@@ -76,6 +76,7 @@ class Args:
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
     task_split: str = "split0"  # Task split to use for seen/unseen tasks
     task_splits_dir: str = "libero_task_splits"  # Directory containing task split definitions
+    unseen_task_index: int = -1  # If >= 0, only evaluate this unseen task (0-indexed)
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -109,6 +110,10 @@ def eval_libero(args: Args) -> None:
             unseen_task_ids.append(task_id)
 
     logging.info(f"Found {len(unseen_task_ids)} unseen tasks in suite: {unseen_task_ids}")
+
+    if args.unseen_task_index >= 0:
+        unseen_task_ids = [unseen_task_ids[args.unseen_task_index]]
+        logging.info(f"Filtering to unseen task index {args.unseen_task_index}: {unseen_task_ids}")
 
     if args.task_suite_name == "libero_spatial":
         max_steps = 220  # longest training demo has 193 steps

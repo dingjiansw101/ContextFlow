@@ -282,9 +282,16 @@ class InjectDemoIndexes(DataTransformFn):
         # 3) attach to data
         data["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
         data["dem_prompt_indexes"] = dem_prompt_indexes
-        
+
         # XJ: === Update inference cache ===
         if split == "test":
+            prompt = data.get("prompt", "")
+            if hasattr(prompt, "item"):
+                prompt = prompt.item()
+            logging.info(
+                "[InjectDemoIndexes] Test task: '%s' (index=%d), demo episode(s): %s, frame indices: %s",
+                prompt, task_index, selected_episodes, dem_prompt_indexes,
+            )
             self._cache["task_index"] = task_index
             self._cache["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
             self._cache["dem_prompt_indexes"] = dem_prompt_indexes
