@@ -2393,6 +2393,25 @@ def build(api) -> list[api.TrainConfig]:
             num_train_steps=20_000,
         ),
         api.TrainConfig(
+            name="pi0_fast_libero_split0",
+            model=api.pi0_fast.Pi0FASTConfig(action_dim=7, action_horizon=10, max_token_len=180),
+            data=LeRobotLiberoDataConfig(
+                repo_id="physical-intelligence/libero",
+                base_config=api.DataConfig(
+                    local_files_only=True,
+                    prompt_from_task=True,
+                ),
+                use_delta_joint_actions=False,
+                remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            ),
+            weight_loader=api.weight_loaders.CheckpointWeightLoader(
+                "s3://openpi-assets/checkpoints/pi0_fast_base/params"
+            ),
+            num_train_steps=20_000,
+            num_workers=16,
+        ),
+        api.TrainConfig(
             name="pi0_fast_libero_low_mem_finetune",
             wandb_enabled=False,
             model=api.pi0_fast.Pi0FASTConfig(paligemma_variant="gemma_2b_lora"),
