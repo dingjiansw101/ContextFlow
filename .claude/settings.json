@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(GIT_LFS_SKIP_SMUDGE=1 uv sync)",
+      "Bash(uv run:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(sbatch:*)",
+      "Bash(squeue:*)",
+      "Bash(sacct:*)",
+      "Bash(scontrol:*)",
+      "Skill(commit-commands:commit)"
+    ]
+  }
+}
