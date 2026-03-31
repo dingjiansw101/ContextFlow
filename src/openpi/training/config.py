@@ -68,7 +68,7 @@ DEFAULT_LIBERO_TEST_TASK = [
 ]
 DEFAULT_LIBERO_TEST_TASK_V2 = [
     # 10
-    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+    "put the white mug on the left plate and put the yellow and white mug on the right plate",
     "pick up the book and place it in the back compartment of the caddy",
     # goal
     "turn on the stove",
