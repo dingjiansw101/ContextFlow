@@ -2405,6 +2405,7 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=36,
+            assets_repo_override="pi0_libero_split0",
         ),
         api.TrainConfig(
             name="pi0_libero_low_mem_finetune_split_train_v3",
@@ -2427,6 +2428,7 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=36,
+            assets_repo_override="pi0_libero_split0",
         ),
         api.TrainConfig(
             name="pi0_libero_low_mem_finetune_split_train_v4",
@@ -2449,6 +2451,7 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=36,
+            assets_repo_override="pi0_libero_split0",
         ),
         api.TrainConfig(
             name="pi0_libero_low_mem_finetune_split_train_v2",
@@ -2471,6 +2474,7 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=36,
+            assets_repo_override="pi0_libero_split0",
         ),
         api.TrainConfig(
             name="pi0_libero_low_mem_finetune_split_train_v5",
@@ -2493,6 +2497,7 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=36,
+            assets_repo_override="pi0_libero_split0",
         ),
         api.TrainConfig(
             name="pi0_libero_low_mem_finetune_split_inference",
