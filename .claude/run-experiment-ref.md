@@ -73,6 +73,15 @@ Eval scripts often have default parameter values that silently produce wrong res
 3. Verify the eval command explicitly passes the matching `--args.task_split`
 4. If omitted, flag it before submitting
 
+## Log-to-Sheet Metadata Paths
+
+When logging results to the experiment tracking sheet, always include these metadata columns alongside metrics:
+
+- **Checkpoint path**: `checkpoints/<config>/<exp_name>/<step>` — resolve from the job script's `serve_policy` command or checkpoint directory listing
+- **Log path**: `logs/<config>/test1` (or whichever `<run_id>` was used) — the directory containing the eval `.log` files
+
+These go in the columns after Config Name. Check existing rows in the sheet to confirm which columns they occupy.
+
 ## Post-Eval Result Sync
 
 openpi eval logs are written to `logs/${Name}/<run_id>/`. To auto-sync results after eval, append to the job script:
