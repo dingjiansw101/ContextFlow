@@ -90,4 +90,4 @@ openpi eval logs are written to `logs/${Name}/<run_id>/`. To auto-sync results a
 claude -p "/log-to-sheet Parse logs at logs/${Name}/test1/ and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
 ```
 
-`${Name}` is the experiment name variable already defined in the job script (e.g., `pi0_fast_libero_split2`).
+`${Name}` is the experiment name variable already defined in the job script (e.g., `pi0_fast_libero_split0`).
