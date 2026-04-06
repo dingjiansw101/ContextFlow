@@ -89,7 +89,7 @@ def eval_libero(args: Args) -> None:
     np.random.seed(args.seed)
 
     if not args.results_out_path:
-        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_incontext_results.json")
+        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_{args.task_split}_incontext_results.json")
 
     # Load seen and unseen task splits
     seen_tasks, unseen_tasks = load_task_splits(args.task_splits_dir, args.task_split)
