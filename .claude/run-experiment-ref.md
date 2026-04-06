@@ -86,16 +86,23 @@ These go in the columns after Config Name. Check existing rows in the sheet to c
 
 All eval scripts (`examples/libero/main*.py`) write a structured JSON results file at the end of evaluation. This is the **preferred source** for reading eval results programmatically — no log parsing needed.
 
-- **Default path**: `<video_out_path>/eval_results.json` (colocated with replay videos)
+- **Default path**: `logs/eval_results/<task_suite_name>_results.json` (in the `logs/` hierarchy, with task-suite-specific filenames to avoid collisions)
 - **Override**: pass `--results-out-path /custom/path.json` to the eval script
 - **Schema**: `config` (eval parameters), `per_task_results` (per-task success rates), `summary` (aggregated metrics including seen/unseen splits where applicable)
 
 To read results:
 ```python
 import json
-with open("data/libero_incontext/videos/eval_results.json") as f:
+with open("logs/eval_results/libero_spatial_results.json") as f:
     results = json.load(f)
 print(results["summary"]["total_success_rate"])
+```
+
+In job scripts, override to save alongside eval logs:
+```bash
+python examples/libero/main_incontext_unseen.py \
+  --args.results_out_path logs/${Name}/test1/goal_unseen_results.json \
+  ...
 ```
 
 ## Post-Eval Result Sync
@@ -104,7 +111,7 @@ Eval scripts now produce a structured JSON file (`eval_results.json`) alongside 
 
 ```bash
 # Preferred: read structured JSON (no log parsing needed)
-claude -p "/log-to-sheet Read eval results from <video_out_path>/eval_results.json and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
+claude -p "/log-to-sheet Read eval results from logs/${Name}/test1/*_results.json and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
 ```
 
 Fallback: eval logs are also written to `logs/${Name}/<run_id>/` and can still be parsed if the JSON file is unavailable.

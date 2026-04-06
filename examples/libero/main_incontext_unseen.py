@@ -74,7 +74,7 @@ class Args:
     # Utils
     #################################################################################################################
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
-    results_out_path: str = ""  # Path to save JSON results (default: <video_out_path>/eval_results.json)
+    results_out_path: str = ""  # Path to save JSON results (default: logs/eval_results/<task_suite_name>_results.json)
     task_split: str = "split0"  # Task split to use for seen/unseen tasks
     task_splits_dir: str = "libero_task_splits"  # Directory containing task split definitions
 
@@ -86,7 +86,7 @@ def eval_libero(args: Args) -> None:
     np.random.seed(args.seed)
 
     if not args.results_out_path:
-        args.results_out_path = str(pathlib.Path(args.video_out_path) / "eval_results.json")
+        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_results.json")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()

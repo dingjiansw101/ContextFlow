@@ -69,7 +69,7 @@ class Args:
     # Utils
     #################################################################################################################
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
-    results_out_path: str = ""  # Path to save JSON results (default: <video_out_path>/eval_results.json)
+    results_out_path: str = ""  # Path to save JSON results (default: logs/eval_results/<task_suite_name>_results.json)
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -79,7 +79,7 @@ def eval_libero(args: Args) -> None:
     np.random.seed(args.seed)
 
     if not args.results_out_path:
-        args.results_out_path = str(pathlib.Path(args.video_out_path) / "eval_results.json")
+        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_results.json")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
