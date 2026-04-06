@@ -69,6 +69,7 @@ class Args:
     # Utils
     #################################################################################################################
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
+    results_out_path: str = ""  # Path to save JSON results (default: <video_out_path>/eval_results.json)
 
     seed: int = 7  # Random Seed (for reproducibility)
 
@@ -76,6 +77,9 @@ class Args:
 def eval_libero(args: Args) -> None:
     # Set random seed
     np.random.seed(args.seed)
+
+    if not args.results_out_path:
+        args.results_out_path = str(pathlib.Path(args.video_out_path) / "eval_results.json")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
@@ -120,6 +124,7 @@ def eval_libero(args: Args) -> None:
 
     # Start evaluation
     total_episodes, total_successes = 0, 0
+    per_task_results = []
     # for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
     for task_id in assigned_task_list:
 
@@ -233,8 +238,36 @@ def eval_libero(args: Args) -> None:
         logging.info(f"Current task success rate: {float(task_successes) / float(task_episodes)}")
         logging.info(f"Current total success rate: {float(total_successes) / float(total_episodes)}")
 
+        per_task_results.append({
+            "task_id": task_id,
+            "task_description": task_description,
+            "episodes": task_episodes,
+            "successes": task_successes,
+            "success_rate": float(task_successes) / float(task_episodes),
+        })
+
     logging.info(f"Total success rate: {float(total_successes) / float(total_episodes)}")
     logging.info(f"Total episodes: {total_episodes}")
+
+    results = {
+        "config": {
+            "task_suite_name": args.task_suite_name,
+            "num_trials_per_task": args.num_trials_per_task,
+            "seed": args.seed,
+        },
+        "per_task_results": per_task_results,
+        "summary": {
+            "total_episodes": total_episodes,
+            "total_successes": total_successes,
+            "total_success_rate": float(total_successes) / float(total_episodes) if total_episodes > 0 else 0.0,
+            "num_tasks_evaluated": len(per_task_results),
+        },
+    }
+    results_path = pathlib.Path(args.results_out_path)
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(results_path, "w") as f:
+        json.dump(results, f, indent=2)
+    logging.info(f"Results saved to {results_path}")
 
 
 def _get_libero_env(task, resolution, seed, task_name_strategy: str = "language"):

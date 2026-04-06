@@ -82,12 +82,31 @@ When logging results to the experiment tracking sheet, always include these meta
 
 These go in the columns after Config Name. Check existing rows in the sheet to confirm which columns they occupy.
 
+## Structured Eval Results (JSON)
+
+All eval scripts (`examples/libero/main*.py`) write a structured JSON results file at the end of evaluation. This is the **preferred source** for reading eval results programmatically — no log parsing needed.
+
+- **Default path**: `<video_out_path>/eval_results.json` (colocated with replay videos)
+- **Override**: pass `--results-out-path /custom/path.json` to the eval script
+- **Schema**: `config` (eval parameters), `per_task_results` (per-task success rates), `summary` (aggregated metrics including seen/unseen splits where applicable)
+
+To read results:
+```python
+import json
+with open("data/libero_incontext/videos/eval_results.json") as f:
+    results = json.load(f)
+print(results["summary"]["total_success_rate"])
+```
+
 ## Post-Eval Result Sync
 
-openpi eval logs are written to `logs/${Name}/<run_id>/`. To auto-sync results after eval, append to the job script:
+Eval scripts now produce a structured JSON file (`eval_results.json`) alongside videos. Use this as the primary data source for syncing results:
 
 ```bash
-claude -p "/log-to-sheet Parse logs at logs/${Name}/test1/ and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
+# Preferred: read structured JSON (no log parsing needed)
+claude -p "/log-to-sheet Read eval results from <video_out_path>/eval_results.json and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
 ```
+
+Fallback: eval logs are also written to `logs/${Name}/<run_id>/` and can still be parsed if the JSON file is unavailable.
 
 `${Name}` is the experiment name variable already defined in the job script (e.g., `pi0_fast_libero_split0`).
