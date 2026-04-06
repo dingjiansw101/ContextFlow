@@ -79,7 +79,7 @@ def eval_libero(args: Args) -> None:
     np.random.seed(args.seed)
 
     if not args.results_out_path:
-        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_results.json")
+        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_robossm_results.json")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
