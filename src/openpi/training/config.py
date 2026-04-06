@@ -123,6 +123,54 @@ DEFAULT_LIBERO_TEST_TASK_V5 = [
     "put the black bowl in the bottom drawer of the cabinet and close it",
 ]
 
+# correspond to v5 in google sheet
+DEFAULT_LIBERO_TEST_TASK_V6 = [
+    # 10
+    "put both the alphabet soup and the cream cheese box in the basket",
+    "put the yellow and white mug in the microwave and close it",
+    # goal
+    "push the plate to the front of the stove",
+    "put the bowl on the stove",
+    # object
+    "pick up the alphabet soup and place it in the basket",
+    "pick up the cream cheese and place it in the basket",
+    # spatial
+    "pick up the black bowl between the plate and the ramekin and place it on the plate",
+    "pick up the black bowl next to the cookie box and place it on the plate",
+]
+
+# correspond to v6 in google sheet
+DEFAULT_LIBERO_TEST_TASK_V7 = [
+    # 10
+    "pick up the book and place it in the back compartment of the caddy",
+    "put both the cream cheese box and the butter in the basket",
+    # goal
+    "open the middle drawer of the cabinet",
+    "put the cream cheese in the bowl",
+    # object
+    "pick up the milk and place it in the basket",
+    "pick up the bbq sauce and place it in the basket",
+    # spatial
+    "pick up the black bowl on the stove and place it on the plate",
+    "pick up the black bowl from table center and place it on the plate",
+]
+
+# correspond to v7 in google sheet
+DEFAULT_LIBERO_TEST_TASK_V8 = [
+    # 10
+    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+    "put both moka pots on the stove",
+    # goal
+    "put the wine bottle on top of the cabinet",
+    "turn on the stove",
+    # object
+    "pick up the tomato sauce and place it in the basket",
+    "pick up the ketchup and place it in the basket",
+    # spatial
+    "pick up the black bowl on the wooden cabinet and place it on the plate",
+    "pick up the black bowl on the ramekin and place it on the plate",
+]
+
 
 # --- helper, keep tiny & local ---
 def _basename(x: str) -> str:

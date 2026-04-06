@@ -66,6 +66,9 @@ Eval scripts often have default parameter values that silently produce wrong res
 | `DEFAULT_LIBERO_TEST_TASK_V3` | `split2` |
 | `DEFAULT_LIBERO_TEST_TASK_V4` | `split3` |
 | `DEFAULT_LIBERO_TEST_TASK_V5` | `split4` |
+| `DEFAULT_LIBERO_TEST_TASK_V6` | `split5` |
+| `DEFAULT_LIBERO_TEST_TASK_V7` | `split6` |
+| `DEFAULT_LIBERO_TEST_TASK_V8` | `split7` |
 
 **Check:** For every eval command in the job script:
 1. Read the eval script's arg defaults (look for dataclass fields)
