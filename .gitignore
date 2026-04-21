@@ -192,3 +192,6 @@ cython_debug/
 
 # Error logs
 errs/
+
+# Claude Code
+.claude/scheduled_tasks.lock
