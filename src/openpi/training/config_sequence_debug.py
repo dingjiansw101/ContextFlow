@@ -4089,6 +4089,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split3",
@@ -4113,6 +4114,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split4",
@@ -4137,6 +4139,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split5",
@@ -4161,6 +4164,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split6",
@@ -4185,6 +4189,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split7",
@@ -4209,6 +4214,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split8",
@@ -4233,6 +4239,7 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=8,
         batch_size=32,
+        save_interval=1000,
     ),
     api.TrainConfig(
         name="debug_pi0_libero_incontextv12_low_mem_train_split_v1",
