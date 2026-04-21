@@ -2,7 +2,17 @@ import dataclasses
 import functools
 import logging
 import platform
+import signal
+import sys
 from typing import Any
+
+_preempt_requested = False
+
+
+def _on_preempt(signum, _frame):
+    global _preempt_requested
+    logging.warning(f"Received signal {signum}; will save and exit at next step boundary for SLURM requeue")
+    _preempt_requested = True
 
 import etils.epath as epath
 import flax.nnx as nnx
@@ -194,6 +204,9 @@ def main(config: _config.TrainConfig):
     init_logging()
     logging.info(f"Running on: {platform.node()}")
 
+    signal.signal(signal.SIGTERM, _on_preempt)
+    signal.signal(signal.SIGUSR1, _on_preempt)
+
     if config.batch_size % jax.device_count() != 0:
         raise ValueError(
             f"Batch size {config.batch_size} must be divisible by the number of devices {jax.device_count()}."
@@ -284,8 +297,15 @@ def main(config: _config.TrainConfig):
             infos = []
         batch = next(data_iter)
 
-        if (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1:
+        periodic_save = (step % config.save_interval == 0 and step > start_step) or step == config.num_train_steps - 1
+        if periodic_save or _preempt_requested:
             _checkpoints.save_state(checkpoint_manager, train_state, data_loader, step)
+
+        if _preempt_requested:
+            logging.warning("Preempt requested: waiting for checkpoint manager to finish")
+            checkpoint_manager.wait_until_finished()
+            logging.warning("Preempt save complete; exiting 0 for SLURM requeue")
+            sys.exit(0)
 
     logging.info("Waiting for checkpoint manager to finish")
     checkpoint_manager.wait_until_finished()
