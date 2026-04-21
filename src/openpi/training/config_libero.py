@@ -3392,6 +3392,7 @@ def build(api) -> list[api.TrainConfig]:
             num_workers=8,
             batch_size=32,
             use_custom_dataloader=True,
+            save_interval=1000,
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v7_inference",
