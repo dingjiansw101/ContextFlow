@@ -20,9 +20,6 @@ import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.pi0_incontextv12 as pi0_incontextv12
 import openpi.models.pi0_incontextv18 as pi0_incontextv18
-import openpi.models.pi0_light as pi0Light
-import openpi.models.pi0_light_incontextv12 as pi0_light_incontextv12
-import openpi.models.pi0_light_incontextv14 as pi0_light_incontextv14
 import openpi.models.pi0_fast_incontext as pi0_fast_incontext
 
 import openpi.models.tokenizer as _tokenizer
