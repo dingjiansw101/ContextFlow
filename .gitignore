@@ -8,6 +8,7 @@ data/
 wandb/
 jobs/
 jobs
+errs
 b9_configs.py
 logs
 # Byte-compiled / optimized / DLL files
