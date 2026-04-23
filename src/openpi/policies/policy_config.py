@@ -241,14 +241,7 @@ def _build_fast_incontext_transforms(
 
     if getattr(model_config, "use_image_prompts", False):
         logging.info("Inference: Adding image prompts")
-        base_dataset = getattr(dataset, "base_dataset", dataset)
-        base_transform = getattr(dataset, "base_transform", None)
-        inputs_layers.append(
-            transforms.AddImagePromptTransform(
-                base_dataset=base_dataset,
-                transform_fn=base_transform,
-            )
-        )
+        inputs_layers.append(transforms.AddImagePromptTransform(dataset))
 
     if getattr(model_config, "use_action_state_prompts", False):
         logging.info("Inference: Adding action state prompts")
