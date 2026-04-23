@@ -152,10 +152,10 @@ class ObservationIncontext(Generic[ArrayT]):
     )
     incontext_image_masks: dict[str, at.Bool[ArrayT, "*b t"]] | dict[str, at.Bool[ArrayT, "*b e t"]] | None = None
     # incontext states, q is the max_len of episode
-    incontext_states: at.Float[ArrayT, "*b q s"] | at.Float[ArrayT, "*b e q s"] | None = None
+    incontext_states: at.Float[ArrayT, "*b q ds"] | at.Float[ArrayT, "*b e q ds"] | None = None
     incontext_state_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
     # incontext actions
-    incontext_actions: at.Float[ArrayT, "*b q s"] | at.Float[ArrayT, "*b e q s"] | None = None
+    incontext_actions: at.Float[ArrayT, "*b q da"] | at.Float[ArrayT, "*b e q da"] | None = None
     incontext_action_masks: at.Bool[ArrayT, "*b q"] | at.Bool[ArrayT, "*b e q"] | None = None
     # selected episode for incontext prompt
     incontext_selected_episode: at.Int[ArrayT, "*b e"] | None = None
