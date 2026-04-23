@@ -258,17 +258,17 @@ def _build_fast_incontext_transforms(
         inputs_layers.append(transforms.AddStatesActionsPromptTransform(**transform_kwargs))
 
 
-    fast_tokenizer = _tokenizer.FASTTokenizer(
-        max_len=getattr(model_config, "max_token_len", 256),
-        fast_tokenizer_path=_maybe_fast_tokenizer_path(model_config),
-    )
-    if isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
-        inputs_layers.append(
-            transforms.TokenizeFASTInputs(
-                fast_tokenizer,
-            )
+    # For Pi0FASTIncontextSeqConfig, TokenizeFASTInputs is already in
+    # data_config.model_transforms.inputs (see ModelTransformFactory in
+    # training/config.py) and has already run above, so we must not append a
+    # second copy (it would find `prompt` already popped and raise).
+    # For the tokenized Pi0FASTIncontextConfig variant, the model transforms
+    # don't include an incontext tokenizer, so add it here.
+    if not isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+        fast_tokenizer = _tokenizer.FASTTokenizer(
+            max_len=getattr(model_config, "max_token_len", 256),
+            fast_tokenizer_path=_maybe_fast_tokenizer_path(model_config),
         )
-    else:
         inputs_layers.append(
             transforms.TokenizeFASTIncontextInputs(
                 tokenizer=fast_tokenizer,
