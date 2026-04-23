@@ -158,6 +158,7 @@ def create_trained_policy_incontext(
 
     if train_config.model.use_action_state_prompts:
         print("Inference: Adding action state prompts")
+        demo_state_dim = getattr(train_config.data, "demo_state_dim", None)
         if train_config.data.episode_to_indexes_file is not None:
             input_transforms.append(
                         transforms.AddStatesActionsPromptTransform(
@@ -168,6 +169,7 @@ def create_trained_policy_incontext(
                             episode_to_indexes_file=train_config.data.episode_to_indexes_file,
                             padding_mode=train_config.data.padding_mode,
                             mask_padding_as_valid=train_config.data.mask_padding_as_valid,
+                            demo_state_dim=demo_state_dim,
                         )
         )
         else:
@@ -179,6 +181,7 @@ def create_trained_policy_incontext(
                                 actions_cache_path=train_config.data.actions_cache_path,
                                 padding_mode=train_config.data.padding_mode,
                                 mask_padding_as_valid=train_config.data.mask_padding_as_valid,
+                                demo_state_dim=demo_state_dim,
                             )
             )
 
@@ -251,6 +254,7 @@ def _build_fast_incontext_transforms(
             "max_len": getattr(model_config, "sample_actions", 0),
             "states_cache_path": getattr(train_config.data, "states_cache_path", None),
             "actions_cache_path": getattr(train_config.data, "actions_cache_path", None),
+            "demo_state_dim": getattr(train_config.data, "demo_state_dim", None),
         }
         episode_map = getattr(train_config.data, "episode_to_indexes_file", None)
         if episode_map is not None:
