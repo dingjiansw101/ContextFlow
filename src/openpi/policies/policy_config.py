@@ -185,7 +185,10 @@ def create_trained_policy_incontext(
                             )
             )
 
-    if isinstance(train_config.model, Pi0FASTIncontextConfig):
+    if isinstance(
+        train_config.model,
+        (Pi0FASTIncontextConfig, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig),
+    ):
         fast_policy = create_trained_policy_fast_incontext(
             train_config,
             checkpoint_dir,
