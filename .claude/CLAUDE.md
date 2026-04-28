@@ -403,7 +403,7 @@ The WebSocket policy server enables **off-robot inference**:
 - Supports streaming action chunks
 - Includes metadata endpoint for capability discovery
 
-See `docs/remote_inference.md` and `packages/openpi-client/` for details.
+See `src/openpi/serving/websocket_policy_server.py` and `packages/openpi-client/` for details.
 
 ## Testing Notes
 

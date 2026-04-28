@@ -22,8 +22,7 @@ installing uv, set up the environment with:
 GIT_LFS_SKIP_SMUDGE=1 uv sync
 ```
 
-`GIT_LFS_SKIP_SMUDGE=1` ensures the LeRobot dependency is fetched correctly. If
-your local setup is problematic, consider the [Docker workflow](docs/docker.md).
+`GIT_LFS_SKIP_SMUDGE=1` ensures the LeRobot dependency is fetched correctly.
 
 ## Model Checkpoints
 

@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The core Python packages live under `src/openpi`, covering `models`, `policies`, `shared`, `serving`, and `training`. Training and inference entry points stay in `scripts/` (for example `scripts/train.py`, `scripts/serve_policy.py`), while configuration assets and walkthroughs sit in `examples/` and `docs/`. Client-facing utilities and msgpack helpers are maintained in the sibling workspace at `packages/openpi-client`. Tests are split between the top-level `tests/` suite for integration and benchmarking and co-located module unit tests such as `src/openpi/transforms_test.py`.
+The core Python packages live under `src/openpi`, covering `models`, `policies`, `shared`, `serving`, and `training`. Training and inference entry points stay in `scripts/` (for example `scripts/train.py`, `scripts/serve_policy.py`), while configuration assets and walkthroughs sit in `examples/`. Client-facing utilities and msgpack helpers are maintained in the sibling workspace at `packages/openpi-client`. Tests are split between the top-level `tests/` suite for integration and benchmarking and co-located module unit tests such as `src/openpi/transforms_test.py`.
 
 ## Build, Test, and Development Commands
 - `GIT_LFS_SKIP_SMUDGE=1 uv sync` installs dependencies, honoring the workspace defined in `pyproject.toml`.
