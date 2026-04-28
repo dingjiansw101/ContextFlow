@@ -459,6 +459,53 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
             # wandb_enabled=False,
         ),
+        *[
+            api.TrainConfig(
+                name=f"pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_gemma2b_split{_split_idx}",
+                assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
+                model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+                    paligemma_variant="gemma_2b",
+                    action_expert_variant="gemma_300m",
+                    sample_frames=2,
+                    sample_actions=32,
+                    random_select=True,
+                ),
+                data=CustomLeRobotLiberoIncontextDataConfig(
+                    repo_id="physical-intelligence/libero",
+                    base_config=api.DataConfig(
+                        local_files_only=True,
+                        prompt_from_task=True,
+                    ),
+                    use_delta_joint_actions=False,
+                    frame_sequence_length=1,
+                    sample_frames=2,
+                    sample_actions=32,
+                    task_to_episode_path="metadata/libero/task_to_episode.json",
+                    remove_task_list=_split_test_tasks,
+                    episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+                    random_select=True,
+                ),
+                weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext(
+                    "s3://openpi-assets/checkpoints/pi0_base/params"
+                ),
+                num_train_steps=20_000,
+                num_workers=2,
+                batch_size=32,
+                use_custom_dataloader=True,
+            )
+            for _split_idx, _split_test_tasks in enumerate(
+                [
+                    api.DEFAULT_LIBERO_TEST_TASK,
+                    api.DEFAULT_LIBERO_TEST_TASK_V2,
+                    api.DEFAULT_LIBERO_TEST_TASK_V3,
+                    api.DEFAULT_LIBERO_TEST_TASK_V4,
+                    api.DEFAULT_LIBERO_TEST_TASK_V5,
+                    api.DEFAULT_LIBERO_TEST_TASK_V6,
+                    api.DEFAULT_LIBERO_TEST_TASK_V7,
+                    api.DEFAULT_LIBERO_TEST_TASK_V8,
+                ]
+            )
+        ],
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_inference",
             model=api.pi0_incontextv12.Pi0IncontextConfigv12(
