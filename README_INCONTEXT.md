@@ -55,10 +55,10 @@ Run the training config with all tasks included to generate the following cache 
 
 These cache files are automatically generated during the first training run.
 
-Or use the script to build cache
-`
-/home/dingj0b/code/openpi/src/openpi/training/build_episode_cache.py
-`
+Or use the script to build cache:
+```bash
+uv run src/openpi/training/build_episode_cache.py
+```
 
 ## Step 6: Run Config and Remove Unseen Tasks
 
@@ -76,6 +76,8 @@ This will exclude the 9 test tasks defined in `ALOHA_OBJECT_TEST_TASK` from trai
 ## Evaluation
 
 Once training is complete, you can evaluate the model using a server-client setup.
+
+> **Note:** In-context models are served by `scripts/serve_policy_incontext.py` (default port 8001), **not** `scripts/serve_policy.py` (port 8000) used by the standard π₀ / π₀-FAST workflow in [`README.md`](README.md). Make sure the eval client connects to the matching port.
 
 ### Terminal 1: Start Policy Server
 
