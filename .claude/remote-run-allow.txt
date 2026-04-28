@@ -1,0 +1,5 @@
+# Allowlist for remote-run-experiment.
+# Paths gitignored locally but needed on the remote at job-run time.
+metadata
+assets
+jobs
