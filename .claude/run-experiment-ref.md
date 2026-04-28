@@ -69,7 +69,7 @@ If the cache files are missing, training fails at dataset construction with `Fil
 - `episode_states_cache.json` / `episode_states_without_delta_cache.json` — per-episode state arrays
 - `episode_actions_first_cache.json` / `episode_actions_without_delta_cache.json` — per-episode first-action arrays
 
-`without_delta` variants are used when `use_delta_joint_actions=False`. The dataset key (e.g. `libero`, `aloha_pen_uncap`, `objects_pickup_place`) comes from the config's cache paths.
+`without_delta` variants are used when `use_delta_joint_actions=False`. The dataset key (e.g. `libero`, `aloha_pen_uncap`, `objects_pickup_place`) is the directory name in the config's cache paths, and configs sharing a dataset + action representation typically point at the same `metadata/<dataset>/` directory so the caches are reused.
 
 **Consumer expects normalized values.** The runtime consumer is `AddStatesActionsPromptTransform.__post_init__` in `src/openpi/transforms.py` (~line 857). It iterates `self.dataset[int(idx)]` where `self.dataset` came from `transform_dataset(..., skip_norm_stats=False)` — i.e. the fully-transformed, **normalized** dataset. Any builder you use to populate `states_cache_path` / `actions_cache_path` must run the same pipeline, otherwise in-context retrieval at training/eval time indexes into mis-scaled values.
 
@@ -91,13 +91,9 @@ uv run src/openpi/training/build_episode_cache.py <config_name> --exp-name dummy
 ```
 This calls `transform_dataset(..., skip_norm_stats=False)` and extracts `dataset[idx]["state"]` / `dataset[idx]["actions"][0]` (see `src/openpi/training/build_episode_cache.py:82-109`) — structurally identical to the runtime auto-builder, so output is guaranteed compatible.
 
-**Auto-build at startup (fallback):** If the cache files are absent when `AddStatesActionsPromptTransform.__post_init__` runs (e.g. policy server cold start), it builds them in-process on the same code path (`transforms.py:857-875`). Convenient for one-off recovery but blocks startup with a single-process tqdm loop — prefer running `build_episode_cache.py` ahead of time for any planned run.
+**Auto-build at startup (fallback):** If the state/action caches are absent when `AddStatesActionsPromptTransform.__post_init__` runs (e.g. policy server cold start), it builds them in-process on the same code path (`transforms.py:857-875`) — convenient for one-off recovery, but blocks startup with a single-process tqdm loop. Prefer running `build_episode_cache.py` ahead of time. Note: the auto-builder does **not** create `episode_to_indexes.json` — that file is a dataset-prep prerequisite and must already exist (`build_episode_cache.py` also requires it; see L89-91 of that script).
 
-`episode_to_indexes.json` itself is built once per dataset (separate from the state/action cache builders) and is reused across configs that share the dataset.
-
-**Reuse across configs:** Configs that share a dataset and action representation typically point at the same `metadata/<dataset>/` directory in their cache-path defaults — no override mechanism is needed (paths are plain strings on the data config).
-
-**Pre-flight check:** For any in-context config, verify all three paths exist before submitting. If only `episode_to_indexes.json` is present, run `build_episode_cache.py` to produce the state/action caches; if even the indexes file is missing, that's a dataset-prep step earlier in the pipeline and flag it for the user.
+**Pre-flight check:** For any in-context config, verify all three paths exist before submitting. If only `episode_to_indexes.json` is present, run `build_episode_cache.py` to produce the state/action caches; if it's missing, flag it for the user — earlier dataset-prep step.
 
 ## Cascade Failure Pattern
 
@@ -148,37 +144,21 @@ These go in the columns after Config Name. Check existing rows in the sheet to c
 
 All eval scripts (`examples/libero/main*.py`) write a structured JSON results file at the end of evaluation. This is the **preferred source** for reading eval results programmatically — no log parsing needed.
 
-- **Default path**: `logs/eval_results/<task_suite_name>_results.json` (in the `logs/` hierarchy, with task-suite-specific filenames to avoid collisions)
-- **Override**: pass `--results-out-path /custom/path.json` to the eval script
+- **Default path**: `logs/eval_results/<task_suite_name>_<task_split>_<variant>_results.json` (e.g. `libero_spatial_split0_incontext_results.json`; `<variant>` is `base` for `main.py`, `incontext` for `main_incontext.py`, `incontext_unseen` for `main_incontext_unseen.py`)
+- **Override**: pass `--args.results_out_path /custom/path.json` — typical usage is to save alongside the eval logs:
+  ```bash
+  python examples/libero/main_incontext_unseen.py \
+    --args.results_out_path logs/${Name}/test1/goal_unseen_results.json \
+    ...
+  ```
 - **Schema**: `config` (eval parameters), `per_task_results` (per-task success rates), `summary` (aggregated metrics including seen/unseen splits where applicable)
 
-To read results:
-```python
-import json
-with open("logs/eval_results/libero_spatial_results.json") as f:
-    results = json.load(f)
-print(results["summary"]["total_success_rate"])
-```
-
-In job scripts, override to save alongside eval logs:
+To sync to the experiment tracking sheet:
 ```bash
-python examples/libero/main_incontext_unseen.py \
-  --args.results_out_path logs/${Name}/test1/goal_unseen_results.json \
-  ...
-```
-
-## Post-Eval Result Sync
-
-Eval scripts now produce a structured JSON file (`eval_results.json`) alongside videos. Use this as the primary data source for syncing results:
-
-```bash
-# Preferred: read structured JSON (no log parsing needed)
 claude -p "/log-to-sheet Read eval results from logs/${Name}/test1/*_results.json and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
 ```
 
-Fallback: eval logs are also written to `logs/${Name}/<run_id>/` and can still be parsed if the JSON file is unavailable.
-
-`${Name}` is the experiment name variable already defined in the job script (e.g., `pi0_fast_libero_split0`).
+Fallback: eval logs at `logs/${Name}/<run_id>/` can still be parsed if the JSON file is unavailable. `${Name}` is the experiment name variable defined in the job script (e.g. `pi0_fast_libero_split0`).
 
 ## ORIX-specific failure modes (LIBERO+MuJoCo)
 
