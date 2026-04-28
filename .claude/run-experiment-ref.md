@@ -1,5 +1,23 @@
 # openpi — Pre-flight & Runtime Checks
 
+## Python venvs
+
+openpi jobs may touch up to two uv venvs:
+
+| Venv | Python | Used by |
+|------|--------|---------|
+| Project root `.venv` | 3.11 | Training (`uv run scripts/train.py`), norm stats (`uv run scripts/compute_norm_stats.py`), episode caches (`uv run src/openpi/training/build_episode_cache.py`), policy server (`uv run scripts/serve_policy.py`) — every `uv run` from the project root. |
+| `examples/libero/.venv` | 3.8 | LIBERO/MuJoCo eval client (`examples/libero/main*.py`). Pinned to 3.8 for the simulator. Job scripts activate it with `source examples/libero/.venv/bin/activate` and run a bare `python`, not `uv run`. |
+
+If the job script never `source`s `examples/libero/.venv/bin/activate` and has no `cd examples/libero`, only the project root venv is needed.
+
+**Pre-flight (covers both, when both apply):**
+```bash
+bash "$SKILL_DIR/scripts/check_python_env.sh" .venv examples/libero/.venv
+```
+
+If a venv is missing or broken, rebuild with `uv sync` in that venv's parent directory (project root for `.venv`, `examples/libero/` for the LIBERO venv). Do not submit until the script reports `OK` for every venv the job references.
+
 ## Normalization Stats
 
 Training requires precomputed normalization stats. Without them, `data_loader.py` raises:
@@ -39,6 +57,47 @@ INFO:root:Still waiting for server...
 ls <checkpoint_dir>/<exp_name>/<step> 2>/dev/null \
   || echo "MISSING: checkpoint at <checkpoint_dir>/<exp_name>/<step>"
 ```
+
+## Episode Caches
+
+In-context learning configs precompute per-episode state/action arrays so training doesn't re-decode the dataset every step. Configs that need these set `episode_to_indexes_file`, `states_cache_path`, and `actions_cache_path` on the data config (see `config_libero.py`, `config_aloha.py`, `config_sequence_debug.py` for examples — typically the `*_incontext*` variants).
+
+If the cache files are missing, training fails at dataset construction with `FileNotFoundError: Episode indexes file not found: metadata/<dataset>/episode_to_indexes.json` (or one of the cache paths).
+
+**What lives in `metadata/<dataset>/`:**
+- `episode_to_indexes.json` — episode_id → list of frame indices (must exist before generating caches)
+- `episode_states_cache.json` / `episode_states_without_delta_cache.json` — per-episode state arrays
+- `episode_actions_first_cache.json` / `episode_actions_without_delta_cache.json` — per-episode first-action arrays
+
+`without_delta` variants are used when `use_delta_joint_actions=False`. The dataset key (e.g. `libero`, `aloha_pen_uncap`, `objects_pickup_place`) comes from the config's cache paths.
+
+**Consumer expects normalized values.** The runtime consumer is `AddStatesActionsPromptTransform.__post_init__` in `src/openpi/transforms.py` (~line 857). It iterates `self.dataset[int(idx)]` where `self.dataset` came from `transform_dataset(..., skip_norm_stats=False)` — i.e. the fully-transformed, **normalized** dataset. Any builder you use to populate `states_cache_path` / `actions_cache_path` must run the same pipeline, otherwise in-context retrieval at training/eval time indexes into mis-scaled values.
+
+**Check** (resolve all three cache paths from the config and test each — works regardless of which dataset key the config uses):
+```bash
+uv run python -c "
+import openpi.training.config as c
+cfg = c.get_config('<config_name>')
+d = cfg.data
+print(d.episode_to_indexes_file)
+print(d.states_cache_path)
+print(d.actions_cache_path)
+" | xargs -I{} sh -c 'test -f "{}" && echo "OK  {}" || echo "MISSING  {}"'
+```
+
+**Generate — canonical builder (`build_episode_cache.py`, single-process):**
+```bash
+uv run src/openpi/training/build_episode_cache.py <config_name> --exp-name dummy
+```
+This calls `transform_dataset(..., skip_norm_stats=False)` and extracts `dataset[idx]["state"]` / `dataset[idx]["actions"][0]` (see `src/openpi/training/build_episode_cache.py:82-109`) — structurally identical to the runtime auto-builder, so output is guaranteed compatible.
+
+**Auto-build at startup (fallback):** If the cache files are absent when `AddStatesActionsPromptTransform.__post_init__` runs (e.g. policy server cold start), it builds them in-process on the same code path (`transforms.py:857-875`). Convenient for one-off recovery but blocks startup with a single-process tqdm loop — prefer running `build_episode_cache.py` ahead of time for any planned run.
+
+`episode_to_indexes.json` itself is built once per dataset (separate from the state/action cache builders) and is reused across configs that share the dataset.
+
+**Reuse across configs:** Configs that share a dataset and action representation typically point at the same `metadata/<dataset>/` directory in their cache-path defaults — no override mechanism is needed (paths are plain strings on the data config).
+
+**Pre-flight check:** For any in-context config, verify all three paths exist before submitting. If only `episode_to_indexes.json` is present, run `build_episode_cache.py` to produce the state/action caches; if even the indexes file is missing, that's a dataset-prep step earlier in the pipeline and flag it for the user.
 
 ## Cascade Failure Pattern
 
@@ -130,4 +189,4 @@ These failure modes are openpi+LIBERO-specific and only manifest on ORIX. They l
 | `ImportError: Cannot initialize a EGL device display` (MuJoCo/robosuite) | ORIX nodes only have the kernel-side NVIDIA driver; the user-space EGL ICD is not on the default library path. Also: `.bashrc` is **never sourced** in SLURM batch jobs, so env vars set there are invisible. | Add these lines directly in the job script, **before** launching the simulator: `export __EGL_VENDOR_LIBRARY_DIRS=$HOME/nvidia-egl`, `export LD_LIBRARY_PATH=$HOME/nvidia-egl/lib:$LD_LIBRARY_PATH`, `export MUJOCO_GL=egl`. Run eval clients as `env -u CUDA_VISIBLE_DEVICES python ...` — note bare `python`, not `uv run`, because the simulator venv (`examples/libero/.venv`, Python 3.8) must be activated first via `source examples/libero/.venv/bin/activate`. The policy server still uses `uv run` (project root `.venv`, Python 3.11). Stripping `CUDA_VISIBLE_DEVICES` is needed because robosuite parses it as a substring and fails on multi-digit GPU IDs set by JAX. |
 | LIBERO/MuJoCo client `Aborted (core dumped)` on H200 *only*, immediately after `[InjectDemoIndexes] Test task: …` (one crash per `libero_*` suite, no Python traceback) — same script runs fine on H100 | User-space EGL ICD shim at `~/nvidia-egl/lib` is H100-built and ABI-incompatible with the H200 driver; native segfault inside MuJoCo's EGL backend before any episode runs | **Pin the eval job script to H100:** add `#SBATCH --partition=batch-h100` and submit with `sbatch -q batch <script>`. Avoid `-p batch-h100,batch-h200` for any libero eval — comma-list partitions can land on H200. Use `scontrol update jobid=<N> Partition=batch-h100` to repin already-pending jobs without losing queue position. (Confirmed 2026-04-27 across splits 1, 3, 5 of `pi0_libero_incontextv18_normstats_fix` — all crashed identically on `orix-worker-h200-1`; splits 2, 4 with the same script worked on `orix-worker-h100-0`.) |
 | `Normalization stats not found` | Missing `assets/<config>/.../norm_stats.json` | Check `assets_repo_override` (see § Normalization Stats above) OR run `compute_norm_stats.py` |
-| `FileNotFoundError` on a metadata path | Precomputed cache missing | Run the corresponding `build_*_cache.py` script |
+| `FileNotFoundError` on a metadata path | Precomputed episode cache missing | See § Episode Caches above — run `build_episode_cache.py`. |
