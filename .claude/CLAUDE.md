@@ -15,6 +15,8 @@ git submodule update --init --recursive
 GIT_LFS_SKIP_SMUDGE=1 uv sync
 ```
 
+For development shells (or `.env` files), set `PYTHONPATH=src` so scripts resolve workspace imports outside `uv run`. Always prefer `uv run` for entry points.
+
 ### Training Workflow
 ```bash
 # 1. Compute normalization statistics (required before first training run)
@@ -51,6 +53,7 @@ uv run pytest -m "not manual"
 ```
 
 ### Code Quality
+Python 3.11, line length 120, enforced by `ruff` (lint + format).
 ```bash
 # Lint and format code (auto-fix issues)
 uv run ruff check . --fix
@@ -427,11 +430,4 @@ See the [Troubleshooting section in README.md](README.md#troubleshooting) for co
 
 For bugs or questions not covered in docs, see [CONTRIBUTING.md](CONTRIBUTING.md) for how to file issues or submit PRs.
 
-## Issue about q-former inference precision.
-
-```
-export JAX_DEFAULT_MATMUL_PRECISION=float32
-uv run scripts/serve_policy_incontext.py --port $PORT policy:checkpoint --policy.inference_dtype=float32 --policy.config=${Name}_inference --policy.dir=checkpoints/$Name/${Name}/19999 &
-
-```
 
