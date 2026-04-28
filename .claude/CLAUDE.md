@@ -36,6 +36,11 @@ uv run scripts/serve_policy.py policy:checkpoint \
   --policy.config=<config_name> \
   --policy.dir=checkpoints/<config_name>/<exp_name>/<iteration>
 
+# In-context models (pi0_incontextv*) use a separate binary on port 8001:
+uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+  --policy.config=<incontext_config_name> \
+  --policy.dir=checkpoints/<config_name>/<exp_name>/<iteration>
+
 # Test inference without a robot (generates random observations)
 uv run examples/simple_client/simple_client.py --checkpoint-dir <path>
 ```
