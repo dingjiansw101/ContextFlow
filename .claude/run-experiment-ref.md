@@ -117,3 +117,14 @@ claude -p "/log-to-sheet Read eval results from logs/${Name}/test1/*_results.jso
 Fallback: eval logs are also written to `logs/${Name}/<run_id>/` and can still be parsed if the JSON file is unavailable.
 
 `${Name}` is the experiment name variable already defined in the job script (e.g., `pi0_fast_libero_split0`).
+
+## ORIX-specific failure modes (LIBERO+MuJoCo)
+
+These failure modes are openpi+LIBERO-specific and only manifest on ORIX. They live in this project ref because they're not generic to ORIX.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `ImportError: Cannot initialize a EGL device display` (MuJoCo/robosuite) | ORIX nodes only have the kernel-side NVIDIA driver; the user-space EGL ICD is not on the default library path. Also: `.bashrc` is **never sourced** in SLURM batch jobs, so env vars set there are invisible. | Add these lines directly in the job script, **before** launching the simulator: `export __EGL_VENDOR_LIBRARY_DIRS=$HOME/nvidia-egl`, `export LD_LIBRARY_PATH=$HOME/nvidia-egl/lib:$LD_LIBRARY_PATH`, `export MUJOCO_GL=egl`. Run eval clients as `env -u CUDA_VISIBLE_DEVICES python ...` — note bare `python`, not `uv run`, because the simulator venv (`examples/libero/.venv`, Python 3.8) must be activated first via `source examples/libero/.venv/bin/activate`. The policy server still uses `uv run` (project root `.venv`, Python 3.11). Stripping `CUDA_VISIBLE_DEVICES` is needed because robosuite parses it as a substring and fails on multi-digit GPU IDs set by JAX. |
+| LIBERO/MuJoCo client `Aborted (core dumped)` on H200 *only*, immediately after `[InjectDemoIndexes] Test task: …` (one crash per `libero_*` suite, no Python traceback) — same script runs fine on H100 | User-space EGL ICD shim at `~/nvidia-egl/lib` is H100-built and ABI-incompatible with the H200 driver; native segfault inside MuJoCo's EGL backend before any episode runs | **Pin the eval job script to H100:** add `#SBATCH --partition=batch-h100` and submit with `sbatch -q batch <script>`. Avoid `-p batch-h100,batch-h200` for any libero eval — comma-list partitions can land on H200. Use `scontrol update jobid=<N> Partition=batch-h100` to repin already-pending jobs without losing queue position. (Confirmed 2026-04-27 across splits 1, 3, 5 of `pi0_libero_incontextv18_normstats_fix` — all crashed identically on `orix-worker-h200-1`; splits 2, 4 with the same script worked on `orix-worker-h100-0`.) |
+| `Normalization stats not found` | Missing `assets/<config>/.../norm_stats.json` | Check `assets_repo_override` (see § Normalization Stats above) OR run `compute_norm_stats.py` |
+| `FileNotFoundError` on a metadata path | Precomputed cache missing | Run the corresponding `build_*_cache.py` script |
