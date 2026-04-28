@@ -166,10 +166,10 @@ These failure modes are openpi+LIBERO-specific and only manifest on ORIX. They l
 
 ## Ibex-specific failure modes (LIBERO+MuJoCo)
 
-These failure modes are openpi+LIBERO-specific to Ibex. Don't naively port the ORIX workarounds — Ibex differs from ORIX in EGL setup and `PYTHONPATH` requirements.
+Don't port the ORIX EGL workaround — Ibex compute has full system EGL.
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| `ModuleNotFoundError: No module named 'torch'` (or `robosuite` / `libero`) immediately after the eval client launches | `examples/libero/.venv` doesn't exist on Ibex; `source examples/libero/.venv/bin/activate` in the job script silently no-ops (no `set -e`), then bare `python` falls through to system Python which lacks the simulator deps | Bootstrap the venv once on Ibex: `cd /ibex/user/dingj0b/code/<repo> && uv venv --python 3.8 examples/libero/.venv && source examples/libero/.venv/bin/activate && uv pip sync examples/libero/requirements.txt third_party/libero/requirements.txt packages/openpi-client/pyproject.toml --extra-index-url https://download.pytorch.org/whl/cu113 --index-strategy=unsafe-best-match`. The 3-file sync mirrors `examples/libero/Dockerfile` — `requirements.txt` alone misses `bddl`, `robomimic`, etc. |
-| `ModuleNotFoundError: No module named 'openpi_client'` after the libero/robosuite imports succeed | Eval-client `PYTHONPATH` only includes `third_party/libero`; the openpi-client package and the openpi root aren't on the path | In the job script, set `export PYTHONPATH="${PYTHONPATH:-}:$PWD:$PWD/packages/openpi-client/src:$PWD/third_party/libero"` (matches the Dockerfile's `ENV PYTHONPATH=/app:/app/packages/openpi-client/src:/app/third_party/libero`). |
-| `ImportError: Cannot initialize a EGL device display` on Ibex | Job script ports the ORIX EGL workaround (`__EGL_VENDOR_LIBRARY_DIRS=$HOME/nvidia-egl` + `LD_LIBRARY_PATH=$HOME/nvidia-egl/lib:...`) but the user-space NVIDIA libs in `~/nvidia-egl/` are pinned to ORIX's driver version (e.g., 570.211.01) which mismatches Ibex compute's driver (e.g., 570.86.15) | **Drop the ORIX EGL exports on Ibex.** Ibex compute nodes have full system EGL at `/usr/lib64/libEGL_nvidia.so.<ver>` with ICD JSON at `/usr/share/glvnd/egl_vendor.d/10_nvidia.json` — `MUJOCO_GL=egl` alone is sufficient. Verify on a compute node with `srun --jobid=<id> --overlap nvidia-smi --query-gpu=driver_version --format=csv,noheader` if you suspect a driver-version mismatch. |
+| Symptom | Fix |
+|---|---|
+| Eval client `ModuleNotFoundError: torch` / `robosuite` / `libero` | `examples/libero/.venv` not built. Bootstrap once: `uv venv --python 3.8 examples/libero/.venv && source examples/libero/.venv/bin/activate && uv pip sync examples/libero/requirements.txt third_party/libero/requirements.txt packages/openpi-client/pyproject.toml --extra-index-url https://download.pytorch.org/whl/cu113 --index-strategy=unsafe-best-match` (3-file sync matches Dockerfile). |
+| `ModuleNotFoundError: openpi_client` after libero imports succeed | `export PYTHONPATH="${PYTHONPATH:-}:$PWD:$PWD/packages/openpi-client/src:$PWD/third_party/libero"`. |
+| `ImportError: Cannot initialize a EGL device display` | Drop ORIX EGL exports (`__EGL_VENDOR_LIBRARY_DIRS`, `LD_LIBRARY_PATH=$HOME/nvidia-egl/lib:...`) — the user-space libs pin the wrong driver version. Just `MUJOCO_GL=egl`. |
