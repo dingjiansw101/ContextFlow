@@ -489,7 +489,7 @@ def build(api) -> list[api.TrainConfig]:
                     "s3://openpi-assets/checkpoints/pi0_base/params"
                 ),
                 num_train_steps=20_000,
-                num_workers=2,
+                num_workers=32,
                 batch_size=32,
                 use_custom_dataloader=True,
             )
