@@ -24,6 +24,7 @@ LOG_DIR="logs/${NAME}/${RUN_ID}"
 VIDEO_DIR="data/libero/${NAME}/${RUN_ID}"
 ProjectPython="${ProjectPython:-}"
 LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
+SERVER_LOG="${LOG_DIR}/${SERVER_LOG_STEM:-server_weight_float32}.log"
 
 mkdir -p "$LOG_DIR" "$VIDEO_DIR"
 
@@ -68,28 +69,28 @@ if [ -n "$ProjectPython" ]; then
     XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
         "$ProjectPython" scripts/serve_policy.py --port "$PORT" \
             policy:checkpoint --policy.config="$NAME" --policy.dir="$CHECKPOINT_DIR" \
-            >"${LOG_DIR}/server_weight_float32.log" 2>&1 &
+            >"$SERVER_LOG" 2>&1 &
 else
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
     XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
         uv run scripts/serve_policy.py --port "$PORT" \
             policy:checkpoint --policy.config="$NAME" --policy.dir="$CHECKPOINT_DIR" \
-            >"${LOG_DIR}/server_weight_float32.log" 2>&1 &
+            >"$SERVER_LOG" 2>&1 &
 fi
 SERVER_PID=$!
 
 for _ in $(seq 1 180); do
     if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-        echo "policy server exited early; see ${LOG_DIR}/server_weight_float32.log" >&2
+        echo "policy server exited early; see ${SERVER_LOG}" >&2
         exit 67
     fi
-    if grep -q "Creating server" "${LOG_DIR}/server_weight_float32.log" 2>/dev/null; then
+    if grep -q "Creating server" "$SERVER_LOG" 2>/dev/null; then
         break
     fi
     sleep 2
 done
-if ! grep -q "Creating server" "${LOG_DIR}/server_weight_float32.log" 2>/dev/null; then
-    echo "policy server did not become ready; see ${LOG_DIR}/server_weight_float32.log" >&2
+if ! grep -q "Creating server" "$SERVER_LOG" 2>/dev/null; then
+    echo "policy server did not become ready; see ${SERVER_LOG}" >&2
     exit 68
 fi
 
