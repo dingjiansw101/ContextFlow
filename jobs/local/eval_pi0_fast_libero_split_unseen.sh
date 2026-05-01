@@ -36,7 +36,13 @@ if [ ! -f assets/pi0_fast_libero_split0/physical-intelligence/libero/norm_stats.
     exit 66
 fi
 
-PORT="${PORT:-$(python - <<'PY'
+if [ -n "$ProjectPython" ]; then
+    PORT_PYTHON="$ProjectPython"
+else
+    PORT_PYTHON="$(command -v python3 || command -v python)"
+fi
+
+PORT="${PORT:-$("$PORT_PYTHON" - <<'PY'
 import socket
 s = socket.socket()
 s.bind(("", 0))
