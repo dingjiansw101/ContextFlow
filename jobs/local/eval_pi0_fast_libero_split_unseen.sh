@@ -120,9 +120,18 @@ run_suite() {
         >"${LOG_DIR}/${stem}_unseen_weight_float32.log" 2>&1
 }
 
-run_suite libero_spatial spatial
-run_suite libero_object object
-run_suite libero_goal goal
-run_suite libero_10 10
+run_requested_suite() {
+    case "$1" in
+        spatial|libero_spatial) run_suite libero_spatial spatial ;;
+        object|libero_object) run_suite libero_object object ;;
+        goal|libero_goal) run_suite libero_goal goal ;;
+        10|libero_10) run_suite libero_10 10 ;;
+        *) echo "unsupported suite: $1" >&2; exit 64 ;;
+    esac
+}
+
+for suite in ${SUITE_LIST:-spatial object goal 10}; do
+    run_requested_suite "$suite"
+done
 
 echo "Completed held-out eval for ${NAME}; results in ${LOG_DIR}"
