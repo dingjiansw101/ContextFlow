@@ -22,6 +22,8 @@ NAME="pi0_fast_libero_split${SPLIT_ID}"
 TASK_SPLIT="split${SPLIT_ID}"
 LOG_DIR="logs/${NAME}/${RUN_ID}"
 VIDEO_DIR="data/libero/${NAME}/${RUN_ID}"
+ProjectPython="${ProjectPython:-}"
+LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
 
 mkdir -p "$LOG_DIR" "$VIDEO_DIR"
 
@@ -55,11 +57,19 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Starting policy server for ${NAME} on port ${PORT}"
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
-XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
-    uv run scripts/serve_policy.py --port "$PORT" \
-        policy:checkpoint --policy.config="$NAME" --policy.dir="$CHECKPOINT_DIR" \
-        >"${LOG_DIR}/server_weight_float32.log" 2>&1 &
+if [ -n "$ProjectPython" ]; then
+    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+    XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
+        "$ProjectPython" scripts/serve_policy.py --port "$PORT" \
+            policy:checkpoint --policy.config="$NAME" --policy.dir="$CHECKPOINT_DIR" \
+            >"${LOG_DIR}/server_weight_float32.log" 2>&1 &
+else
+    CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
+    XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
+        uv run scripts/serve_policy.py --port "$PORT" \
+            policy:checkpoint --policy.config="$NAME" --policy.dir="$CHECKPOINT_DIR" \
+            >"${LOG_DIR}/server_weight_float32.log" 2>&1 &
+fi
 SERVER_PID=$!
 
 for _ in $(seq 1 180); do
@@ -77,7 +87,11 @@ if ! grep -q "Creating server" "${LOG_DIR}/server_weight_float32.log" 2>/dev/nul
     exit 68
 fi
 
-source examples/libero/.venv/bin/activate
+if [ ! -x "${LiberoVenv}/bin/python" ]; then
+    echo "LIBERO python not found: ${LiberoVenv}/bin/python" >&2
+    exit 66
+fi
+source "${LiberoVenv}/bin/activate"
 export PYTHONPATH="${PYTHONPATH:-}:$PWD:$PWD/packages/openpi-client/src:$PWD/third_party/libero"
 export MUJOCO_GL="${MUJOCO_GL:-egl}"
 
