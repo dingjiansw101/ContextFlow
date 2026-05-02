@@ -744,7 +744,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -924,7 +927,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -950,7 +956,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -976,7 +985,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -1002,7 +1014,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -1028,7 +1043,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -1054,7 +1072,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,
@@ -1080,7 +1101,10 @@ def build(api) -> list["api.TrainConfig"]:
             remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
             episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
         ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
+        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
+        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=20_000,
         ema_decay=None,
         num_workers=8,

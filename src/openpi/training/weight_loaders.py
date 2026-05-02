@@ -55,6 +55,35 @@ class CheckpointWeightLoader(WeightLoader):
 
 
 @dataclasses.dataclass(frozen=True)
+class CheckpointWeightLoaderShapeFlexible(WeightLoader):
+    """Loads weights from a checkpoint, silently dropping keys whose shapes don't match
+    the reference model. Useful for size-matched LLM variants (e.g., gemma_900m) where
+    the LLM trunk shape differs from the loaded checkpoint but the vision encoder and
+    embedder shapes match. Dropped keys fall back to the model's random initialization
+    via missing_regex='.*'.
+
+    Compatible with the same checkpoint paths as CheckpointWeightLoader.
+    """
+
+    params_path: str
+
+    def load(self, params: at.Params) -> at.Params:
+        loaded_params = _model.restore_params(download.maybe_download(self.params_path), restore_type=np.ndarray)
+        flat_ref = flax.traverse_util.flatten_dict(params, sep="/")
+        flat_loaded = flax.traverse_util.flatten_dict(loaded_params, sep="/")
+        kept = {k: v for k, v in flat_loaded.items() if k in flat_ref and v.shape == flat_ref[k].shape}
+        dropped = sorted(set(flat_loaded.keys()) - set(kept.keys()))
+        if dropped:
+            logger.info(
+                f"[CheckpointWeightLoaderShapeFlexible] Kept {len(kept)} matching keys; "
+                f"dropped {len(dropped)} keys due to shape mismatch / not in model. "
+                f"Examples: {dropped[:3]}"
+            )
+        loaded_filtered = flax.traverse_util.unflatten_dict(kept, sep="/")
+        return _merge_params(loaded_filtered, params, missing_regex=".*")
+
+
+@dataclasses.dataclass(frozen=True)
 class CheckpointWeightLoaderIncontext(WeightLoader):
     """Loads an entire set of weights from a checkpoint.
 
