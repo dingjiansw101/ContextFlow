@@ -42,10 +42,6 @@ GIT_LFS_SKIP_SMUDGE=1 uv sync
 
 NOTE: `GIT_LFS_SKIP_SMUDGE=1` is needed to pull LeRobot as a dependency.
 
-**Docker**: As an alternative to uv installation, we provide instructions for installing openpi using Docker. If you encounter issues with your system setup, consider using Docker to simplify installation. See [Docker Setup](docs/docker.md) for more details.
-
-
-
 
 ## Model Checkpoints
 
@@ -101,7 +97,7 @@ You can also test this out in the [example notebook](examples/inference.ipynb).
 
 We provide detailed step-by-step examples for running inference of our pre-trained checkpoints on [DROID](examples/droid/README.md) and [ALOHA](examples/aloha_real/README.md) robots.
 
-**Remote Inference**: We provide [examples and code](docs/remote_inference.md) for running inference of our models **remotely**: the model can run on a different server and stream actions to the robot via a websocket connection. This makes it easy to use more powerful GPUs off-robot and keep robot and policy environments separate.
+**Remote Inference**: The model can run on a different server and stream actions to the robot via a websocket connection (see `src/openpi/serving/websocket_policy_server.py` and `packages/openpi-client/`). This makes it easy to use more powerful GPUs off-robot and keep robot and policy environments separate.
 
 **Test inference without a robot**: We provide a [script](examples/simple_client/README.md) for testing inference without a robot. This script will generate a random observation and run inference with the model. See [here](examples/simple_client/README.md) for more details.
 

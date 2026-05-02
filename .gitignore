@@ -18,6 +18,7 @@ __pycache__/
 
 saved_demo_frames/
 # XJ's ignored files
+visualized_keyframes/
 dcgm/
 train_inference_transform_check.py
 get_train_video.py
@@ -189,3 +190,9 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Error logs
+errs/
+
+# Claude Code
+.claude/scheduled_tasks.lock

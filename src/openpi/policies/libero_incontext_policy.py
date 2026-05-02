@@ -209,7 +209,7 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             inputs["dem_prompt_all_actions"] = padded_actions
             inputs["dem_prompt_all_actions_mask"] = np.ones(len(padded_actions), dtype=bool)
 
-        # Process current frames sequence (NEW for CustomLeRobotDatasetv2)
+        # Process current frames sequence
         # current_images_seq: dict with {"image": [N, H, W, 3], "wrist_image": [N, H, W, 3]}
         if "current_images_seq" in data:
             curr_images = data["current_images_seq"]

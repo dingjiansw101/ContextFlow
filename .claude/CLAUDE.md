@@ -15,6 +15,8 @@ git submodule update --init --recursive
 GIT_LFS_SKIP_SMUDGE=1 uv sync
 ```
 
+For development shells (or `.env` files), set `PYTHONPATH=src` so scripts resolve workspace imports outside `uv run`. Always prefer `uv run` for entry points.
+
 ### Training Workflow
 ```bash
 # 1. Compute normalization statistics (required before first training run)
@@ -34,6 +36,18 @@ uv run scripts/serve_policy.py policy:checkpoint \
   --policy.config=<config_name> \
   --policy.dir=checkpoints/<config_name>/<exp_name>/<iteration>
 
+# In-context models (pi0_incontextv*) use a separate binary on port 8001:
+uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+  --policy.config=<incontext_config_name> \
+  --policy.dir=checkpoints/<config_name>/<exp_name>/<iteration>
+
+# For more stable in-context inference, force float32 matmul + float32 dtype:
+export JAX_DEFAULT_MATMUL_PRECISION=float32
+uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+  --policy.inference_dtype=float32 \
+  --policy.config=<incontext_config_name> \
+  --policy.dir=checkpoints/<config_name>/<exp_name>/<iteration>
+
 # Test inference without a robot (generates random observations)
 uv run examples/simple_client/simple_client.py --checkpoint-dir <path>
 ```
@@ -51,6 +65,7 @@ uv run pytest -m "not manual"
 ```
 
 ### Code Quality
+Python 3.11, line length 120, enforced by `ruff` (lint + format).
 ```bash
 # Lint and format code (auto-fix issues)
 uv run ruff check . --fix
@@ -395,7 +410,7 @@ The WebSocket policy server enables **off-robot inference**:
 - Supports streaming action chunks
 - Includes metadata endpoint for capability discovery
 
-See `docs/remote_inference.md` and `packages/openpi-client/` for details.
+See `src/openpi/serving/websocket_policy_server.py` and `packages/openpi-client/` for details.
 
 ## Testing Notes
 
@@ -426,12 +441,3 @@ See the [Troubleshooting section in README.md](README.md#troubleshooting) for co
 - Dataset download failures
 
 For bugs or questions not covered in docs, see [CONTRIBUTING.md](CONTRIBUTING.md) for how to file issues or submit PRs.
-
-## Issue about q-former inference precision.
-
-```
-export JAX_DEFAULT_MATMUL_PRECISION=float32
-uv run scripts/serve_policy_incontext.py --port $PORT policy:checkpoint --policy.inference_dtype=float32 --policy.config=${Name}_inference --policy.dir=checkpoints/$Name/${Name}/19999 &
-
-```
-

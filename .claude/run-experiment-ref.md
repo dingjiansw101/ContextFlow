@@ -72,44 +72,31 @@ ls <checkpoint_dir>/<exp_name>/<step> 2>/dev/null \
 
 ## Episode Caches
 
-In-context learning configs precompute per-episode state/action arrays so training doesn't re-decode the dataset every step. Configs that need these set `episode_to_indexes_file`, `states_cache_path`, and `actions_cache_path` on the data config (see `config_libero.py`, `config_aloha.py`, `config_sequence_debug.py` for examples — typically the `*_incontext*` variants).
+In-context configs precompute per-episode state/action arrays so training doesn't re-decode the dataset every step. The data config sets three paths under `metadata/<dataset>/`; if any are missing, dataset construction raises `FileNotFoundError`. Configs that need these are typically `*_incontext*` variants (see `config_libero.py`, `config_aloha.py`, `config_sequence_debug.py`).
 
-If the cache files are missing, training fails at dataset construction with `FileNotFoundError: Episode indexes file not found: metadata/<dataset>/episode_to_indexes.json` (or one of the cache paths).
+**Files:**
+- `episode_to_indexes.json` — episode_id → frame indices (built per-dataset, reused across configs)
+- `episode_states_cache.json` / `episode_actions_first_cache.json` — per-episode arrays
+- `*_without_delta_cache.json` variants are used when `use_delta_joint_actions=False`
 
-**What lives in `metadata/<dataset>/`:**
-- `episode_to_indexes.json` — episode_id → list of frame indices (must exist before generating caches)
-- `episode_states_cache.json` / `episode_states_without_delta_cache.json` — per-episode state arrays
-- `episode_actions_first_cache.json` / `episode_actions_without_delta_cache.json` — per-episode first-action arrays
+**Caches must be normalized.** The runtime consumer (`AddStatesActionsPromptTransform.__post_init__` in `src/openpi/transforms.py`) indexes into a `transform_dataset(..., skip_norm_stats=False)` view. Any builder must run the same pipeline, or in-context retrieval will use mis-scaled values.
 
-`without_delta` variants are used when `use_delta_joint_actions=False`. The dataset key (e.g. `libero`, `aloha_pen_uncap`, `objects_pickup_place`) comes from the config's cache paths.
-
-**Consumer expects normalized values.** The runtime consumer is `AddStatesActionsPromptTransform.__post_init__` in `src/openpi/transforms.py` (~line 857). It iterates `self.dataset[int(idx)]` where `self.dataset` came from `transform_dataset(..., skip_norm_stats=False)` — i.e. the fully-transformed, **normalized** dataset. Any builder you use to populate `states_cache_path` / `actions_cache_path` must run the same pipeline, otherwise in-context retrieval at training/eval time indexes into mis-scaled values.
-
-**Check** (resolve all three cache paths from the config and test each — works regardless of which dataset key the config uses):
+**Check all three paths:**
 ```bash
 uv run python -c "
 import openpi.training.config as c
-cfg = c.get_config('<config_name>')
-d = cfg.data
-print(d.episode_to_indexes_file)
-print(d.states_cache_path)
-print(d.actions_cache_path)
+d = c.get_config('<config_name>').data
+print(d.episode_to_indexes_file); print(d.states_cache_path); print(d.actions_cache_path)
 " | xargs -I{} sh -c 'test -f "{}" && echo "OK  {}" || echo "MISSING  {}"'
 ```
 
-**Generate — canonical builder (`build_episode_cache.py`, single-process):**
+**Generate state/action caches** (matches the runtime pipeline):
 ```bash
 uv run src/openpi/training/build_episode_cache.py <config_name> --exp-name dummy
 ```
-This calls `transform_dataset(..., skip_norm_stats=False)` and extracts `dataset[idx]["state"]` / `dataset[idx]["actions"][0]` (see `src/openpi/training/build_episode_cache.py:82-109`) — structurally identical to the runtime auto-builder, so output is guaranteed compatible.
+If the caches are absent at runtime, `AddStatesActionsPromptTransform` auto-builds on the same code path — fine for cold-start recovery but blocks startup with a single-process tqdm loop, so prefer pre-building.
 
-**Auto-build at startup (fallback):** If the cache files are absent when `AddStatesActionsPromptTransform.__post_init__` runs (e.g. policy server cold start), it builds them in-process on the same code path (`transforms.py:857-875`). Convenient for one-off recovery but blocks startup with a single-process tqdm loop — prefer running `build_episode_cache.py` ahead of time for any planned run.
-
-`episode_to_indexes.json` itself is built once per dataset (separate from the state/action cache builders) and is reused across configs that share the dataset.
-
-**Reuse across configs:** Configs that share a dataset and action representation typically point at the same `metadata/<dataset>/` directory in their cache-path defaults — no override mechanism is needed (paths are plain strings on the data config).
-
-**Pre-flight check:** For any in-context config, verify all three paths exist before submitting. If only `episode_to_indexes.json` is present, run `build_episode_cache.py` to produce the state/action caches; if even the indexes file is missing, that's a dataset-prep step earlier in the pipeline and flag it for the user.
+**Pre-flight:** Verify all three paths. If only `episode_to_indexes.json` exists, run `build_episode_cache.py`; if it's missing too, that's a separate dataset-prep step.
 
 ## Cascade Failure Pattern
 
@@ -137,6 +124,9 @@ Eval scripts often have default parameter values that silently produce wrong res
 | `DEFAULT_LIBERO_TEST_TASK_V3` | `split2` |
 | `DEFAULT_LIBERO_TEST_TASK_V4` | `split3` |
 | `DEFAULT_LIBERO_TEST_TASK_V5` | `split4` |
+| `DEFAULT_LIBERO_TEST_TASK_V6` | `split5` |
+| `DEFAULT_LIBERO_TEST_TASK_V7` | `split6` |
+| `DEFAULT_LIBERO_TEST_TASK_V8` | `split7` |
 
 **Check:** For every eval command in the job script:
 1. Read the eval script's arg defaults (look for dataclass fields)
@@ -157,37 +147,21 @@ These go in the columns after Config Name. Check existing rows in the sheet to c
 
 All eval scripts (`examples/libero/main*.py`) write a structured JSON results file at the end of evaluation. This is the **preferred source** for reading eval results programmatically — no log parsing needed.
 
-- **Default path**: `logs/eval_results/<task_suite_name>_results.json` (in the `logs/` hierarchy, with task-suite-specific filenames to avoid collisions)
-- **Override**: pass `--results-out-path /custom/path.json` to the eval script
+- **Default path**: `logs/eval_results/<task_suite_name>_<task_split>_<variant>_results.json` (e.g. `libero_spatial_split0_incontext_results.json`; `<variant>` is `base` for `main.py`, `incontext` for `main_incontext.py`, `incontext_unseen` for `main_incontext_unseen.py`)
+- **Override**: pass `--args.results_out_path /custom/path.json` — typical usage is to save alongside the eval logs:
+  ```bash
+  python examples/libero/main_incontext_unseen.py \
+    --args.results_out_path logs/${Name}/test1/goal_unseen_results.json \
+    ...
+  ```
 - **Schema**: `config` (eval parameters), `per_task_results` (per-task success rates), `summary` (aggregated metrics including seen/unseen splits where applicable)
 
-To read results:
-```python
-import json
-with open("logs/eval_results/libero_spatial_results.json") as f:
-    results = json.load(f)
-print(results["summary"]["total_success_rate"])
-```
-
-In job scripts, override to save alongside eval logs:
+To sync to the experiment tracking sheet:
 ```bash
-python examples/libero/main_incontext_unseen.py \
-  --args.results_out_path logs/${Name}/test1/goal_unseen_results.json \
-  ...
-```
-
-## Post-Eval Result Sync
-
-Eval scripts now produce a structured JSON file (`eval_results.json`) alongside videos. Use this as the primary data source for syncing results:
-
-```bash
-# Preferred: read structured JSON (no log parsing needed)
 claude -p "/log-to-sheet Read eval results from logs/${Name}/test1/*_results.json and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
 ```
 
-Fallback: eval logs are also written to `logs/${Name}/<run_id>/` and can still be parsed if the JSON file is unavailable.
-
-`${Name}` is the experiment name variable already defined in the job script (e.g., `pi0_fast_libero_split0`).
+Fallback: eval logs at `logs/${Name}/<run_id>/` can still be parsed if the JSON file is unavailable. `${Name}` is the experiment name variable defined in the job script (e.g. `pi0_fast_libero_split0`).
 
 ## ORIX-specific failure modes (LIBERO+MuJoCo)
 
@@ -199,3 +173,13 @@ These failure modes are openpi+LIBERO-specific and only manifest on ORIX. They l
 | LIBERO/MuJoCo client `Aborted (core dumped)` on H200 *only*, immediately after `[InjectDemoIndexes] Test task: …` (one crash per `libero_*` suite, no Python traceback) — same script runs fine on H100 | User-space EGL ICD shim at `~/nvidia-egl/lib` is H100-built and ABI-incompatible with the H200 driver; native segfault inside MuJoCo's EGL backend before any episode runs | **Pin the eval job script to H100:** add `#SBATCH --partition=batch-h100` and submit with `sbatch -q batch <script>`. Avoid `-p batch-h100,batch-h200` for any libero eval — comma-list partitions can land on H200. Use `scontrol update jobid=<N> Partition=batch-h100` to repin already-pending jobs without losing queue position. (Confirmed 2026-04-27 across splits 1, 3, 5 of `pi0_libero_incontextv18_normstats_fix` — all crashed identically on `orix-worker-h200-1`; splits 2, 4 with the same script worked on `orix-worker-h100-0`.) |
 | `Normalization stats not found` | Missing `assets/<config>/.../norm_stats.json` | Check `assets_repo_override` (see § Normalization Stats above) OR run `compute_norm_stats.py` |
 | `FileNotFoundError` on a metadata path | Precomputed episode cache missing | See § Episode Caches above — run `build_episode_cache.py`. |
+
+## Ibex-specific failure modes (LIBERO+MuJoCo)
+
+Don't port the ORIX EGL workaround — Ibex compute has full system EGL.
+
+| Symptom | Fix |
+|---|---|
+| Eval client `ModuleNotFoundError: torch` / `robosuite` / `libero` | `examples/libero/.venv` not built. Bootstrap once: `uv venv --python 3.8 examples/libero/.venv && source examples/libero/.venv/bin/activate && uv pip sync examples/libero/requirements.txt third_party/libero/requirements.txt packages/openpi-client/pyproject.toml --extra-index-url https://download.pytorch.org/whl/cu113 --index-strategy=unsafe-best-match` (3-file sync matches Dockerfile). |
+| `ModuleNotFoundError: openpi_client` after libero imports succeed | `export PYTHONPATH="${PYTHONPATH:-}:$PWD:$PWD/packages/openpi-client/src:$PWD/third_party/libero"`. |
+| `ImportError: Cannot initialize a EGL device display` | Drop ORIX EGL exports (`__EGL_VENDOR_LIBRARY_DIRS`, `LD_LIBRARY_PATH=$HOME/nvidia-egl/lib:...`) — the user-space libs pin the wrong driver version. Just `MUJOCO_GL=egl`. |
