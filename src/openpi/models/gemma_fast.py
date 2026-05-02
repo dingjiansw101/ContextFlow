@@ -29,7 +29,7 @@ import ml_collections
 import openpi.models.lora as lora
 import openpi.shared.array_typing as at
 
-Variant = Literal["gemma_2b", "gemma_2b_lora"]
+Variant = Literal["gemma_2b", "gemma_2b_lora", "gemma_900m"]
 
 
 def get_config(variant):
@@ -85,6 +85,25 @@ def get_config(variant):
                     "attn": lora.LoRAConfig(rank=16, alpha=16.0),
                     "ffn": lora.LoRAConfig(rank=16, alpha=16.0),
                 },
+            }
+        )
+    if variant == "gemma_900m":
+        # ~934M layer params (size-matched to ContextFlow non-2B's prompt+action experts combined: 622M + 311M).
+        # width=2048 matches PaliGemma so vision encoder and embedder transfer cleanly from pi0_fast_base.
+        # mlp_dim=6912 sits between gemma_300m_v2 (4096) and gemma_2b (16384); LLM trunk trains from scratch.
+        return ml_collections.ConfigDict(
+            {
+                "variant": variant,
+                "width": 2048,
+                "depth": 18,
+                "mlp_dim": 6912,
+                "num_heads": 8,
+                "num_kv_heads": 1,
+                "head_dim": 256,
+                "norm_eps": 1e-6,
+                "vocab_size": 257_152,
+                "scan": True,
+                "remat_policy": "nothing_saveable",
             }
         )
     raise ValueError(f"Unknown variant: {variant}")
