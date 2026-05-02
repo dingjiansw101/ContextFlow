@@ -6,7 +6,7 @@ openpi jobs may touch up to two uv venvs:
 
 | Venv | Python | Used by |
 |------|--------|---------|
-| Project root `.venv` | 3.11 | Training (`uv run scripts/train.py`), norm stats (`uv run scripts/compute_norm_stats.py`), episode caches (`uv run src/openpi/training/build_episode_cache.py`), policy server (`uv run scripts/serve_policy.py`) — every `uv run` from the project root. |
+| Project root `.venv` | 3.11 | Training (`uv run scripts/train.py`, or `scripts/train_incontext.py` for `pi0_incontext*` configs — see "Train entry point" below), norm stats (`uv run scripts/compute_norm_stats.py`), episode caches (`uv run src/openpi/training/build_episode_cache.py`), policy server (`uv run scripts/serve_policy.py`) — every `uv run` from the project root. |
 | `examples/libero/.venv` | 3.8 | LIBERO/MuJoCo eval client (`examples/libero/main*.py`). Pinned to 3.8 for the simulator. Job scripts activate it with `source examples/libero/.venv/bin/activate` and run a bare `python`, not `uv run`. |
 
 If the job script never `source`s `examples/libero/.venv/bin/activate` and has no `cd examples/libero`, only the project root venv is needed.
@@ -17,6 +17,18 @@ bash "$SKILL_DIR/scripts/check_python_env.sh" .venv examples/libero/.venv
 ```
 
 If a venv is missing or broken, rebuild with `uv sync` in that venv's parent directory (project root for `.venv`, `examples/libero/` for the LIBERO venv). Do not submit until the script reports `OK` for every venv the job references.
+
+## Train entry point: `train.py` vs `train_incontext.py`
+
+For configs with `use_custom_dataloader=True` (any `pi0_incontext*` family — v12, v18, etc.), the training command must be:
+
+```bash
+uv run scripts/train_incontext.py <config> --exp-name=...
+```
+
+`scripts/train.py` always calls `_data_loader.create_data_loader` and silently ignores `config.use_custom_dataloader`. The standard repack transform then expects `dem_prompt_actions` (produced only by `CustomLeRobotDataset` via `scripts/train_incontext.py` → `create_custom_incontext_data_loader`), so training crashes ~2 min in with `KeyError: 'dem_prompt_actions'`.
+
+**Pre-flight:** When generating a new training job script, grep the config in `src/openpi/training/config*.py` for `use_custom_dataloader=True`. If true (or the `model=` line names a `pi0_incontext*` class), use `scripts/train_incontext.py`. Reference: `jobs/ibex/contextflow_libero.sh`.
 
 ## Normalization Stats
 
