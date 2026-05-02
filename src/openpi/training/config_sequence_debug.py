@@ -722,6 +722,35 @@ def build(api) -> list["api.TrainConfig"]:
         batch_size=32,
         save_interval=1000,
     ),
+    # Size-matched ContextAR variant: PaliGemma LLM swapped from gemma_2b -> gemma_900m
+    # (~934M layer params, total ~1.86B) to match ContextFlow non-2B (~1.86B) on Libero V1 split.
+    # Vision + embedder transfer from pi0_fast_base; LLM trunk trains from scratch.
+    api.TrainConfig(
+        name="pi0_fast_incontext_prompt_action_7_state_8_train_split2_900m",
+        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
+        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
+            paligemma_variant="gemma_900m",
+            action_dim=7, action_horizon=10, max_token_len=128,
+            demo_action_dim=32, demo_state_dim=8,
+            sample_frames=2, sample_actions=32, random_select=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(prompt_from_task=True),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            demo_state_dim=8,
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
+            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=20_000,
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+        save_interval=1000,
+    ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split3",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",

@@ -56,7 +56,7 @@ class Config:
     expert_name: str | None = None     
 
 
-Variant = Literal["dummy", "gemma_100m", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_300m_v2", "gemma_300m_lora"]
+Variant = Literal["dummy", "gemma_100m", "gemma_300m", "gemma_2b", "gemma_2b_lora", "gemma_300m_v2", "gemma_300m_lora", "gemma_900m"]
 
 
 def get_config(variant: Variant, expert_name: str | None = None) -> Config:
@@ -136,6 +136,19 @@ def get_config(variant: Variant, expert_name: str | None = None) -> Config:
             num_kv_heads=1,
             head_dim=256,
             lora_configs={"attn": lora.LoRAConfig(rank=32, alpha=32.0), "ffn": lora.LoRAConfig(rank=32, alpha=32.0)},
+            expert_name=expert_name,
+        )
+    if variant == "gemma_900m":
+        # ~934M layer params (size-matched to ContextFlow non-2B's prompt+action experts combined: 622M + 311M).
+        # width=2048 matches PaliGemma so vision encoder and embedder transfer cleanly from pi0_fast_base.
+        # mlp_dim=6912 sits between gemma_300m_v2 (4096) and gemma_2b (16384); LLM trunk trains from scratch.
+        return Config(
+            width=2048,
+            depth=18,
+            mlp_dim=6912,
+            num_heads=8,
+            num_kv_heads=1,
+            head_dim=256,
             expert_name=expert_name,
         )
     # XJ: customizer gemma mini models
