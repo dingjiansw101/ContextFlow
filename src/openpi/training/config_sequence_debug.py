@@ -672,6 +672,32 @@ def build(api) -> list["api.TrainConfig"]:
         num_workers=8,
         batch_size=32,
     ),
+    # Inference config matching gemma_900m training checkpoints (size-matched to ContextFlow non-2B).
+    # Used by serve_policy_incontext.py via --policy.config; the trained checkpoint is loaded from
+    # --policy.dir, but the model architecture (paligemma_variant) must match the checkpoint shape.
+    api.TrainConfig(
+        name="pi0_fast_incontext_prompt_action_7_state_8_inference_900m",
+        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
+        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
+            paligemma_variant="gemma_900m",
+            action_dim=7, action_horizon=10, max_token_len=128,
+            demo_action_dim=32, demo_state_dim=8,
+            sample_frames=2, sample_actions=32, random_select=True,
+            ),
+        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+            repo_id="physical-intelligence/libero",
+            base_config=api.DataConfig(prompt_from_task=True),
+            use_delta_joint_actions=False,
+            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
+            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+            demo_state_dim=8,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=20_000,
+        ema_decay=None,
+        num_workers=8,
+        batch_size=32,
+    ),
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_train_split",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",
