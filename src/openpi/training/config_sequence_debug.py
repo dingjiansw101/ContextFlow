@@ -112,7 +112,7 @@ def build(api) -> list[api.TrainConfig]:
     ####################
     ####################
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     # no sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
     # no sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
     # sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
@@ -122,27 +122,27 @@ def build(api) -> list[api.TrainConfig]:
     ####################
     ####################
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     ####################
     #####seq_no_avg#####
     ####################
     ####################
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     ####################
     #####seq_avg########
     #####prompt_img#####
     ####################
     # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
     #### total_bs=384 variants; seq_avg
     ####################
     #####seq_avg########
@@ -255,7 +255,7 @@ def build(api) -> list[api.TrainConfig]:
     ###############
     ####pi0-fast###
     ###############
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py trivial --project-name=ddd --exp-name=trivial --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py trivial --project-name=ddd --exp-name=trivial --overwrite
     api.TrainConfig(
         name="pi0_fast_incontext_action_7_state_8_example_config",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",
@@ -319,7 +319,7 @@ def build(api) -> list[api.TrainConfig]:
         num_workers=8,
         batch_size=4,
     ),
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py debug_pi0_fast_prompt_libero_incontext_inference --project-name=ddd --exp-name=debug_pi0_fast_prompt_libero_incontext_inference --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py debug_pi0_fast_prompt_libero_incontext_inference --project-name=ddd --exp-name=debug_pi0_fast_prompt_libero_incontext_inference --overwrite
     api.TrainConfig(
         name="debug_pi0_fast_prompt_libero_incontext_train_split_v1",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",
@@ -409,7 +409,7 @@ def build(api) -> list[api.TrainConfig]:
     ###############
     ####pi0-fast###
     #####lora#######
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py debug_pi0_fast_libero_incontextv_inference --project-name=ddd --exp-name=debug_pi0_fast_libero_incontextv_inference --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py debug_pi0_fast_libero_incontextv_inference --project-name=ddd --exp-name=debug_pi0_fast_libero_incontextv_inference --overwrite
     api.TrainConfig(
         name="debug_pi0_fast_libero_incontext_low_mem_inference",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",
@@ -464,7 +464,7 @@ def build(api) -> list[api.TrainConfig]:
         num_workers=8,
         batch_size=32,
     ),
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py debug_pi0_fast_prompt_libero_incontext_inference --project-name=ddd --exp-name=debug_pi0_fast_prompt_libero_incontext_inference --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py debug_pi0_fast_prompt_libero_incontext_inference --project-name=ddd --exp-name=debug_pi0_fast_prompt_libero_incontext_inference --overwrite
     api.TrainConfig(
         name="debug_pi0_fast_prompt_libero_incontext_low_mem_train_split_v1",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",
@@ -523,7 +523,7 @@ def build(api) -> list[api.TrainConfig]:
         num_workers=8,
         batch_size=32,
     ),
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_mini_incontext_v14.py pi0_fast_incontext_prompt_action_7_state_8_train_split --project-name=ddd --exp-name=pi0_fast_incontext_prompt_action_7_state_8_train_split --overwrite
+    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_incontext_prompt_action_7_state_8_train_split --project-name=ddd --exp-name=pi0_fast_incontext_prompt_action_7_state_8_train_split --overwrite
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_inference",
         assets_repo_override="debug_pi0_fast_libero_incontext_inference",

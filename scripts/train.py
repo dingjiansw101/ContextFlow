@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 import functools
 import logging
@@ -5,6 +6,7 @@ import platform
 from typing import Any
 
 import etils.epath as epath
+from flax.core import frozen_dict
 import flax.nnx as nnx
 from flax.training import common_utils
 import flax.traverse_util as traverse_util
@@ -25,6 +27,15 @@ import openpi.training.optimizer as _optimizer
 import openpi.training.sharding as sharding
 import openpi.training.utils as training_utils
 import openpi.training.weight_loaders as _weight_loaders
+
+_ALLOWED_MISSING_WEIGHT_PREFIXES: tuple[str, ...] = (
+    "image_proj_promtp_expert",
+    "img_pool_action_expert",
+    "image_proj_action_expert",
+    "img_pool_prompt_expert",
+    "demo_state_proj",
+    "demo_action_proj",
+)
 
 
 def init_logging():
@@ -69,9 +80,31 @@ def init_wandb(config: _config.TrainConfig, *, resuming: bool, log_code: bool = 
         wandb.run.log_code(epath.Path(__file__).parent.parent)
 
 
+def _ensure_allowed_missing_subtrees(params: at.Params, template: at.Params) -> at.Params:
+    """Fill known newly initialized subtrees so partial checkpoint loads can validate."""
+    was_frozen = isinstance(params, frozen_dict.FrozenDict)
+    mutable_params = frozen_dict.unfreeze(params) if was_frozen else params
+    mutable_template = frozen_dict.unfreeze(template) if isinstance(template, frozen_dict.FrozenDict) else template
+
+    inserted: list[str] = []
+    for prefix in _ALLOWED_MISSING_WEIGHT_PREFIXES:
+        if prefix in mutable_params:
+            continue
+        template_subtree = mutable_template.get(prefix)
+        if template_subtree is None:
+            continue
+        mutable_params[prefix] = copy.deepcopy(template_subtree)
+        inserted.append(prefix)
+
+    if inserted:
+        logging.warning("Filled missing weight prefixes from initialized model: %s", inserted)
+
+    return frozen_dict.freeze(mutable_params) if was_frozen else mutable_params
+
+
 def _load_weights_and_validate(loader: _weight_loaders.WeightLoader, params_shape: at.Params) -> at.Params:
     """Loads and validates the weights. Returns a loaded subset of the weights."""
-    loaded_params = loader.load(params_shape)
+    loaded_params = _ensure_allowed_missing_subtrees(loader.load(params_shape), params_shape)
     at.check_pytree_equality(expected=params_shape, got=loaded_params, check_shapes=True, check_dtypes=True)
 
     # Remove jax.ShapeDtypeStruct from the loaded params. This makes sure that only the loaded params are returned.
@@ -137,15 +170,13 @@ def train_step(
     config: _config.TrainConfig,
     rng: at.KeyArrayLike,
     state: training_utils.TrainState,
-    batch: tuple[_model.Observation, _model.Actions],
+    batch: tuple[_model.Observation | _model.ObservationIncontext | _model.ObservationFASTIncontext, _model.Actions],
 ) -> tuple[training_utils.TrainState, dict[str, at.Array]]:
     model = nnx.merge(state.model_def, state.params)
     model.train()
 
     @at.typecheck
-    def loss_fn(
-        model: _model.BaseModel, rng: at.KeyArrayLike, observation: _model.Observation, actions: _model.Actions
-    ):
+    def loss_fn(model, rng, observation, actions):
         chunked_loss = model.compute_loss(rng, observation, actions, train=True)
         return jnp.mean(chunked_loss)
 
@@ -190,6 +221,39 @@ def train_step(
     return new_state, info
 
 
+def _create_train_data_loader(
+    config: _config.TrainConfig,
+    *,
+    sharding: jax.sharding.Sharding,
+    num_workers: int,
+    shuffle: bool,
+):
+    match config.model.model_type:
+        case _model.ModelType.PI0 | _model.ModelType.PI0_FAST:
+            return _data_loader.create_data_loader(
+                config,
+                sharding=sharding,
+                num_workers=num_workers,
+                shuffle=shuffle,
+            )
+        case _model.ModelType.PI0_INCONTEXT | _model.ModelType.PI0_FAST_INCONTEXT:
+            if config.use_custom_dataloader:
+                return _data_loader.create_custom_incontext_data_loader(
+                    config,
+                    sharding=sharding,
+                    num_workers=num_workers,
+                    shuffle=shuffle,
+                )
+            return _data_loader.create_incontext_data_loader(
+                config,
+                sharding=sharding,
+                num_workers=num_workers,
+                shuffle=shuffle,
+            )
+        case _:
+            raise ValueError(f"Unsupported model type: {config.model.model_type}")
+
+
 def main(config: _config.TrainConfig):
     init_logging()
     logging.info(f"Running on: {platform.node()}")
@@ -217,7 +281,7 @@ def main(config: _config.TrainConfig):
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
 
-    data_loader = _data_loader.create_data_loader(
+    data_loader = _create_train_data_loader(
         config,
         sharding=data_sharding,
         num_workers=config.num_workers,
