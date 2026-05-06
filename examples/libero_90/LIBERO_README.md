@@ -49,7 +49,8 @@ Terminal window 2:
 uv run scripts/serve_policy.py --env LIBERO
 ```
 
-Replace LIBERO with the corresponding ENV from `scripts/serve_policy.py` (e.g., LIBERO_FM_LORA_INCONTEXT_SAMPLE2)
+For non-default or in-context checkpoints, use `policy:checkpoint` with the desired `--policy.config` and
+`--policy.dir` instead of a default `--env` alias.
 
 ## Results
 
