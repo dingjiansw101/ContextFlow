@@ -22,7 +22,7 @@ Under config.py TrainConfig: checkpoint_base_dir:
 
 ## TRAINING
 ```
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train_incontext.py pi0_fast_libero --exp-name=my_experiment --overwrite
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_libero --exp-name=my_experiment --overwrite
 ```
 Replace "pi0_fast_libero" with config from config.py (e.g., pi0_libero_incontext_low_mem_finetune_sample2)
 ## TESTING

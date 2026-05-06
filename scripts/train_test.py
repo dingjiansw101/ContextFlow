@@ -1,6 +1,7 @@
 import dataclasses
 import os
 import pathlib
+import signal
 import types
 
 os.environ["JAX_PLATFORMS"] = "cpu"
@@ -111,6 +112,30 @@ def test_create_train_data_loader_routes_by_model_type(monkeypatch):
 
     assert [call[0] for call in calls] == ["incontext", "standard", "custom"]
     assert all(call[2] == {"sharding": "sharding", "num_workers": 3, "shuffle": True} for call in calls)
+
+
+def test_register_preemption_handlers(monkeypatch):
+    registered = {}
+
+    def fake_signal(signum, handler):
+        registered[signum] = handler
+
+    monkeypatch.setattr(train.signal, "signal", fake_signal)
+
+    train._register_preemption_handlers()  # noqa: SLF001
+
+    assert registered == {
+        signal.SIGTERM: train._on_preempt,  # noqa: SLF001
+        signal.SIGUSR1: train._on_preempt,  # noqa: SLF001
+    }
+
+
+def test_on_preempt_sets_requested_flag():
+    train._preempt_requested = False  # noqa: SLF001
+
+    train._on_preempt(signal.SIGTERM, None)  # noqa: SLF001
+
+    assert train._preempt_requested is True  # noqa: SLF001
 
 
 def test_load_weights_accepts_allowlisted_missing_subtrees():
