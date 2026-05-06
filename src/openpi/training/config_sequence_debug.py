@@ -547,7 +547,7 @@ def build(api) -> list[api.TrainConfig]:
         batch_size=32,
     ),
     # Inference config matching gemma_900m training checkpoints (size-matched to ContextFlow non-2B).
-    # Used by serve_policy_incontext.py via --policy.config; the trained checkpoint is loaded from
+    # Used by serve_policy.py via --policy.config; the trained checkpoint is loaded from
     # --policy.dir, but the model architecture (paligemma_variant) must match the checkpoint shape.
     api.TrainConfig(
         name="pi0_fast_incontext_prompt_action_7_state_8_inference_900m",

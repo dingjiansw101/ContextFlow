@@ -77,14 +77,14 @@ This will exclude the 9 test tasks defined in `ALOHA_OBJECT_TEST_TASK` from trai
 
 Once training is complete, you can evaluate the model using a server-client setup.
 
-> **Note:** In-context models are served by `scripts/serve_policy_incontext.py` (default port 8001), **not** `scripts/serve_policy.py` (port 8000) used by the standard π₀ / π₀-FAST workflow in [`README.md`](README.md). Make sure the eval client connects to the matching port.
+> **Note:** In-context and standard models are served by `scripts/serve_policy.py`. Use the same port in the server and eval client.
 
 ### Terminal 1: Start Policy Server
 
 Start the policy server with your trained checkpoint:
 
 ```bash
-uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+uv run scripts/serve_policy.py --port 8001 policy:checkpoint \
   --policy.config=pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k_inference \
   --policy.dir=checkpoints/pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k/pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k/79999
 ```
@@ -92,7 +92,7 @@ uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
 ```bash
 export JAX_DEFAULT_MATMUL_PRECISION=float32
 
-uv run scripts/serve_policy_incontext.py --port 8001 policy:checkpoint \
+uv run scripts/serve_policy.py --port 8001 policy:checkpoint \
   --policy.config=pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8_inference \
   --policy.dir=checkpoints/pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8/pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8/10000
 ```

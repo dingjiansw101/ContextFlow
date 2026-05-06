@@ -46,10 +46,10 @@ Terminal window 2:
 
 ```bash
 # Run the server
-uv run scripts/serve_policy_incontext.py --env LIBERO
+uv run scripts/serve_policy.py --env LIBERO
 ```
 
-Replace LIBERO with corresponding ENV from serve_policy_incontext.py (e.g., LIBERO_FM_LORA_INCONTEXT_SAMPLE2)
+Replace LIBERO with the corresponding ENV from `scripts/serve_policy.py` (e.g., LIBERO_FM_LORA_INCONTEXT_SAMPLE2)
 
 ## Results
 
