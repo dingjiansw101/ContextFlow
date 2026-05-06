@@ -1,9 +1,9 @@
 """Visualize in-context demonstration trajectories from the LeRobot dataset.
 
 Usage:
-    uv run scripts/visualize_demo.py --task-index 17
-    uv run scripts/visualize_demo.py --task-index 17 --episode-id 612
-    uv run scripts/visualize_demo.py --task-index 17 --num-frames 8 --out-dir data/demo_visualizations
+    uv run scripts/visualize_lerobot.py --task-index 17
+    uv run scripts/visualize_lerobot.py --task-index 17 --episode-id 612
+    uv run scripts/visualize_lerobot.py --task-index 17 --num-frames 8 --out-dir data/demo_visualizations
 """
 
 import argparse
