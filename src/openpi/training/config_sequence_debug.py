@@ -1,9 +1,6 @@
-# config_sequence_debug.py
-"""
-An example of child configs.
-Debug experiment child configs.
-Parent config.py will import this file and call build(api) to collect TrainConfig entries.
-"""
+"""Sequence-debug LIBERO in-context training configs."""
+
+# ruff: noqa: SLF001
 
 from __future__ import annotations
 
@@ -12,16 +9,14 @@ import pathlib
 
 from typing_extensions import override
 
-# If this child only needs certain policies/modules here, import them directly
 import openpi.policies.libero_incontext_policy as libero_incontext_policy
 
 
-def build(api) -> list[api.TrainConfig]:
+def build(api):
     g = globals()
     g["DataConfig"] = api.DataConfig
     g["BaseModelConfig"] = api._model.BaseModelConfig
 
-    # 1) Define DataConfig subclasses inside this function, inheriting DataConfigFactory via api
     @dataclasses.dataclass(frozen=True)
     class SequenceDebugLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
         use_delta_joint_actions: bool = True
@@ -29,15 +24,12 @@ def build(api) -> list[api.TrainConfig]:
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
         task_to_episode: str = "metadata/libero/task_to_episode.json"
         episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
-
-        # Padding mode for AddStatesActionsPromptTransform
         padding_mode: str = "keep_all"
         mask_padding_as_valid: bool = False
         demo_state_dim: int | None = 32
 
         @override
-        def create(self, assets_dirs: pathlib.Path, model_config: BaseModelConfig) -> DataConfig:
-            # Make inputs look like they come from the Libero environment
+        def create(self, assets_dirs: pathlib.Path, model_config):
             repack_transform = api._transforms.Group(
                 inputs=[
                     api._transforms.RepackTransform(
@@ -56,11 +48,7 @@ def build(api) -> list[api.TrainConfig]:
                 ]
             )
 
-            # Xianjie: calculate training episode indexi first
             train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
-
-            # Prepare data for policy training
-            # inject the indexes of demo prompt, TODO: provide json file_paths here
             data_transforms = api._transforms.Group(
                 inputs=[
                     api._transforms.InjectDemoIndexes(
@@ -74,8 +62,6 @@ def build(api) -> list[api.TrainConfig]:
                 ],
                 outputs=[],
             )
-
-            # Convert images to uint8 numpy arrays, add masks
             data_transforms = data_transforms.push(
                 inputs=[
                     libero_incontext_policy.LiberoIncontextInputs(
@@ -85,759 +71,122 @@ def build(api) -> list[api.TrainConfig]:
                 outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
             )
 
-            # TODO: fix the bug of libero actions.
-            # fix it and re-train on libero
-            # Use delta actions (not for gripper)
             if self.use_delta_joint_actions:
                 delta_action_mask = api._transforms.make_bool_mask(6, -1)
                 data_transforms = data_transforms.push(
                     inputs=[api._transforms.DeltaActions(delta_action_mask)],
                     outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
                 )
-            # else:
-            # Model transforms include things like tokenizing the prompt and action targets
-            model_transforms = api.ModelTransformFactory()(model_config)
 
             return dataclasses.replace(
                 self.create_base_config(assets_dirs),
                 repack_transforms=repack_transform,
                 data_transforms=data_transforms,
-                model_transforms=model_transforms,
+                model_transforms=api.ModelTransformFactory()(model_config),
                 train_episode=train_epi,
                 demo_state_dim=self.demo_state_dim,
             )
 
-    # 2) Return this child's TrainConfig entries directly (can be multiple)
-    return [
-    ####################
-    ####################
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    # no sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
-    # no sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # sequence training frames + pi0mini + without avg current img tokens + current img tokens in action expert
-    # V12: no sequence training frames + pi0mini + without avg current img tokens + current img tokens in PROMPT expert
-    ####################
-    #####seq_avg########
-    ####################
-    ####################
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    ####################
-    #####seq_no_avg#####
-    ####################
-    ####################
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    ####################
-    #####seq_avg########
-    #####prompt_img#####
-    ####################
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py sequence_debug_pi0mini_libero_incontextv14_train_split_v1 --project-name=ddd --exp-name=ddd --overwrite
-    #### total_bs=384 variants; seq_avg
-    ####################
-    #####seq_avg########
-    #####train##########
-    #####longer##########
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    ####################
-    #####seq_avg########
-    #####large##########
-    #####ViT############
-    # sequence training frames + pi0mini + with avg current img tokens + current img tokens in action expert
-    ###############
-    ####RoboSSM####
-    ###############
-    ###############
-    ###############
-    ####Split######
-    ###############
-    # api.TrainConfig(
-    #     name="vitb_6_sequence_avg_pi0mini_libero_incontextv14_train_split_v1",
-    #     assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
-    #     model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="B/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=True,
-    #         ),
-    #     data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-    #         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-    #     ),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
-    #     ),
-    #     weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     lr_schedule = api._optimizer.CosineDecaySchedule(
-    #         warmup_steps = 1_000,
-    #         peak_lr= 2.5e-5,
-    #         decay_steps= 20_000,
-    #         decay_lr= 2.5e-6),
-    #     num_train_steps= 20_000,
-    #     freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="B/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=True,
-    #         ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=8,
-    #     batch_size=32,
-    # ), 
-    # api.TrainConfig(
-    #     name="vitb_6_sequence_avg_pi0mini_libero_incontextv14_inference",
-    #     assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
-    #     model=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="B/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=True,
-    #         ),
-    #     data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #     ),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
-    #     ),
-    #     weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     lr_schedule = api._optimizer.CosineDecaySchedule(
-    #         warmup_steps = 1_000,
-    #         peak_lr= 2.5e-5,
-    #         decay_steps= 20_000,
-    #         decay_lr= 2.5e-6),
-    #     num_train_steps= 20_000,
-    #     freeze_filter=api.pi0_light_incontextv14.Pi0LightIncontextConfigv14(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="B/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=True,
-    #         ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=8,
-    #     batch_size=32,
-    # ), 
-    ##############
-    ##v12 model###
-    ####no seq####
-    ###############
-    ####pi0-fast###
-    ###############
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py trivial --project-name=ddd --exp-name=trivial --overwrite
-    api.TrainConfig(
-        name="pi0_fast_incontext_action_7_state_8_example_config",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
-            action_dim=7, action_horizon=10, max_token_len=256, 
-            sample_frames=2, sample_actions=32, random_select=True,
-             
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache_state_8.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache_action_7.json",
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-    ),
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py debug_pi0_fast_prompt_libero_incontext_inference --project-name=ddd --exp-name=debug_pi0_fast_prompt_libero_incontext_inference --overwrite
-    ###############
-    ####pi0-fast###
-    #####lora#######
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py debug_pi0_fast_libero_incontextv_inference --project-name=ddd --exp-name=debug_pi0_fast_libero_incontextv_inference --overwrite
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py debug_pi0_fast_prompt_libero_incontext_inference --project-name=ddd --exp-name=debug_pi0_fast_prompt_libero_incontext_inference --overwrite
-    # XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_incontext_prompt_action_7_state_8_train_split --project-name=ddd --exp-name=pi0_fast_incontext_prompt_action_7_state_8_train_split --overwrite
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_inference",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
+    def make_model(*, paligemma_variant: str | None = None):
+        kwargs = {}
+        if paligemma_variant is not None:
+            kwargs["paligemma_variant"] = paligemma_variant
+        return api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
+            **kwargs,
+            action_dim=7,
+            action_horizon=10,
+            max_token_len=128,
+            demo_action_dim=32,
             demo_state_dim=8,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-    ),
-    # Inference config matching gemma_900m training checkpoints (size-matched to ContextFlow non-2B).
-    # Used by serve_policy.py via --policy.config; the trained checkpoint is loaded from
-    # --policy.dir, but the model architecture (paligemma_variant) must match the checkpoint shape.
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_inference_900m",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split2",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    # Size-matched ContextAR variant: PaliGemma LLM swapped from gemma_2b -> gemma_900m
-    # (~934M layer params, total ~1.86B) to match ContextFlow non-2B (~1.86B) on Libero V1 split.
-    # Vision + embedder transfer from pi0_fast_base; LLM trunk trains from scratch.
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split2_900m",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split3",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split4",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split5",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split6",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split7",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split8",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    # === gemma_900m size-matched variants (paired with the splits above) ===
-    # Each config is identical to its sibling except paligemma_variant="gemma_900m".
-    # Total ~1.86B params (size-matched to ContextFlow non-2B). split2_900m is registered earlier
-    # near its base config; the remaining 7 splits are grouped here for easy iteration.
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split_900m",  # V0
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split3_900m",  # V2
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split4_900m",  # V3
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split5_900m",  # V4
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split6_900m",  # V5
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split7_900m",  # V6
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    api.TrainConfig(
-        name="pi0_fast_incontext_prompt_action_7_state_8_train_split8_900m",  # V7
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api._pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig(
-            paligemma_variant="gemma_900m",
-            action_dim=7, action_horizon=10, max_token_len=128,
-            demo_action_dim=32, demo_state_dim=8,
-            sample_frames=2, sample_actions=32, random_select=True,
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-            repo_id="physical-intelligence/libero",
-            base_config=api.DataConfig(prompt_from_task=True),
-            use_delta_joint_actions=False,
-            states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-            actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            demo_state_dim=8,
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-        ),
-        # gemma_900m LLM trunk has mlp_dim=6912 (vs PaliGemma 16384) so plain CheckpointWeightLoader
-        # fails shape-equality validation. ShapeFlexible variant drops shape-mismatched keys (LLM
-        # layers) while keeping vision encoder + embedder; dropped keys are randomly initialized.
-        weight_loader=api.weight_loaders.CheckpointWeightLoaderShapeFlexible("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-        save_interval=1000,
-    ),
-    
-    
-    
-    
-    # api.TrainConfig(
-    #     name="debug_prompt_pi0_libero_low_mem_finetune_incontextv14_inference",
-    #     assets_repo_override="sequence_compare_pi0_libero_incontextv12_train_split_v3",
-    #     model=api.pi0_light_incontextv14_prompt.Pi0LightIncontextConfigv14Prompt(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="B/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=True,
-    #         ),
-    #     data=SequenceDebugLeRobotLiberoIncontextDataConfig(
-    #         repo_id="physical-intelligence/libero",
-    #         base_config=api.DataConfig(
-    #             local_files_only=False,  # Set to True for local-only datasets.
-    #             prompt_from_task=True,
-    #         ),
-    #         use_delta_joint_actions=False,
-    #         states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
-    #         actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-    #     ),
-    #     weight_loader=api.weight_loaders.InputEmbedderLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-    #     vision_weight_loader=api.weight_loaders.RemapSigLIPPrefixLoader(
-    #         npz_path="gs://vit_models/augreg/B_16-i21k-300ep-lr_0.001-aug_medium1-wd_0.1-do_0.0-sd_0.0.npz", # B/16
-    #     ),
-    #     num_train_steps=20_000,
-    #     freeze_filter=api.pi0_light_incontextv14_prompt.Pi0LightIncontextConfigv14Prompt(
-    #         prompt_expert_variant="gemma_132m", action_expert_variant="gemma_66m",
-    #         sample_frames=2, sample_actions=32, random_select=True,  
-    #         freeze_llm_embedder=True, freeze_img_encoder=False, siglip_variant="B/16",
-    #         use_frame_sequence_transform=True, 
-    #         frame_sequence_length=6,
-    #         avg_current_img=True,
-    #         ).get_freeze_filter(),
-    #     ema_decay=None,
-    #     num_workers=8,
-    #     batch_size=32,
-    # ),
+            sample_frames=2,
+            sample_actions=32,
+            random_select=True,
+        )
 
-    api.TrainConfig(
-        name="sup_pi0_fast_incontextv12_train_split_v1",
-        model_summary_json="fast_incontextv12_model_summary.json",
-        assets_repo_override="debug_pi0_fast_libero_incontext_inference",
-        model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
-            paligemma_variant="gemma_incontextv12_fast",
-            action_dim=7, action_horizon=10, max_token_len=256, 
-            sample_frames=2, sample_actions=32, random_select=True, 
-            ),
-        data=SequenceDebugLeRobotLiberoIncontextDataConfig(
+    def make_data(*, remove_task_list: list[str] | None = None):
+        kwargs = {}
+        if remove_task_list is not None:
+            kwargs.update(
+                remove_task_list=remove_task_list,
+                episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+            )
+        return SequenceDebugLeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=api.DataConfig(prompt_from_task=True),
             use_delta_joint_actions=False,
             states_cache_path="metadata/libero/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/libero/episode_actions_without_delta_cache.json",
-            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-            episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             demo_state_dim=8,
-        ),
-        weight_loader=api.weight_loaders.InputEmbedderAndSiglipLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        # weight_loader=api.weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
-        num_train_steps=20_000,
-        ema_decay=None,
-        num_workers=8,
-        batch_size=32,
-    ),
+            **kwargs,
+        )
+
+    def make_config(
+        *,
+        name: str,
+        remove_task_list: list[str] | None = None,
+        paligemma_variant: str | None = None,
+        shape_flexible_loader: bool = False,
+        save_interval: int = 5000,
+    ) -> api.TrainConfig:
+        weight_loader_cls = (
+            api.weight_loaders.CheckpointWeightLoaderShapeFlexible
+            if shape_flexible_loader
+            else api.weight_loaders.CheckpointWeightLoader
+        )
+        return api.TrainConfig(
+            name=name,
+            assets_repo_override="debug_pi0_fast_libero_incontext_inference",
+            model=make_model(paligemma_variant=paligemma_variant),
+            data=make_data(remove_task_list=remove_task_list),
+            weight_loader=weight_loader_cls("gs://openpi-assets/checkpoints/pi0_fast_base/params"),
+            num_train_steps=20_000,
+            ema_decay=None,
+            num_workers=8,
+            batch_size=32,
+            save_interval=save_interval,
+        )
+
+    split_variants = [
+        ("", api.DEFAULT_LIBERO_TEST_TASK),
+        ("2", api.DEFAULT_LIBERO_TEST_TASK_V2),
+        ("3", api.DEFAULT_LIBERO_TEST_TASK_V3),
+        ("4", api.DEFAULT_LIBERO_TEST_TASK_V4),
+        ("5", api.DEFAULT_LIBERO_TEST_TASK_V5),
+        ("6", api.DEFAULT_LIBERO_TEST_TASK_V6),
+        ("7", api.DEFAULT_LIBERO_TEST_TASK_V7),
+        ("8", api.DEFAULT_LIBERO_TEST_TASK_V8),
     ]
+
+    configs = [
+        make_config(
+            name="pi0_fast_incontext_prompt_action_7_state_8_inference",
+        ),
+        make_config(
+            name="pi0_fast_incontext_prompt_action_7_state_8_inference_900m",
+            paligemma_variant="gemma_900m",
+            shape_flexible_loader=True,
+        ),
+    ]
+
+    for suffix, remove_task_list in split_variants:
+        configs.append(
+            make_config(
+                name=f"pi0_fast_incontext_prompt_action_7_state_8_train_split{suffix}",
+                remove_task_list=remove_task_list,
+                save_interval=1000,
+            )
+        )
+
+    for suffix, remove_task_list in split_variants:
+        name_suffix = f"{suffix}_900m" if suffix else "_900m"
+        configs.append(
+            make_config(
+                name=f"pi0_fast_incontext_prompt_action_7_state_8_train_split{name_suffix}",
+                remove_task_list=remove_task_list,
+                paligemma_variant="gemma_900m",
+                shape_flexible_loader=True,
+                save_interval=1000,
+            )
+        )
+
+    return configs
