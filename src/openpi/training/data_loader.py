@@ -367,21 +367,31 @@ def create_incontext_data_loader(
     if config.model.use_action_state_prompts:
         print("Using action-state prompt")
         demo_state_dim = getattr(config.data, "demo_state_dim", None)
+        padding_mode = getattr(config.data, "padding_mode", "keep_all")
+        mask_padding_as_valid = getattr(config.data, "mask_padding_as_valid", False)
         if config.data.episode_to_indexes_file is not None:
-            add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
-                                                                states_cache_path=config.data.states_cache_path,
-                                                                actions_cache_path=config.data.actions_cache_path,
-                                                                episode_to_indexes_file=config.data.episode_to_indexes_file,
-                                                                demo_state_dim=demo_state_dim,
-                                                                )                                        
+            add_demo_transform = _transforms.AddStatesActionsPromptTransform(
+                dataset=dataset,
+                max_len=config.model.sample_actions,
+                states_cache_path=config.data.states_cache_path,
+                actions_cache_path=config.data.actions_cache_path,
+                episode_to_indexes_file=config.data.episode_to_indexes_file,
+                padding_mode=padding_mode,
+                mask_padding_as_valid=mask_padding_as_valid,
+                demo_state_dim=demo_state_dim,
+            )
         else:
-            add_demo_transform = _transforms.AddStatesActionsPromptTransform(dataset=dataset, max_len=config.model.sample_actions,
-                                                                states_cache_path=config.data.states_cache_path,
-                                                                actions_cache_path=config.data.actions_cache_path,
-                                                                demo_state_dim=demo_state_dim,
-                                                                )
+            add_demo_transform = _transforms.AddStatesActionsPromptTransform(
+                dataset=dataset,
+                max_len=config.model.sample_actions,
+                states_cache_path=config.data.states_cache_path,
+                actions_cache_path=config.data.actions_cache_path,
+                padding_mode=padding_mode,
+                mask_padding_as_valid=mask_padding_as_valid,
+                demo_state_dim=demo_state_dim,
+            )
         dataset = TransformedDataset(dataset, [add_demo_transform])
-    
+
     if getattr(config.model, "use_frame_sequence_transform", False):
         print("Using frame-sequence transform (training frame sequences)")
         dataset = TransformedDataset(dataset, [

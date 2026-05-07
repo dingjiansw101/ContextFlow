@@ -24,7 +24,32 @@ import pytest
 from openpi.models import model as _model
 from openpi.shared import download
 from openpi.training import config as _config
+from openpi.training import config_libero
 from openpi.training import weight_loaders
+
+
+def test_libero_incontext_inference_configs_removed():
+    names = sorted(
+        config.name
+        for config in config_libero.build(_config)
+        if config.name.startswith("pi0_libero") and "incontext" in config.name and config.name.endswith("_inference")
+    )
+    assert names == []
+
+
+def test_custom_libero_incontext_create_policy_uses_lerobot_path():
+    config = _config.get_config("pi0_libero_incontextv18_low_mem_finetune_sample_frames8")
+    data_config = config.data.create_policy(config.assets_dirs, config.model)
+
+    input_transform_names = [type(transform).__name__ for transform in data_config.data_transforms.inputs]
+
+    assert data_config.train_episode is None
+    assert data_config.local_files_only is False
+    assert "InjectDemoIndexes" in input_transform_names
+    assert "LiberoIncontextInputs" in input_transform_names
+    assert "CustomLeRobotLiberoIncontextInputs" not in input_transform_names
+    assert config.data.padding_mode == "linspace_repeat"
+    assert config.data.mask_padding_as_valid is True
 
 
 @pytest.mark.manual

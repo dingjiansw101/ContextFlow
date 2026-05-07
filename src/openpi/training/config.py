@@ -568,6 +568,15 @@ class DataConfigFactory(abc.ABC):
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         """Create a data config."""
 
+    def create_policy(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        """Create the data config used by policy inference.
+
+        Most configs use the same data path for training and policy inference. Configs with a specialized
+        training loader can override this to expose the environment-style inference path without creating
+        a sibling TrainConfig.
+        """
+        return self.create(assets_dirs, model_config)
+
     def create_base_config(self, assets_dirs: pathlib.Path) -> DataConfig:
         repo_id = self.repo_id if self.repo_id is not tyro.MISSING else None
         asset_id = self.assets.asset_id or repo_id
