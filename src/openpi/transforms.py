@@ -26,8 +26,9 @@ NormStats: TypeAlias = _normalize.NormStats
 T = TypeVar("T")
 S = TypeVar("S")
 
+
 def reindex_filtered_dict(data: Dict[str, Any]) -> Dict[str, Any]:
-# TODO: check this function
+    # TODO: check this function
     new_data = {}
     current_frame_index = 0
 
@@ -36,6 +37,7 @@ def reindex_filtered_dict(data: Dict[str, Any]) -> Dict[str, Any]:
         new_data[ep_idx] = list(range(current_frame_index, current_frame_index + num_frames))
         current_frame_index += num_frames
     return new_data
+
 
 # def reindex_filtered_dict(data: Dict[str, Any], episode_order: Optional[Sequence[int]] = None) -> Dict[str, Any]:
 #     """Reindex per-episode frame lists to be contiguous within a filtered subset.
@@ -65,6 +67,7 @@ def reindex_filtered_dict(data: Dict[str, Any]) -> Dict[str, Any]:
 #         current_frame_index += num_frames
 
 #     return new_data
+
 
 @runtime_checkable
 class DataTransformFn(Protocol):
@@ -146,6 +149,7 @@ class RepackTransform(DataTransformFn):
         flat_item = flatten_dict(data)
         return jax.tree.map(lambda k: flat_item[k], self.structure)
 
+
 @dataclasses.dataclass(frozen=True)
 class InjectDemoIndexes(DataTransformFn):
     """
@@ -179,7 +183,9 @@ class InjectDemoIndexes(DataTransformFn):
         if self.train_episode_index_list is None:
             episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
         else:
-            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items() if int(k) in self.train_episode_index_list}
+            episode_to_indexes = {
+                int(k): v for k, v in episode_to_indexes_str.items() if int(k) in self.train_episode_index_list
+            }
 
             # XIANJIE: if train-test split, test episodes are removed and the corresponding frames are removed
             # which leads to non-continuous frame index
@@ -187,18 +193,22 @@ class InjectDemoIndexes(DataTransformFn):
             # therefore, the frame index must be reindexed, in the continuous manner.
             # LeRobot dataset follows the order of "train_episode_index_list"
             # so we can simple reindex the frame index in the following way:
-            episode_to_indexes = reindex_filtered_dict(episode_to_indexes)#, self.train_episode_index_list)
+            episode_to_indexes = reindex_filtered_dict(episode_to_indexes)  # , self.train_episode_index_list)
 
         # Store these dictionaries on the frozen dataclass
         object.__setattr__(self, "task_to_episode", task_to_episode)
         object.__setattr__(self, "episode_to_indexes", episode_to_indexes)
 
         # XJ: Initialize inference cache
-        object.__setattr__(self, "_cache", {
-            "task_index": None,  # type: Optional[int]
-            "selected_episode": None,  # type: Optional[np.ndarray]
-            "dem_prompt_indexes": None,  # type: Optional[List[List[int]]]
-        })
+        object.__setattr__(
+            self,
+            "_cache",
+            {
+                "task_index": None,  # type: Optional[int]
+                "selected_episode": None,  # type: Optional[np.ndarray]
+                "dem_prompt_indexes": None,  # type: Optional[List[List[int]]]
+            },
+        )
 
     def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
         """
@@ -216,7 +226,7 @@ class InjectDemoIndexes(DataTransformFn):
             data["selected_episode"] = self._cache["selected_episode"]
             data["dem_prompt_indexes"] = self._cache["dem_prompt_indexes"]
             return data
-        
+
         # === Otherwise: generate prompt ===
         episodes_for_task = [int(ep) for ep in episodes_for_task]
 
@@ -226,9 +236,7 @@ class InjectDemoIndexes(DataTransformFn):
 
         candidates = valid_candidates if valid_candidates else fallback_candidates
         if not candidates:
-            raise ValueError(
-                f"InjectDemoIndexes: no prompt episodes with frames for task {task_index}"
-            )
+            raise ValueError(f"InjectDemoIndexes: no prompt episodes with frames for task {task_index}")
         if valid_candidates and len(valid_candidates) < len(episodes_for_task):
             logging.debug(
                 "InjectDemoIndexes: filtered out %d prompt episodes without enough frames for task %d",
@@ -247,9 +255,7 @@ class InjectDemoIndexes(DataTransformFn):
         else:
             selected_episodes = candidates[: self.sample_episodes]
         if not selected_episodes:
-            raise ValueError(
-                f"InjectDemoIndexes: unable to choose prompt episodes for task {task_index}"
-            )
+            raise ValueError(f"InjectDemoIndexes: unable to choose prompt episodes for task {task_index}")
 
         # 2) choose frames per episode
         dem_prompt_indexes: List[List[int]] = []
@@ -273,9 +279,7 @@ class InjectDemoIndexes(DataTransformFn):
                 while len(chosen) < self.sample_frames:
                     chosen.append(pad_value)
             else:
-                raise ValueError(
-                    f"InjectDemoIndexes: episode {ep} for task {task_index} has no frames available"
-                )
+                raise ValueError(f"InjectDemoIndexes: episode {ep} for task {task_index} has no frames available")
 
             dem_prompt_indexes.append(chosen)
 
@@ -290,13 +294,17 @@ class InjectDemoIndexes(DataTransformFn):
                 prompt = prompt.item()
             logging.info(
                 "[InjectDemoIndexes] Test task: '%s' (index=%d), demo episode(s): %s, frame indices: %s",
-                prompt, task_index, selected_episodes, dem_prompt_indexes,
+                prompt,
+                task_index,
+                selected_episodes,
+                dem_prompt_indexes,
             )
             self._cache["task_index"] = task_index
             self._cache["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
             self._cache["dem_prompt_indexes"] = dem_prompt_indexes
 
         return data
+
 
 def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
     """
@@ -327,6 +335,7 @@ def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
 
     return episode_to_all_states
 
+
 def tree_stack_np(list_of_trees, axis=0):
     """
     Stack a list of similarly structured PyTrees along `axis`,
@@ -338,250 +347,25 @@ def tree_stack_np(list_of_trees, axis=0):
 
     return jax.tree_map(stack_fn, *list_of_trees)
 
-@dataclasses.dataclass(frozen=True)
-class AddCurrentFramesSequenceTransform(DataTransformFn):
-    """
-    Augment the current sample with an N-frame sequence from the same episode (images/state/actions),
-    and reshape actions from [H,A] to [N,H,A] for fused loss.
-    """
-    dataset: any
-    episode_to_indexes_file: Optional[str] = "metadata/libero/episode_to_indexes.json"
-    n_frames: int = 4
-    sampling: str = "random"       # "uniform" | "around" | "random" | "random_stratified"
-    train_episode_index_list: Optional[List[int]] = None
 
-    # Sampling refinements (optional)
-    keep_anchor_when_random: bool = True          # Prefer to include anchor for random/random_stratified
-    enforce_unique: bool = True                   # Whether to enforce unique sampled indices
-
-    # Randomness control: defaults to numpy global RNG (differs per worker)
-    seed_base: Optional[int] = None               # Optional per-instance base seed for reproducibility
-
-    def __post_init__(self):
-        # Read episode->global frame list
-        epi2idx = None
-        if self.episode_to_indexes_file is not None:
-            p = Path(self.episode_to_indexes_file)
-            if p.exists():
-                with p.open("r") as f:
-                    raw = json.load(f)  # { "123": [global_idx, ...], ... }
-                if self.train_episode_index_list is None:
-                    epi2idx = {int(k): v for k, v in raw.items()}
-                else:
-                    allowed = set(int(ep) for ep in self.train_episode_index_list)
-                    filt = {int(k): v for k, v in raw.items() if int(k) in allowed}
-                    epi2idx = reindex_filtered_dict(filt)  # reuse existing logic
-        object.__setattr__(self, "_epi2idx", epi2idx)
-
-        # Internal RNG (dataclass is frozen; use object.__setattr__)
-        if self.seed_base is not None:
-            rng = np.random.default_rng(int(self.seed_base))
-        else:
-            rng = np.random.default_rng()
-        object.__setattr__(self, "_rng", rng)
-
-        # Basic parameter validation
-    # -----------------------------
-    # Sampling helpers
-    # -----------------------------
-    def _ensure_unique(self, idxs: List[int]) -> List[int]:
-        if not self.enforce_unique:
-            return idxs
-        uniq = list(dict.fromkeys(int(x) for x in idxs))  # stable deduplication
-        if len(uniq) != len(idxs):
-            raise AssertionError(f"[AddCurrentFramesSequenceTransform] duplicate sampled indices: {idxs} -> {uniq}")
-        return uniq
-
-    def _rng_for_sample(self, ep_idx: int, anchor_local_idx: Optional[int]) -> np.random.Generator:
-        """
-        For worker/epoch stability you could mix in dataloader global_step/epoch;
-        keep it simple here with an instance-level RNG.
-        """
-        return self._rng
-
-    def _pick_indices_uniform(self, n_total: int) -> List[int]:
-        # Uniform sampling: linspace + floor
-        loc = np.linspace(0, n_total - 1, num=self.n_frames, dtype=int).tolist()
-        return [int(i) for i in loc]
-
-    def _pick_indices_around(self, n_total: int, anchor_local_idx: Optional[int]) -> List[int]:
-        if anchor_local_idx is None:
-            return self._pick_indices_uniform(n_total)
-        half = max(1, self.n_frames // 2)
-        s = max(0, min(anchor_local_idx - half + 1, n_total - self.n_frames))
-        e = min(n_total, s + self.n_frames)
-        return list(range(int(s), int(e)))
-
-    def _pick_indices_random(self, n_total: int, anchor_local_idx: Optional[int], rng: np.random.Generator) -> List[int]:
-        """
-        Fully random: sample without replacement. Include anchor if keep_anchor_when_random=True and provided.
-        """
-        if self.n_frames > n_total:
-            raise ValueError(f"Random sampling needs n_frames={self.n_frames} <= episode length n_total={n_total}")
-        if self.keep_anchor_when_random and anchor_local_idx is not None and 0 <= anchor_local_idx < n_total:
-            # Fix anchor first, then randomly fill the rest
-            rest = np.delete(np.arange(n_total), anchor_local_idx)
-            k = self.n_frames - 1
-            choose = rng.choice(rest, size=k, replace=False)
-            loc = np.concatenate([[anchor_local_idx], choose])
-        else:
-            loc = rng.choice(n_total, size=self.n_frames, replace=False)
-        loc = np.sort(loc)  # Keep chronological order (optional)
-        return [int(i) for i in loc]
-
-    def _pick_indices_random_stratified(self, n_total: int, anchor_local_idx: Optional[int],
-                                        rng: np.random.Generator) -> List[int]:
-        """
-        Stratified random: split sequence into n_frames segments, sample 1 frame per segment,
-        while trying to include the anchor (if inside a segment, replace that segment's sample with anchor).
-        This keeps randomness without long-term bias toward the start/end.
-        """
-        if self.n_frames > n_total:
-            raise ValueError(f"Stratified sampling needs n_frames={self.n_frames} <= n_total={n_total}")
-        bounds = np.linspace(0, n_total, num=self.n_frames + 1, dtype=int)  # segment boundaries, right-open
-        loc = []
-        anchor_used = False
-        for s, e in zip(bounds[:-1], bounds[1:]):
-            e = max(e, s + 1)  # prevent empty segment
-            if (self.keep_anchor_when_random and
-                (anchor_local_idx is not None) and
-                (s <= anchor_local_idx < e) and
-                not anchor_used):
-                loc.append(int(anchor_local_idx))
-                anchor_used = True
-            else:
-                loc.append(int(rng.integers(s, e)))  # [s, e)
-        loc.sort()
-        return loc
-
-    def _pick_indices(self, frame_list: List[int], anchor_local_idx: Optional[int]) -> List[int]:
-        """
-        Sample within the episode-local index space (returns local indices), later mapped to global frame indices.
-        """
-        n = len(frame_list)
-        if n == 0 or self.n_frames <= 1:
-            raise ValueError("[AddCurrentFramesSequenceTransform] episode is empty or n_frames <= 1.")
-
-        rng = self._rng_for_sample(ep_idx=-1, anchor_local_idx=anchor_local_idx)  # ep_idx not required
-        if self.sampling == "uniform":
-            loc = self._pick_indices_uniform(n)
-        elif self.sampling == "around":
-            loc = self._pick_indices_around(n, anchor_local_idx)
-        elif self.sampling == "random":
-            loc = self._pick_indices_random(n, anchor_local_idx, rng)
-        elif self.sampling == "random_stratified":
-            loc = self._pick_indices_random_stratified(n, anchor_local_idx, rng)
-        else:
-            raise ValueError(f"Unknown sampling: {self.sampling}")
-
-        # Assertions for uniqueness and range
-        loc = [int(i) for i in loc]
-        # Map to global frame indices
-        chosen_global = [int(frame_list[i]) for i in loc]
-        return chosen_global
-
-    # -----------------------------
-    # Main entrypoint
-    # -----------------------------
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        # Enable only during training; keep single-frame for eval/inference
-        split = data.get("split", "train")
-        if split != "train" or self.n_frames <= 1:
-            return data
-
-        # Basic field assertions
-        ep_idx = int(data["episode_index"])
-
-        # Anchor (local frame index), used to try to include under around/random*
-        anchor_val = data.get("frame_index", None)
-        anchor_val = int(anchor_val) if anchor_val is not None else None
-
-        # Fetch episode's global frame list
-        if self._epi2idx is None or ep_idx not in self._epi2idx:
-            raise ValueError("[AddCurrentFramesSequenceTransform] Missing frame index list for episode "
-                             f"(ep={ep_idx}); check episode_to_indexes_file.")
-        frame_list = self._epi2idx[ep_idx]
-        anchor_local = None
-        anchor_global = None
-        if anchor_val is not None:
-            if 0 <= anchor_val < len(frame_list):
-                anchor_local = anchor_val
-            else:
-                idx = None
-                try:
-                    idx = frame_list.index(anchor_val)
-                except ValueError:
-                    idx = None
-                if idx is None and "index" in data:
-                    try:
-                        global_candidate = int(data["index"])
-                    except (TypeError, ValueError):
-                        global_candidate = None
-                    if global_candidate is not None:
-                        try:
-                            idx = frame_list.index(global_candidate)
-                        except ValueError:
-                            idx = None
-                anchor_local = idx
-        if anchor_local is not None:
-            anchor_global = frame_list[anchor_local]
-
-        # Sample global frame indices
-        chosen_global = self._pick_indices(frame_list, anchor_local)
-
-        if anchor_global is not None and anchor_global not in chosen_global:
-            merged = sorted({anchor_global, *chosen_global})
-            if len(merged) > self.n_frames:
-                drop_idx = None
-                anchor_pos = merged.index(anchor_global)
-                left_gap = anchor_pos
-                right_gap = len(merged) - anchor_pos - 1
-                if right_gap >= left_gap and anchor_pos + 1 < len(merged):
-                    drop_idx = anchor_pos + 1
-                elif anchor_pos > 0:
-                    drop_idx = anchor_pos - 1
-                if drop_idx is not None and merged[drop_idx] != anchor_global:
-                    merged.pop(drop_idx)
-            chosen_global = merged
-
-        # Select and stack
-        items = [self.dataset[int(i)] for i in chosen_global]
-        if len(items) == 0:
-            raise ValueError(f"[AddCurrentFramesSequenceTransform] empty chosen_global: {chosen_global}")
-
-        stacked = tree_stack_np(items)  # Each leaf should gain a leading N dimension
-
-        # Build outputs from stacked
-        # Convention: stacked["image"][cam] -> [N,H,W,3], stacked["image_mask"][cam] -> [N]
-        #            stacked["state"] -> [N,A], stacked["actions"] -> [N,H,A]
-        images_seq = {name: arr for name, arr in stacked["image"].items()}
-        masks_seq  = {name: arr for name, arr in stacked["image_mask"].items()}
-        state_seq  = stacked["state"]
-        act_seq    = stacked["actions"]
-
-        # Strict assertions (shape/type)
-        # Write back to data (downstream fused expects these keys)
-        data["current_images_seq"]       = images_seq
-        data["current_image_masks_seq"]  = masks_seq
-        data["current_state_seq"]        = state_seq.astype(np.float32, copy=False)
-        data["actions_seq"]              = act_seq.astype(np.float32, copy=False)
-
-        return data
-    
-    
 @dataclasses.dataclass(frozen=True)
 class AddImagePromptTransform(DataTransformFn):
     """Stacks image prompts per episode into dicts of arrays by key."""
+
     dataset: any
-    
+
     def __post_init__(self):
         # XJ: inference cache
-        object.__setattr__(self, "_cache", {
-            "dem_prompt_indexes": None,
-            "dem_prompt_images": None,
-            "dem_prompt_images_mask": None,
-            "split": None,
-        })
+        object.__setattr__(
+            self,
+            "_cache",
+            {
+                "dem_prompt_indexes": None,
+                "dem_prompt_images": None,
+                "dem_prompt_images_mask": None,
+                "split": None,
+            },
+        )
 
     # def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
     #     idx_lists: List[List[int]] = data.get("dem_prompt_indexes", [])
@@ -595,7 +379,7 @@ class AddImagePromptTransform(DataTransformFn):
     #     #     data["dem_prompt_images"] = self._cache["dem_prompt_images"]
     #     #     data["dem_prompt_images_mask"] = self._cache["dem_prompt_images_mask"]
     #     #     return data
-    
+
     #     # otherwise, normal routine
     #     images_dict: Dict[str, List[np.ndarray]] = {}
     #     masks_dict: Dict[str, List[np.ndarray]] = {}
@@ -615,34 +399,29 @@ class AddImagePromptTransform(DataTransformFn):
     #     if len(idx_lists) == 1:
     #         imgs = {name: arr[0] for name, arr in imgs.items()}
     #         msks = {name: arr[0] for name, arr in msks.items()}
-            
+
     #     # Attach to data
     #     data["dem_prompt_images"] = imgs
     #     data["dem_prompt_images_mask"] = msks
-        
-        # if split == "test":
-        #     self._cache["dem_prompt_indexes"] = idx_lists
-        #     self._cache["dem_prompt_images"] = imgs
-        #     self._cache["dem_prompt_images_mask"] = msks
+
+    # if split == "test":
+    #     self._cache["dem_prompt_indexes"] = idx_lists
+    #     self._cache["dem_prompt_images"] = imgs
+    #     self._cache["dem_prompt_images_mask"] = msks
 
     #     return data
-    
+
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
         idx_lists: List[List[int]] = data.get("dem_prompt_indexes", [])
-        
+
         # ---- Check cache for test split ----
         split = data.get("split", "train")
-        if (
-            split == "test"
-            and self._cache["split"] == "test"
-            and self._cache["dem_prompt_indexes"] == idx_lists
-        ):
+        if split == "test" and self._cache["split"] == "test" and self._cache["dem_prompt_indexes"] == idx_lists:
             # Use cached results
             data["dem_prompt_images"] = self._cache["dem_prompt_images"]
             data["dem_prompt_images_mask"] = self._cache["dem_prompt_images_mask"]
             return data
-        
-        
+
         images_dict: Dict[str, List[np.ndarray]] = {}
         masks_dict: Dict[str, List[np.ndarray]] = {}
         for idx_list in idx_lists:
@@ -650,7 +429,7 @@ class AddImagePromptTransform(DataTransformFn):
                 raise ValueError(f"Empty idx_list found! dem_prompt_indexes={idx_lists}")
             items = [self.dataset[int(i)] for i in idx_list]
             if len(items) == 0:
-                raise ValueError(f"No items fetched! idx_list={idx_list}")            
+                raise ValueError(f"No items fetched! idx_list={idx_list}")
             stacked = tree_stack_np(items)
             for name, img_arr in stacked["image"].items():
                 images_dict.setdefault(name, []).append(img_arr)
@@ -688,8 +467,9 @@ class AddImagePromptTransform(DataTransformFn):
             self._cache["dem_prompt_indexes"] = idx_lists
             self._cache["dem_prompt_images"] = data["dem_prompt_images"]
             self._cache["dem_prompt_images_mask"] = data["dem_prompt_images_mask"]
-            
+
         return data
+
 
 # @dataclasses.dataclass(frozen=True)
 # class AddStatesActionsPromptTransform(DataTransformFn):
@@ -704,7 +484,7 @@ class AddImagePromptTransform(DataTransformFn):
 #     states_cache_path: str = "metadata/libero/episode_states_cache.json"
 #     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
 #     episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
-    
+
 
 #     def __post_init__(self):
 #         try:
@@ -727,7 +507,7 @@ class AddImagePromptTransform(DataTransformFn):
 #             save_episode_states_to_json(actions, self.actions_cache_path)
 #         object.__setattr__(self, "episode_to_all_states", states)
 #         object.__setattr__(self, "episode_to_all_first_actions", actions)
-        
+
 #         # XJ: inference cache
 #         object.__setattr__(self, "_cache", {
 #             "selected_episode": None,
@@ -754,8 +534,8 @@ class AddImagePromptTransform(DataTransformFn):
 #                 data["dem_prompt_all_actions"] = self._cache["actions"]
 #                 data["dem_prompt_all_actions_mask"] = self._cache["actions_mask"]
 #             return data
-        
-        
+
+
 #         states_b, states_mask_b, actions_b, actions_mask_b = [], [], [], []
 #         for ep in eps:
 #             all_states = self.episode_to_all_states[ep]
@@ -807,7 +587,7 @@ class AddImagePromptTransform(DataTransformFn):
 #             data["dem_prompt_all_states_mask"] = stacked_states_mask
 #             data["dem_prompt_all_actions"] = stacked_actions
 #             data["dem_prompt_all_actions_mask"] = stacked_actions_mask
-            
+
 #         # XJ: update cache
 #         if split == "test":
 #             self._cache["selected_episode"] = list(eps)
@@ -815,14 +595,16 @@ class AddImagePromptTransform(DataTransformFn):
 #             self._cache["states_mask"] = stacked_states_mask
 #             self._cache["actions"] = stacked_actions
 #             self._cache["actions_mask"] = stacked_actions_mask
-        
+
 #         return data
+
 
 @dataclasses.dataclass(frozen=True)
 class AddStatesActionsPromptTransform(DataTransformFn):
     """
     Adds state/action sequences for multiple episodes.
     """
+
     dataset: any  # the underlying dataset from which to fetch demo items
 
     max_len: int = 32
@@ -849,8 +631,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         # Validate padding_mode
         if self.padding_mode not in {"keep_all", "linspace_repeat"}:
             raise ValueError(
-                f"Invalid padding_mode: '{self.padding_mode}'. "
-                f"Must be 'keep_all' or 'linspace_repeat'."
+                f"Invalid padding_mode: '{self.padding_mode}'. " f"Must be 'keep_all' or 'linspace_repeat'."
             )
 
         expected_idx_map: Optional[Dict[int, List[int]]] = None
@@ -868,10 +649,10 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 state_list, action_list = [], []
                 for idx in idxs:
                     item = self.dataset[int(idx)]
-                    state_list.append(item["state"])        # shape: [D_s]
+                    state_list.append(item["state"])  # shape: [D_s]
                     action_list.append(item["actions"][0])  # shape: [D_a]  (keep your original choice)
-                states[ep] = np.stack(state_list, axis=0)      # [T, D_s]
-                actions[ep] = np.stack(action_list, axis=0)    # [T, D_a]
+                states[ep] = np.stack(state_list, axis=0)  # [T, D_s]
+                actions[ep] = np.stack(action_list, axis=0)  # [T, D_a]
             save_episode_states_to_json(states, self.states_cache_path)
             save_episode_states_to_json(actions, self.actions_cache_path)
 
@@ -880,13 +661,17 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         object.__setattr__(self, "episode_to_all_first_actions", actions)
 
         # ---- Inference cache ----
-        object.__setattr__(self, "_cache", {
-            "selected_episode": None,
-            "states": None,
-            "states_mask": None,
-            "actions": None,
-            "actions_mask": None,
-        })
+        object.__setattr__(
+            self,
+            "_cache",
+            {
+                "selected_episode": None,
+                "states": None,
+                "states_mask": None,
+                "actions": None,
+                "actions_mask": None,
+            },
+        )
 
     def _maybe_slice_states(self, states: Dict[int, np.ndarray]) -> Dict[int, np.ndarray]:
         if self.demo_state_dim is None:
@@ -917,7 +702,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         T_total = arr.shape[0]
         s = max(0, min(s, T_total))
         e = max(s + 1, min(e, T_total))  # ensure at least 1 frame
-        window = arr[s:e]                 # [L, D]
+        window = arr[s:e]  # [L, D]
         L = window.shape[0]
         D = window.shape[1] if window.ndim > 1 else 1
 
@@ -967,7 +752,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         T_total = arr.shape[0]
         s = max(0, min(s, T_total))
         e = max(s + 1, min(e, T_total))  # ensure at least 1 frame
-        window = arr[s:e]                 # [L, D]
+        window = arr[s:e]  # [L, D]
         L = window.shape[0]
         D = window.shape[1] if window.ndim > 1 else 1
 
@@ -992,10 +777,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         split = data.get("split", "train")
 
         # ---- Cache hit for test split ----
-        if (
-            split == "test"
-            and self._cache["selected_episode"] == list(eps)
-        ):
+        if split == "test" and self._cache["selected_episode"] == list(eps):
             if len(eps) == 1:
                 data["dem_prompt_all_states"] = self._cache["states"][0]
                 data["dem_prompt_all_states_mask"] = self._cache["states_mask"][0]
@@ -1015,8 +797,8 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 raise KeyError(
                     f"[AddStatesActionsPromptTransform] episode={ep} missing from cache; check whether states/actions cache covers the task subset."
                 )
-            all_states = self.episode_to_all_states[ep]             # [T, D_s]
-            all_actions = self.episode_to_all_first_actions[ep]     # [T, D_a]
+            all_states = self.episode_to_all_states[ep]  # [T, D_s]
+            all_actions = self.episode_to_all_first_actions[ep]  # [T, D_a]
             T = all_states.shape[0]
 
             # Sample whole episode
@@ -1063,12 +845,11 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         return data
 
 
-
 @dataclasses.dataclass(frozen=True)
 class AddDemoPromptTransform(DataTransformFn):
     # TODO: divid it into two parts: 1) add demo prompt, 2) add states and actions
     dataset: any  # the underlying dataset from which to fetch demo items
-    max_len: int = 32 
+    max_len: int = 32
 
     # These fields are not provided at initialization by the user.
     episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
@@ -1077,7 +858,7 @@ class AddDemoPromptTransform(DataTransformFn):
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
     episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
-    
+
     def __post_init__(self):
         # TODO: consider delta actions here
         # TODO: refactor the code. consider the case only using seen tasks
@@ -1134,7 +915,7 @@ class AddDemoPromptTransform(DataTransformFn):
         # 2) Retrieve precomputed states and actions for the selected episode.
         # Here we assume that the key "selected_episode" exists in the data.
         episode_id = data["selected_episode"]
-        all_states = self.episode_to_all_states[episode_id]       # shape: (T, D)
+        all_states = self.episode_to_all_states[episode_id]  # shape: (T, D)
         all_actions_first = self.episode_to_all_first_actions[episode_id]  # shape: (T, A)
 
         # --- Process States Separately ---
@@ -1177,6 +958,7 @@ class AddDemoPromptTransform(DataTransformFn):
 
         return data
 
+
 @dataclasses.dataclass(frozen=True)
 class InjectDefaultPrompt(DataTransformFn):
     prompt: str | None
@@ -1188,7 +970,7 @@ class InjectDefaultPrompt(DataTransformFn):
             # print(f"[InjectDefaultPrompt] Injected prompt: '{self.prompt}'")
         elif "prompt" in data:
             # DEBUG: Print existing prompt
-            prompt_str = data["prompt"].item() if hasattr(data["prompt"], 'item') else str(data["prompt"])
+            prompt_str = data["prompt"].item() if hasattr(data["prompt"], "item") else str(data["prompt"])
             # print(f"[InjectDefaultPrompt] Using existing prompt: '{prompt_str}'")
         return data
 
@@ -1345,10 +1127,9 @@ class ResizeImages(DataTransformFn):
         data["image"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["image"].items()}
         # Resize demonstration prompt images if present (for CustomLeRobotDataset)
         if "dem_prompt_images" in data:
-            data["dem_prompt_images"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["dem_prompt_images"].items()}
-        # V2-specific: resize current frames sequence images if present
-        if "current_images_seq" in data:
-            data["current_images_seq"] = {k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["current_images_seq"].items()}
+            data["dem_prompt_images"] = {
+                k: image_tools.resize_with_pad(v, self.height, self.width) for k, v in data["dem_prompt_images"].items()
+            }
         return data
 
 
@@ -1476,10 +1257,7 @@ class TokenizeFASTIncontextInputs(DataTransformFn):
         if states.ndim == 2:
             chunks = [self._encode_state_sequence(states[: self.max_incontext_steps])]
         elif states.ndim >= 3:
-            chunks = [
-                self._encode_state_sequence(ep[: self.max_incontext_steps])
-                for ep in states
-            ]
+            chunks = [self._encode_state_sequence(ep[: self.max_incontext_steps]) for ep in states]
         else:
             raise ValueError("demonstration states must be at least 2-D")
         if not chunks:
@@ -1491,10 +1269,7 @@ class TokenizeFASTIncontextInputs(DataTransformFn):
         if actions.ndim == 2:
             chunks = [self._encode_action_sequence(actions[: self.max_incontext_steps])]
         elif actions.ndim >= 3:
-            chunks = [
-                self._encode_action_sequence(ep[: self.max_incontext_steps])
-                for ep in actions
-            ]
+            chunks = [self._encode_action_sequence(ep[: self.max_incontext_steps]) for ep in actions]
         else:
             raise ValueError("demonstration actions must be at least 2-D")
         if not chunks:

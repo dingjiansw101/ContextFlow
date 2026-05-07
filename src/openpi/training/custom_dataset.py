@@ -33,6 +33,7 @@ class CustomLeRobotDataset(LeRobotDataset):
     Args:
         Same as LeRobotDataset parent class.
     """
+
     def __init__(
         self,
         repo_id: str,
@@ -44,7 +45,6 @@ class CustomLeRobotDataset(LeRobotDataset):
         download_videos: bool = True,
         local_files_only: bool = False,
         video_backend: str | None = None,
-        num_current_frames: int = 1,
         num_sample_frames: int = 2,
         num_sample_actions: int = 32,
         task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
@@ -56,7 +56,6 @@ class CustomLeRobotDataset(LeRobotDataset):
         Args:
             repo_id: Dataset repository id.
             root, episodes, image_transforms, delta_timestamps, tolerance_s, download_videos, local_files_only, video_backend: Same as LeRobotDataset.
-            num_current_frames (int): Number of consecutive frames for current frames sequence.
             num_sample_frames (int): Number of frames for in-context demonstration.
             num_sample_actions (int): Number of actions for in-context demonstration.
             task_to_episode_path (str): Path to task_to_episode.json mapping file.
@@ -75,7 +74,6 @@ class CustomLeRobotDataset(LeRobotDataset):
             local_files_only=local_files_only,
             video_backend=video_backend,
         )
-        self.num_current_frames = num_current_frames
         self.num_sample_frames = num_sample_frames
         self.num_sample_actions = num_sample_actions
         self.action_horizon = len(delta_timestamps["actions"])
@@ -90,8 +88,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         self.task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
-        """Get a single sample from the dataset with custom processing.
-        """
+        """Get a single sample from the dataset with custom processing."""
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
         query_indices = None
@@ -142,7 +139,9 @@ class CustomLeRobotDataset(LeRobotDataset):
         frame_indices = list(range(ep_start, ep_end))
         num_frames = len(frame_indices)
 
-        assert self.num_sample_frames <= num_frames, f"num_sample_frames ({self.num_sample_frames}) must be less than or equal to num_frames ({num_frames})"
+        assert (
+            self.num_sample_frames <= num_frames
+        ), f"num_sample_frames ({self.num_sample_frames}) must be less than or equal to num_frames ({num_frames})"
         # Use evenly-spaced sampling when we have enough frames
         positions = np.linspace(0, num_frames - 1, num=self.num_sample_frames, dtype=int)
         sampled_indices = [frame_indices[p] for p in positions]

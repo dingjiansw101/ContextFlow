@@ -78,7 +78,6 @@ class TransformedDataset(Dataset[T_co]):
         # Xianjie: for data transform debug
         # self._transform_list = transforms
 
-
     def __getitem__(self, index: SupportsIndex) -> T_co:
         return self._transform(self._dataset[index])
 
@@ -173,7 +172,6 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
     return dataset
 
 
-
 def create_custom_dataset(
     data_config: _config.DataConfig,
     model_config: _model.BaseModelConfig,
@@ -197,14 +195,14 @@ def create_custom_dataset(
 
     # Get CustomLeRobotDataset-specific parameters from factory (if provided) or use defaults
     if data_config_factory is not None:
-        num_current_frames = getattr(data_config_factory, 'frame_sequence_length', 1)
-        num_sample_frames = getattr(data_config_factory, 'sample_frames', 2)
-        num_sample_actions = getattr(data_config_factory, 'sample_actions', 32)
-        task_to_episode_path = getattr(data_config_factory, 'task_to_episode_path', "metadata/libero/task_to_episode.json")
-        random_select = getattr(data_config_factory, 'random_select', True)
+        num_sample_frames = getattr(data_config_factory, "sample_frames", 2)
+        num_sample_actions = getattr(data_config_factory, "sample_actions", 32)
+        task_to_episode_path = getattr(
+            data_config_factory, "task_to_episode_path", "metadata/libero/task_to_episode.json"
+        )
+        random_select = getattr(data_config_factory, "random_select", True)
     else:
         # Fallback to defaults if no factory provided
-        num_current_frames = 1
         num_sample_frames = 2
         num_sample_actions = 32
         task_to_episode_path = "metadata/libero/task_to_episode.json"
@@ -214,13 +212,12 @@ def create_custom_dataset(
     dataset = CustomLeRobotDataset(
         data_config.repo_id,
         episodes=data_config.train_episode if not is_effective_none(data_config.train_episode) else None,
-        delta_timestamps = {
+        delta_timestamps={
             key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
             for key in data_config.action_sequence_keys
         },
         local_files_only=data_config.local_files_only,
         # Pass CustomLeRobotDataset specific parameters from factory
-        num_current_frames=num_current_frames,
         num_sample_frames=num_sample_frames,
         num_sample_actions=num_sample_actions,
         task_to_episode_path=task_to_episode_path,
@@ -230,7 +227,6 @@ def create_custom_dataset(
     if data_config.prompt_from_task:
         dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
     return dataset
-
 
 
 # def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False) -> Dataset:
@@ -243,7 +239,8 @@ def create_custom_dataset(
 #                 "Make sure to run `scripts/compute_norm_stats.py --config-name=<your-config>`."
 #             )
 #         norm_stats = data_config.norm_stats
-        
+
+
 #     return TransformedDataset(
 #         dataset,
 #         [
@@ -253,7 +250,13 @@ def create_custom_dataset(
 #             *data_config.model_transforms.inputs,
 #         ],
 #     )
-def transform_dataset(dataset: Dataset, data_config: _config.DataConfig, *, skip_norm_stats: bool = False, norm_stats_aliases: dict[str, str] | None = None) -> Dataset:
+def transform_dataset(
+    dataset: Dataset,
+    data_config: _config.DataConfig,
+    *,
+    skip_norm_stats: bool = False,
+    norm_stats_aliases: dict[str, str] | None = None,
+) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
     if data_config.repo_id != "fake" and not skip_norm_stats:
@@ -319,7 +322,6 @@ def create_data_loader(
         def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
             self._data_config = data_config
             self._data_loader = data_loader
-
 
         def data_config(self) -> _config.DataConfig:
             return self._data_config
@@ -392,27 +394,16 @@ def create_incontext_data_loader(
             )
         dataset = TransformedDataset(dataset, [add_demo_transform])
 
-    if getattr(config.model, "use_frame_sequence_transform", False):
-        print("Using frame-sequence transform (training frame sequences)")
-        dataset = TransformedDataset(dataset, [
-            _transforms.AddCurrentFramesSequenceTransform(
-                dataset=dataset,
-                episode_to_indexes_file=config.data.episode_to_indexes_file,  # reuse the existing JSON mapping
-                n_frames=config.model.frame_sequence_length,
-                train_episode_index_list=getattr(data_config, "train_episode", None),
-                seed_base=config.seed,
-            )
-        ])
-
-
     if isinstance(config.model, _pi0_fast_incontext.Pi0FASTIncontextConfig):
         fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
         dataset = TransformedDataset(
             dataset,
-            [_transforms.TokenizeFASTIncontextInputs(
-                tokenizer=fast_tokenizer,
-                max_incontext_steps=getattr(config.model, "sample_actions", 0),
-            )]
+            [
+                _transforms.TokenizeFASTIncontextInputs(
+                    tokenizer=fast_tokenizer,
+                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
+                )
+            ],
         )
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
@@ -477,7 +468,9 @@ def create_custom_incontext_data_loader(
     """
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_custom_dataset(data_config, config.model, config.data)
-    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases)
+    dataset = transform_dataset(
+        dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases
+    )
 
     data_loader = TorchDataLoader(
         dataset,

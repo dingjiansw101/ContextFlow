@@ -105,17 +105,15 @@ def test_libero_incontext_dataset():
         # dict_keys(['state', 'image', 'image_mask', 'actions',
         # 'tokenized_prompt', 'tokenized_prompt_mask'])
 
+
 def test_custom_lerobot_dataset():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
     config = _config.get_config("pi0mini_incontext_libero_custom_dataset_debug")
-    config = dataclasses.replace(
-        config,
-        data=dataclasses.replace(config.data, frame_sequence_length=6)
-    )
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_custom_dataset(data_config, config.model, config.data)
     for i in range(len(dataset)):
         print(dataset[i].keys())
+
 
 def test_libero_incontext_data_loader():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
@@ -132,11 +130,7 @@ def test_create_custom_incontext_data_loader():
     config = _config.get_config("pi0mini_incontext_libero_custom_dataset_debug")
 
     # Create data loader using CustomLeRobotDataset
-    data_loader = _data_loader.create_custom_incontext_data_loader(
-        config,
-        skip_norm_stats=False,
-        num_batches=1
-    )
+    data_loader = _data_loader.create_custom_incontext_data_loader(config, skip_norm_stats=False, num_batches=1)
 
     # Get one batch
     data_iter = iter(data_loader)
@@ -215,6 +209,7 @@ def test_AddImagePromptTransform():
         print(dataset[i].keys())
         # dict_keys(['state', 'image', 'image_mask', 'actions',
         # 'tokenized_prompt', 'tokenized_prompt_mask'])
+
 
 if __name__ == "__main__":
     # test_libero_incontext_dataset()
