@@ -38,10 +38,9 @@ import sys
 from openpi.training import config as _config
 
 cfg = _config.get_config(sys.argv[1])
-asset_dir = Path(cfg.assets_dirs)
-norm_stats = list(asset_dir.glob("*/norm_stats*"))
-if not norm_stats:
-    raise SystemExit(f"Missing norm stats under {asset_dir}")
+data_cfg = cfg.data.create(cfg.assets_dirs, cfg.model)
+if data_cfg.repo_id != "fake" and data_cfg.norm_stats is None:
+    raise SystemExit(f"Missing norm stats for asset_id={data_cfg.asset_id} under {cfg.assets_dirs}")
 
 paths = []
 for attr in ("episode_to_indexes_file", "states_cache_path", "actions_cache_path", "task_to_episode", "task_to_episode_path"):
@@ -53,7 +52,7 @@ missing = [str(path) for path in paths if not path.exists()]
 if missing:
     raise SystemExit("Missing metadata/cache paths:\n" + "\n".join(missing))
 
-print(f"Preflight OK for {cfg.name}: assets={asset_dir}")
+print(f"Preflight OK for {cfg.name}: assets={cfg.assets_dirs}, asset_id={data_cfg.asset_id}")
 PY
 
 trap 'kill -TERM "$pid" 2>/dev/null; wait "$pid"' SIGTERM

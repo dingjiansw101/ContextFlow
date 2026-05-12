@@ -41,6 +41,19 @@ if [ ! -x "${LiberoVenv}/bin/python" ]; then
     exit 66
 fi
 
+PYTHONPATH=src uv run python - "$POLICY_CONFIG" <<'PY'
+import sys
+
+from openpi.training import config as _config
+
+cfg = _config.get_config(sys.argv[1])
+data_cfg = cfg.data.create_policy(cfg.assets_dirs, cfg.model)
+if data_cfg.repo_id != "fake" and data_cfg.norm_stats is None:
+    raise SystemExit(f"Missing policy norm stats for asset_id={data_cfg.asset_id} under {cfg.assets_dirs}")
+
+print(f"Policy preflight OK for {cfg.name}: assets={cfg.assets_dirs}, asset_id={data_cfg.asset_id}")
+PY
+
 if [ -n "$ProjectPython" ]; then
     PORT_PYTHON="$ProjectPython"
 else
