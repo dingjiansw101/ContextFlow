@@ -27,6 +27,10 @@ export NCCL_P2P_DISABLE="${NCCL_P2P_DISABLE:-0}"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}"
 
+if [ "$(ulimit -Sn)" -lt 65536 ]; then
+    ulimit -n 65536
+fi
+
 PYTHONPATH=src uv run python - "$CONFIG" <<'PY'
 from pathlib import Path
 import sys
