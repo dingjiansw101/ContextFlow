@@ -10,7 +10,7 @@ EVAL_PARTITION="${EVAL_PARTITION:-batch-h100}"
 EVAL_QOS="${EVAL_QOS:-batch}"
 RUN_ID="${RUN_ID:-orix_refactor_merge_$(date +%Y%m%d)}"
 NUM_WORKERS="${NUM_WORKERS:-32}"
-FSDP_DEVICES="${FSDP_DEVICES:-4}"
+FSDP_DEVICES="${FSDP_DEVICES:-}"
 ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
 LIBERO_ASSETS_BASE_DIR="${LIBERO_ASSETS_BASE_DIR:-$ASSETS_BASE_DIR}"
 FAST_ASSETS_BASE_DIR="${FAST_ASSETS_BASE_DIR:-$ASSETS_BASE_DIR}"
@@ -66,6 +66,17 @@ disable_cudnn_fmha_for_config() {
     esac
 }
 
+fsdp_devices_for_config() {
+    if [ -n "$FSDP_DEVICES" ]; then
+        printf "%s" "$FSDP_DEVICES"
+        return
+    fi
+    case "$1" in
+        pi0_libero_incontextv18_low_mem_finetune_sample_frames8*) printf "1" ;;
+        *) printf "4" ;;
+    esac
+}
+
 submit_train() {
     local label="$1"
     local config="$2"
@@ -73,8 +84,10 @@ submit_train() {
     local job_name="train_${label}_refactor_merge"
     local assets_base
     local disable_cudnn_fmha
+    local fsdp_devices
     assets_base="$(assets_base_for_config "$config")"
     disable_cudnn_fmha="$(disable_cudnn_fmha_for_config "$config")"
+    fsdp_devices="$(fsdp_devices_for_config "$config")"
     local args=(
         --job-name="$job_name"
         --output="logs/%x-%j.log"
@@ -84,7 +97,7 @@ submit_train() {
         --mem=400G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$NUM_WORKERS",FSDP_DEVICES="$FSDP_DEVICES",ASSETS_BASE_DIR="$assets_base",DISABLE_CUDNN_FMHA="$disable_cudnn_fmha"
+        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$NUM_WORKERS",FSDP_DEVICES="$fsdp_devices",ASSETS_BASE_DIR="$assets_base",DISABLE_CUDNN_FMHA="$disable_cudnn_fmha"
     )
     case "$SUBMIT_CMD" in
         sbatch) args=(--partition="$PARTITION" --qos="$QOS" "${args[@]}") ;;
