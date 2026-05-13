@@ -18,7 +18,6 @@ REPO=/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge
 CONFIG="pi0_fast_incontext_prompt_action_7_state_8_train_split"
 EXP_NAME="${CONFIG}_refactor_merge"
 ASSETS_BASE_DIR="/mnt/data/u/dingj0b/code/openpi_fastincontext/openpi/assets"
-FSDP_DEVICES="${FSDP_DEVICES:-4}"
 
 cd "$REPO"
 mkdir -p logs errs
@@ -60,7 +59,6 @@ XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
         --project-name=openpi \
         --exp-name="$EXP_NAME" \
         --assets-base-dir="$ASSETS_BASE_DIR" \
-        --fsdp-devices="$FSDP_DEVICES" \
         --resume &
 pid=$!
 wait "$pid"
