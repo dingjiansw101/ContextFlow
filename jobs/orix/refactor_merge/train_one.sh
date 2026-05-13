@@ -18,6 +18,7 @@ EXP_NAME="${EXP_NAME:-${CONFIG}_refactor_merge}"
 NUM_WORKERS="${NUM_WORKERS:-32}"
 FSDP_DEVICES="${FSDP_DEVICES:-4}"
 ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
+DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
 
 cd "$REPO"
 mkdir -p logs errs
@@ -25,6 +26,11 @@ mkdir -p logs errs
 export PATH="$HOME/.local/bin:$PATH"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}"
+case "$DISABLE_CUDNN_FMHA" in
+    1|true|TRUE|yes|YES)
+        export XLA_FLAGS="${XLA_FLAGS:+$XLA_FLAGS }--xla_gpu_enable_cudnn_fmha=false"
+        ;;
+esac
 
 if [ "$(ulimit -Sn)" -lt 65536 ]; then
     ulimit -n 65536

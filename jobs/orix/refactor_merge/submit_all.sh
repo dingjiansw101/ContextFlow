@@ -56,13 +56,25 @@ assets_base_for_config() {
     esac
 }
 
+disable_cudnn_fmha_for_config() {
+    case "${DISABLE_CUDNN_FMHA:-}" in
+        0|1|true|TRUE|yes|YES|false|FALSE|no|NO) printf "%s" "$DISABLE_CUDNN_FMHA"; return ;;
+    esac
+    case "$1" in
+        pi0_libero_incontextv18_low_mem_finetune_sample_frames8*) printf "1" ;;
+        *) printf "0" ;;
+    esac
+}
+
 submit_train() {
     local label="$1"
     local config="$2"
     local exp_name="${config}_refactor_merge"
     local job_name="train_${label}_refactor_merge"
     local assets_base
+    local disable_cudnn_fmha
     assets_base="$(assets_base_for_config "$config")"
+    disable_cudnn_fmha="$(disable_cudnn_fmha_for_config "$config")"
     local args=(
         --job-name="$job_name"
         --output="logs/%x-%j.log"
@@ -72,7 +84,7 @@ submit_train() {
         --mem=400G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$NUM_WORKERS",FSDP_DEVICES="$FSDP_DEVICES",ASSETS_BASE_DIR="$assets_base"
+        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$NUM_WORKERS",FSDP_DEVICES="$FSDP_DEVICES",ASSETS_BASE_DIR="$assets_base",DISABLE_CUDNN_FMHA="$disable_cudnn_fmha"
     )
     case "$SUBMIT_CMD" in
         sbatch) args=(--partition="$PARTITION" --qos="$QOS" "${args[@]}") ;;
@@ -96,7 +108,9 @@ submit_eval() {
     local checkpoint_dir="checkpoints/${config}/${exp_name}/19999"
     local job_name="eval_${label}_refactor_merge"
     local assets_base
+    local disable_cudnn_fmha
     assets_base="$(assets_base_for_config "$policy_config")"
+    disable_cudnn_fmha="$(disable_cudnn_fmha_for_config "$policy_config")"
     local args=(
         --dependency="afterok:${train_job_id}"
         --job-name="$job_name"
@@ -107,7 +121,7 @@ submit_eval() {
         --mem=120G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",POLICY_CONFIG="$policy_config",EXP_NAME="$exp_name",CHECKPOINT_DIR="$checkpoint_dir",RUN_ID="$RUN_ID",TASK_SPLIT="$TASK_SPLIT",SUITE_LIST="$SUITE_LIST",ASSETS_BASE_DIR="$assets_base",SKIP_LOG_TO_SHEET=1
+        --export=ALL,REPO="$REPO",CONFIG="$config",POLICY_CONFIG="$policy_config",EXP_NAME="$exp_name",CHECKPOINT_DIR="$checkpoint_dir",RUN_ID="$RUN_ID",TASK_SPLIT="$TASK_SPLIT",SUITE_LIST="$SUITE_LIST",ASSETS_BASE_DIR="$assets_base",DISABLE_CUDNN_FMHA="$disable_cudnn_fmha",SKIP_LOG_TO_SHEET=1
     )
     case "$EVAL_SUBMIT_CMD" in
         sbatch) args=(--partition="$EVAL_PARTITION" --qos="$EVAL_QOS" "${args[@]}") ;;

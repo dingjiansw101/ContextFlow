@@ -23,6 +23,7 @@ SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
 ProjectPython="${ProjectPython:-}"
 ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
+DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
 
 cd "$REPO"
 mkdir -p logs errs
@@ -80,6 +81,11 @@ export MUJOCO_GL="${MUJOCO_GL:-egl}"
 export __EGL_VENDOR_LIBRARY_DIRS="${__EGL_VENDOR_LIBRARY_DIRS:-$HOME/nvidia-egl}"
 export LD_LIBRARY_PATH="$HOME/nvidia-egl/lib:${LD_LIBRARY_PATH:-}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}"
+case "$DISABLE_CUDNN_FMHA" in
+    1|true|TRUE|yes|YES)
+        export XLA_FLAGS="${XLA_FLAGS:+$XLA_FLAGS }--xla_gpu_enable_cudnn_fmha=false"
+        ;;
+esac
 
 cleanup() {
     if [ -n "${SERVER_PID:-}" ]; then
