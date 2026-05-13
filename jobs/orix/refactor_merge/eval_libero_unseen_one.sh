@@ -22,6 +22,7 @@ TASK_SPLIT="${TASK_SPLIT:-split0}"
 SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
 ProjectPython="${ProjectPython:-}"
+ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
 
 cd "$REPO"
 mkdir -p logs errs
@@ -41,12 +42,15 @@ if [ ! -x "${LiberoVenv}/bin/python" ]; then
     exit 66
 fi
 
-PYTHONPATH=src uv run python - "$POLICY_CONFIG" <<'PY'
+PYTHONPATH=src uv run python - "$POLICY_CONFIG" "$ASSETS_BASE_DIR" <<'PY'
+import dataclasses
 import sys
 
 from openpi.training import config as _config
 
 cfg = _config.get_config(sys.argv[1])
+if sys.argv[2]:
+    cfg = dataclasses.replace(cfg, assets_base_dir=sys.argv[2])
 data_cfg = cfg.data.create_policy(cfg.assets_dirs, cfg.model)
 if data_cfg.repo_id != "fake" and data_cfg.norm_stats is None:
     raise SystemExit(f"Missing policy norm stats for asset_id={data_cfg.asset_id} under {cfg.assets_dirs}")
@@ -86,17 +90,22 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Starting policy server for ${EXP_NAME} with policy config ${POLICY_CONFIG} on port ${PORT}"
+policy_args=(
+    --loader=INCONTEXT
+    --port "$PORT"
+    policy:checkpoint
+    --policy.inference-dtype=float32
+    --policy.config="$POLICY_CONFIG"
+    --policy.dir="$CHECKPOINT_DIR"
+)
+
 if [ -n "$ProjectPython" ]; then
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
-        "$ProjectPython" scripts/serve_policy.py --loader=INCONTEXT --port "$PORT" \
-            policy:checkpoint --policy.inference-dtype=float32 \
-            --policy.config="$POLICY_CONFIG" --policy.dir="$CHECKPOINT_DIR" \
+        "$ProjectPython" scripts/serve_policy.py "${policy_args[@]}" \
             >"$SERVER_LOG" 2>&1 &
 else
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
-        uv run scripts/serve_policy.py --loader=INCONTEXT --port "$PORT" \
-            policy:checkpoint --policy.inference-dtype=float32 \
-            --policy.config="$POLICY_CONFIG" --policy.dir="$CHECKPOINT_DIR" \
+        uv run scripts/serve_policy.py "${policy_args[@]}" \
             >"$SERVER_LOG" 2>&1 &
 fi
 SERVER_PID=$!

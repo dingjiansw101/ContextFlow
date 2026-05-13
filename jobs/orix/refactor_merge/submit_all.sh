@@ -11,6 +11,7 @@ EVAL_QOS="${EVAL_QOS:-batch}"
 RUN_ID="${RUN_ID:-orix_refactor_merge_$(date +%Y%m%d)}"
 NUM_WORKERS="${NUM_WORKERS:-32}"
 FSDP_DEVICES="${FSDP_DEVICES:-4}"
+ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
 TASK_SPLIT="${TASK_SPLIT:-split0}"
 SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 MODE="${1:-submit}"
@@ -60,7 +61,7 @@ submit_train() {
         --mem=400G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$NUM_WORKERS",FSDP_DEVICES="$FSDP_DEVICES"
+        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$NUM_WORKERS",FSDP_DEVICES="$FSDP_DEVICES",ASSETS_BASE_DIR="$ASSETS_BASE_DIR"
     )
     case "$SUBMIT_CMD" in
         sbatch) args=(--partition="$PARTITION" --qos="$QOS" "${args[@]}") ;;
@@ -93,7 +94,7 @@ submit_eval() {
         --mem=120G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",POLICY_CONFIG="$policy_config",EXP_NAME="$exp_name",CHECKPOINT_DIR="$checkpoint_dir",RUN_ID="$RUN_ID",TASK_SPLIT="$TASK_SPLIT",SUITE_LIST="$SUITE_LIST",SKIP_LOG_TO_SHEET=1
+        --export=ALL,REPO="$REPO",CONFIG="$config",POLICY_CONFIG="$policy_config",EXP_NAME="$exp_name",CHECKPOINT_DIR="$checkpoint_dir",RUN_ID="$RUN_ID",TASK_SPLIT="$TASK_SPLIT",SUITE_LIST="$SUITE_LIST",ASSETS_BASE_DIR="$ASSETS_BASE_DIR",SKIP_LOG_TO_SHEET=1
     )
     case "$EVAL_SUBMIT_CMD" in
         sbatch) args=(--partition="$EVAL_PARTITION" --qos="$EVAL_QOS" "${args[@]}") ;;

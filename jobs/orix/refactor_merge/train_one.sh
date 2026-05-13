@@ -17,6 +17,7 @@ CONFIG="${CONFIG:?set CONFIG}"
 EXP_NAME="${EXP_NAME:-${CONFIG}_refactor_merge}"
 NUM_WORKERS="${NUM_WORKERS:-32}"
 FSDP_DEVICES="${FSDP_DEVICES:-4}"
+ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
 
 cd "$REPO"
 mkdir -p logs errs
@@ -29,13 +30,16 @@ if [ "$(ulimit -Sn)" -lt 65536 ]; then
     ulimit -n 65536
 fi
 
-PYTHONPATH=src uv run python - "$CONFIG" <<'PY'
+PYTHONPATH=src uv run python - "$CONFIG" "$ASSETS_BASE_DIR" <<'PY'
+import dataclasses
 from pathlib import Path
 import sys
 
 from openpi.training import config as _config
 
 cfg = _config.get_config(sys.argv[1])
+if sys.argv[2]:
+    cfg = dataclasses.replace(cfg, assets_base_dir=sys.argv[2])
 data_cfg = cfg.data.create(cfg.assets_dirs, cfg.model)
 if data_cfg.repo_id != "fake" and data_cfg.norm_stats is None:
     raise SystemExit(f"Missing norm stats for asset_id={data_cfg.asset_id} under {cfg.assets_dirs}")
@@ -54,11 +58,18 @@ print(f"Preflight OK for {cfg.name}: assets={cfg.assets_dirs}, asset_id={data_cf
 PY
 
 trap 'kill -TERM "$pid" 2>/dev/null; wait "$pid"' SIGTERM
-uv run scripts/train.py "$CONFIG" \
-    --project-name=openpi \
-    --exp-name="$EXP_NAME" \
-    --resume \
-    --num-workers="$NUM_WORKERS" \
-    --fsdp-devices="$FSDP_DEVICES" &
+train_args=(
+    "$CONFIG"
+    --project-name=openpi
+    --exp-name="$EXP_NAME"
+    --resume
+    --num-workers="$NUM_WORKERS"
+    --fsdp-devices="$FSDP_DEVICES"
+)
+if [ -n "$ASSETS_BASE_DIR" ]; then
+    train_args+=(--assets-base-dir="$ASSETS_BASE_DIR")
+fi
+
+uv run scripts/train.py "${train_args[@]}" &
 pid=$!
 wait "$pid"
