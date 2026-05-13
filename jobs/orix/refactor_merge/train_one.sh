@@ -19,6 +19,7 @@ NUM_WORKERS="${NUM_WORKERS:-32}"
 FSDP_DEVICES="${FSDP_DEVICES:-4}"
 ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
 DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
+DISABLE_WANDB="${DISABLE_WANDB:-0}"
 
 cd "$REPO"
 mkdir -p logs errs
@@ -75,6 +76,11 @@ train_args=(
 if [ -n "$ASSETS_BASE_DIR" ]; then
     train_args+=(--assets-base-dir="$ASSETS_BASE_DIR")
 fi
+case "$DISABLE_WANDB" in
+    1|true|TRUE|yes|YES)
+        train_args+=(--no-wandb-enabled)
+        ;;
+esac
 
 uv run scripts/train.py "${train_args[@]}" &
 pid=$!
