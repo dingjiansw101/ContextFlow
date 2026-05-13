@@ -12,14 +12,25 @@
 
 set -euo pipefail
 
-REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
-CONFIG="${CONFIG:?set CONFIG}"
-EXP_NAME="${EXP_NAME:-${CONFIG}_refactor_merge}"
-NUM_WORKERS="${NUM_WORKERS:-32}"
-FSDP_DEVICES="${FSDP_DEVICES:-4}"
-ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
-DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
-DISABLE_WANDB="${DISABLE_WANDB:-0}"
+if [ "$#" -gt 0 ]; then
+    REPO="${1:?set REPO}"
+    CONFIG="${2:?set CONFIG}"
+    EXP_NAME="${3:?set EXP_NAME}"
+    NUM_WORKERS="${4:?set NUM_WORKERS}"
+    FSDP_DEVICES="${5:?set FSDP_DEVICES}"
+    ASSETS_BASE_DIR="${6:-}"
+    DISABLE_CUDNN_FMHA="${7:-0}"
+    DISABLE_WANDB="${8:-0}"
+else
+    REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
+    CONFIG="${CONFIG:?set CONFIG}"
+    EXP_NAME="${EXP_NAME:-${CONFIG}_refactor_merge}"
+    NUM_WORKERS="${NUM_WORKERS:-32}"
+    FSDP_DEVICES="${FSDP_DEVICES:-4}"
+    ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
+    DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
+    DISABLE_WANDB="${DISABLE_WANDB:-0}"
+fi
 
 cd "$REPO"
 mkdir -p logs errs

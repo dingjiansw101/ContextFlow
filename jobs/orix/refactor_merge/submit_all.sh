@@ -122,7 +122,7 @@ submit_train() {
         --mem=400G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",EXP_NAME="$exp_name",NUM_WORKERS="$num_workers",FSDP_DEVICES="$fsdp_devices",ASSETS_BASE_DIR="$assets_base",DISABLE_CUDNN_FMHA="$disable_cudnn_fmha",DISABLE_WANDB="$disable_wandb"
+        --export=ALL
     )
     case "$SUBMIT_CMD" in
         sbatch) args=(--partition="$PARTITION" --qos="$QOS" "${args[@]}") ;;
@@ -133,8 +133,18 @@ submit_train() {
     if [ "$MODE" = "--test-only" ]; then
         args=(--test-only "${args[@]}")
     fi
-    echo "Submitting train ${label}: ${SUBMIT_CMD} ${args[*]} jobs/orix/refactor_merge/train_one.sh"
-    "$SUBMIT_CMD" "${args[@]}" jobs/orix/refactor_merge/train_one.sh
+    local script_args=(
+        "$REPO"
+        "$config"
+        "$exp_name"
+        "$num_workers"
+        "$fsdp_devices"
+        "$assets_base"
+        "$disable_cudnn_fmha"
+        "$disable_wandb"
+    )
+    echo "Submitting train ${label}: ${SUBMIT_CMD} ${args[*]} jobs/orix/refactor_merge/train_one.sh ${script_args[*]}"
+    "$SUBMIT_CMD" "${args[@]}" jobs/orix/refactor_merge/train_one.sh "${script_args[@]}"
 }
 
 submit_eval() {
@@ -159,7 +169,7 @@ submit_eval() {
         --mem=120G
         --time=24:00:00
         --chdir="$REPO"
-        --export=ALL,REPO="$REPO",CONFIG="$config",POLICY_CONFIG="$policy_config",EXP_NAME="$exp_name",CHECKPOINT_DIR="$checkpoint_dir",RUN_ID="$RUN_ID",TASK_SPLIT="$TASK_SPLIT",SUITE_LIST="$SUITE_LIST",ASSETS_BASE_DIR="$assets_base",DISABLE_CUDNN_FMHA="$disable_cudnn_fmha",SKIP_LOG_TO_SHEET=1
+        --export=ALL,SKIP_LOG_TO_SHEET=1
     )
     case "$EVAL_SUBMIT_CMD" in
         sbatch) args=(--partition="$EVAL_PARTITION" --qos="$EVAL_QOS" "${args[@]}") ;;
@@ -169,8 +179,20 @@ submit_eval() {
     if [ "$MODE" = "--test-only" ]; then
         args=(--test-only "${args[@]}")
     fi
-    echo "Submitting eval ${label}: ${EVAL_SUBMIT_CMD} ${args[*]} jobs/orix/refactor_merge/eval_libero_unseen_one.sh"
-    "$EVAL_SUBMIT_CMD" "${args[@]}" jobs/orix/refactor_merge/eval_libero_unseen_one.sh
+    local script_args=(
+        "$REPO"
+        "$config"
+        "$policy_config"
+        "$exp_name"
+        "$checkpoint_dir"
+        "$RUN_ID"
+        "$TASK_SPLIT"
+        "$SUITE_LIST"
+        "$assets_base"
+        "$disable_cudnn_fmha"
+    )
+    echo "Submitting eval ${label}: ${EVAL_SUBMIT_CMD} ${args[*]} jobs/orix/refactor_merge/eval_libero_unseen_one.sh ${script_args[*]}"
+    "$EVAL_SUBMIT_CMD" "${args[@]}" jobs/orix/refactor_merge/eval_libero_unseen_one.sh "${script_args[@]}"
 }
 
 for i in "${!configs[@]}"; do

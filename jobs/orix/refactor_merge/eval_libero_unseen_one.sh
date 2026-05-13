@@ -12,18 +12,31 @@
 
 set -euo pipefail
 
-REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
-CONFIG="${CONFIG:?set CONFIG}"
-POLICY_CONFIG="${POLICY_CONFIG:-$CONFIG}"
-EXP_NAME="${EXP_NAME:-${CONFIG}_refactor_merge}"
-CHECKPOINT_DIR="${CHECKPOINT_DIR:-checkpoints/${CONFIG}/${EXP_NAME}/19999}"
-RUN_ID="${RUN_ID:-orix_refactor_merge_$(date +%Y%m%d)}"
-TASK_SPLIT="${TASK_SPLIT:-split0}"
-SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
+if [ "$#" -gt 0 ]; then
+    REPO="${1:?set REPO}"
+    CONFIG="${2:?set CONFIG}"
+    POLICY_CONFIG="${3:?set POLICY_CONFIG}"
+    EXP_NAME="${4:?set EXP_NAME}"
+    CHECKPOINT_DIR="${5:?set CHECKPOINT_DIR}"
+    RUN_ID="${6:?set RUN_ID}"
+    TASK_SPLIT="${7:?set TASK_SPLIT}"
+    SUITE_LIST="${8:?set SUITE_LIST}"
+    ASSETS_BASE_DIR="${9:-}"
+    DISABLE_CUDNN_FMHA="${10:-0}"
+else
+    REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
+    CONFIG="${CONFIG:?set CONFIG}"
+    POLICY_CONFIG="${POLICY_CONFIG:-$CONFIG}"
+    EXP_NAME="${EXP_NAME:-${CONFIG}_refactor_merge}"
+    CHECKPOINT_DIR="${CHECKPOINT_DIR:-checkpoints/${CONFIG}/${EXP_NAME}/19999}"
+    RUN_ID="${RUN_ID:-orix_refactor_merge_$(date +%Y%m%d)}"
+    TASK_SPLIT="${TASK_SPLIT:-split0}"
+    SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
+    ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
+    DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
+fi
 LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
 ProjectPython="${ProjectPython:-}"
-ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
-DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
 
 cd "$REPO"
 mkdir -p logs errs
