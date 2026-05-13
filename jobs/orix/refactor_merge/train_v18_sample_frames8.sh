@@ -14,46 +14,34 @@
 
 set -euo pipefail
 
-REPO=/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge
+REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
 CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"
 EXP_NAME="${CONFIG}_refactor_merge"
 ASSETS_BASE_DIR="/mnt/data/u/dingj0b/code/openpi_libero/openpi/assets"
+ASSETS_NAME="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor"
 
 cd "$REPO"
 mkdir -p logs errs
 
 export PATH="$HOME/.local/bin:$PATH"
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$REPO/.venv}"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
-
 ulimit -n 65536 || true
 
-PYTHONPATH=src uv run python - "$CONFIG" "$ASSETS_BASE_DIR" <<'PY'
-import dataclasses
-from pathlib import Path
-import sys
+if ! find "${ASSETS_BASE_DIR}/${ASSETS_NAME}" -maxdepth 4 -type f -name 'norm_stats*' 2>/dev/null | grep -q .; then
+    echo "Missing ${ASSETS_BASE_DIR}/${ASSETS_NAME} norm stats; run scripts/compute_norm_stats.py --config-name ${CONFIG} first." >&2
+    exit 66
+fi
 
-from openpi.training import config as _config
+pid=""
+forward_term() {
+    if [[ -n "${pid}" ]]; then
+        kill -TERM "$pid" 2>/dev/null || true
+        wait "$pid" || true
+    fi
+}
+trap forward_term SIGTERM
 
-cfg = _config.get_config(sys.argv[1])
-cfg = dataclasses.replace(cfg, assets_base_dir=sys.argv[2])
-data_cfg = cfg.data.create(cfg.assets_dirs, cfg.model)
-if data_cfg.repo_id != "fake" and data_cfg.norm_stats is None:
-    raise SystemExit(f"Missing norm stats for asset_id={data_cfg.asset_id} under {cfg.assets_dirs}")
-
-paths = []
-for attr in ("episode_to_indexes_file", "states_cache_path", "actions_cache_path", "task_to_episode", "task_to_episode_path"):
-    value = getattr(cfg.data, attr, None)
-    if value:
-        paths.append(Path(value))
-
-missing = [str(path) for path in paths if not path.exists()]
-if missing:
-    raise SystemExit("Missing metadata/cache paths:\n" + "\n".join(missing))
-
-print(f"Preflight OK for {cfg.name}: assets={cfg.assets_dirs}, asset_id={data_cfg.asset_id}")
-PY
-
-trap 'kill -TERM "$pid" 2>/dev/null; wait "$pid"' SIGTERM
 XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
     uv run scripts/train.py "$CONFIG" \
         --project-name=openpi \

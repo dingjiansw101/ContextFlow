@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-REPO=/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge
+REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
 CONFIG="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor"
 POLICY_CONFIG="$CONFIG"
 EXP_NAME="${CONFIG}_refactor_merge"
@@ -27,5 +27,11 @@ DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
 cd "$REPO"
 mkdir -p logs errs
 
-bash jobs/orix/refactor_merge/eval_libero_unseen_one.sh \
-    "$REPO" "$CONFIG" "$POLICY_CONFIG" "$EXP_NAME" "$CHECKPOINT_DIR" "$RUN_ID" "$TASK_SPLIT" "$SUITE_LIST" "$ASSETS_BASE_DIR" "$DISABLE_CUDNN_FMHA"
+export REPO
+export TASK_SPLIT
+export SUITE_LIST
+export ASSETS_BASE_DIR
+export DISABLE_CUDNN_FMHA
+
+bash jobs/local/eval_pi0_libero_incontext_unseen.sh \
+    "$EXP_NAME" "$POLICY_CONFIG" "$CHECKPOINT_DIR" "$RUN_ID"

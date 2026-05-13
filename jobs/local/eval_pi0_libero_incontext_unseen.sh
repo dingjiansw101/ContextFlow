@@ -2,41 +2,63 @@
 set -euo pipefail
 
 if [ "$#" -lt 3 ]; then
-    echo "usage: $0 <run-name> <inference-config> <checkpoint-dir> [run-id]" >&2
-    echo "  <run-name>           directory stem under logs/ and data/libero/ (e.g. pi0_libero_incontextv18..._orix)" >&2
-    echo "  <inference-config>   policy.config arg for serve_policy_incontext.py (typically <CONFIG>_inference)" >&2
-    echo "  <checkpoint-dir>     orbax checkpoint directory" >&2
-    echo "  [run-id]             tag for outputs; defaults to orix_<date>" >&2
-    echo "env overrides: TASK_SPLIT (default split0), ASSETS_NAME, SUITE_LIST, PORT, CUDA_VISIBLE_DEVICES, LiberoVenv, ProjectPython" >&2
+    echo "usage: $0 <run-name> <policy-config> <checkpoint-dir> [run-id]" >&2
+    echo "  <run-name>        directory stem under logs/ and data/libero" >&2
+    echo "  <policy-config>   policy.config arg for scripts/serve_policy.py" >&2
+    echo "  <checkpoint-dir>  orbax checkpoint directory" >&2
+    echo "  [run-id]          output tag; defaults to orix_<date>" >&2
+    echo "env overrides: TASK_SPLIT, SUITE_LIST, ASSETS_BASE_DIR, PORT, LiberoVenv, ProjectPython, DISABLE_CUDNN_FMHA" >&2
     exit 64
 fi
 
 NAME="$1"
-CONFIG_NAME="$2"
+POLICY_CONFIG="$2"
 CHECKPOINT_DIR="$3"
 RUN_ID="${4:-orix_$(date +%Y%m%d)}"
 
 REPO="${REPO:-$PWD}"
+TASK_SPLIT="${TASK_SPLIT:-split0}"
+SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
+LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
+ProjectPython="${ProjectPython:-}"
+ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-}"
+DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
+
 cd "$REPO"
 
-TASK_SPLIT="${TASK_SPLIT:-split0}"
-ASSETS_NAME="${ASSETS_NAME:-pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor}"
 LOG_DIR="logs/${NAME}/${RUN_ID}"
 VIDEO_DIR="data/libero/${NAME}/${RUN_ID}"
-ProjectPython="${ProjectPython:-}"
-LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
 SERVER_LOG="${LOG_DIR}/${SERVER_LOG_STEM:-server_weight_float32}.log"
 
 mkdir -p "$LOG_DIR" "$VIDEO_DIR"
+
+export PATH="$HOME/.local/bin:$PATH"
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-$REPO/.venv}"
 
 if [ ! -d "$CHECKPOINT_DIR" ]; then
     echo "checkpoint dir not found: $CHECKPOINT_DIR" >&2
     exit 66
 fi
-if ! find "assets/${ASSETS_NAME}" -maxdepth 4 -type f -name 'norm_stats*' 2>/dev/null | grep -q .; then
-    echo "Missing assets/${ASSETS_NAME} norm stats on eval machine." >&2
+if [ ! -x "${LiberoVenv}/bin/python" ]; then
+    echo "LIBERO python not found: ${LiberoVenv}/bin/python" >&2
     exit 66
 fi
+
+PYTHONPATH=src uv run python - "$POLICY_CONFIG" "$ASSETS_BASE_DIR" <<'PY'
+import dataclasses
+import sys
+
+from openpi.training import config as _config
+
+cfg = _config.get_config(sys.argv[1])
+if sys.argv[2]:
+    cfg = dataclasses.replace(cfg, assets_base_dir=sys.argv[2])
+data_cfg = cfg.data.create_policy(cfg.assets_dirs, cfg.model)
+if data_cfg.repo_id != "fake" and data_cfg.norm_stats is None:
+    raise SystemExit(f"Missing policy norm stats for asset_id={data_cfg.asset_id} under {cfg.assets_dirs}")
+
+print(f"Policy preflight OK for {cfg.name}: assets={cfg.assets_dirs}, asset_id={data_cfg.asset_id}")
+PY
 
 if [ -n "$ProjectPython" ]; then
     PORT_PYTHON="$ProjectPython"
@@ -46,6 +68,7 @@ fi
 
 PORT="${PORT:-$("$PORT_PYTHON" - <<'PY'
 import socket
+
 s = socket.socket()
 s.bind(("", 0))
 print(s.getsockname()[1])
@@ -53,8 +76,17 @@ s.close()
 PY
 )}"
 
-export PATH="$HOME/.local/bin:$PATH"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
+export MUJOCO_GL="${MUJOCO_GL:-egl}"
+export __EGL_VENDOR_LIBRARY_DIRS="${__EGL_VENDOR_LIBRARY_DIRS:-$HOME/nvidia-egl}"
+export LD_LIBRARY_PATH="$HOME/nvidia-egl/lib:${LD_LIBRARY_PATH:-}"
+export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}"
+
+case "$DISABLE_CUDNN_FMHA" in
+    1|true|TRUE|yes|YES)
+        export XLA_FLAGS="${XLA_FLAGS:+$XLA_FLAGS }--xla_gpu_enable_cudnn_fmha=false"
+        ;;
+esac
 
 cleanup() {
     if [ -n "${SERVER_PID:-}" ]; then
@@ -64,20 +96,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Starting in-context policy server for ${NAME} (config=${CONFIG_NAME}) on port ${PORT}"
+echo "Starting policy server for ${NAME} with policy config ${POLICY_CONFIG} on port ${PORT}"
+policy_args=(
+    --loader=INCONTEXT
+    --port "$PORT"
+    policy:checkpoint
+    --policy.inference-dtype=float32
+    --policy.config="$POLICY_CONFIG"
+    --policy.dir="$CHECKPOINT_DIR"
+)
+
 if [ -n "$ProjectPython" ]; then
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
-    XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
-        "$ProjectPython" scripts/serve_policy_incontext.py --port "$PORT" \
-            policy:checkpoint --policy.inference_dtype=float32 \
-            --policy.config="$CONFIG_NAME" --policy.dir="$CHECKPOINT_DIR" \
+        "$ProjectPython" scripts/serve_policy.py "${policy_args[@]}" \
             >"$SERVER_LOG" 2>&1 &
 else
     CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" \
-    XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
-        uv run scripts/serve_policy_incontext.py --port "$PORT" \
-            policy:checkpoint --policy.inference_dtype=float32 \
-            --policy.config="$CONFIG_NAME" --policy.dir="$CHECKPOINT_DIR" \
+        uv run scripts/serve_policy.py "${policy_args[@]}" \
             >"$SERVER_LOG" 2>&1 &
 fi
 SERVER_PID=$!
@@ -97,10 +132,6 @@ if ! grep -q "Creating server" "$SERVER_LOG" 2>/dev/null; then
     exit 68
 fi
 
-if [ ! -x "${LiberoVenv}/bin/python" ]; then
-    echo "LIBERO python not found: ${LiberoVenv}/bin/python" >&2
-    exit 66
-fi
 source "${LiberoVenv}/bin/activate"
 export PYTHONPATH="${PYTHONPATH:-}:$PWD:$PWD/packages/openpi-client/src:$PWD/third_party/libero"
 export MUJOCO_GL="${MUJOCO_GL:-egl}"
@@ -134,13 +165,12 @@ run_requested_suite() {
     esac
 }
 
-for suite in ${SUITE_LIST:-spatial object goal 10}; do
+for suite in $SUITE_LIST; do
     run_requested_suite "$suite"
 done
 
 echo "Completed held-out eval for ${NAME}; results in ${LOG_DIR}"
 
-# Auto-sync results to the openpi LIBERO eval tracker (skipped when SKIP_LOG_TO_SHEET=1).
 if [ "${SKIP_LOG_TO_SHEET:-0}" != "1" ] && command -v claude >/dev/null 2>&1; then
     TRAINING_MACHINE="${TRAINING_MACHINE:-orix}"
     EVAL_MACHINE="${EVAL_MACHINE:-orix}"
