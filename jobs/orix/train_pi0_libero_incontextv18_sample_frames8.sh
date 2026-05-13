@@ -16,8 +16,6 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p logs errs
 
 export PATH="$HOME/.local/bin:$PATH"
-export NCCL_NVLS_ENABLE="${NCCL_NVLS_ENABLE:-0}"
-export NCCL_P2P_DISABLE="${NCCL_P2P_DISABLE:-0}"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 
 CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"

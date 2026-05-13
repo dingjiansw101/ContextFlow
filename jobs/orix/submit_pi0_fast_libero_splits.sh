@@ -86,8 +86,6 @@ cd "$REPO"
 mkdir -p logs errs
 
 export PATH="$HOME/.local/bin:$PATH"
-export NCCL_NVLS_ENABLE="${NCCL_NVLS_ENABLE:-0}"
-export NCCL_P2P_DISABLE="${NCCL_P2P_DISABLE:-0}"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 
 STATS_PATH="assets/pi0_fast_libero_split0/physical-intelligence/libero/norm_stats.json"

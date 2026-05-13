@@ -80,8 +80,6 @@ cd "$REPO"
 mkdir -p logs errs
 
 export PATH="$HOME/.local/bin:$PATH"
-export NCCL_NVLS_ENABLE="${NCCL_NVLS_ENABLE:-0}"
-export NCCL_P2P_DISABLE="${NCCL_P2P_DISABLE:-0}"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 
 if ! find assets/pi0_libero_split0 -maxdepth 4 -type f -name 'norm_stats*' | grep -q .; then
