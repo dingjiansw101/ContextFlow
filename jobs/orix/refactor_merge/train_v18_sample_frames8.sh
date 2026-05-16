@@ -16,7 +16,7 @@ set -euo pipefail
 
 REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
 CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"
-EXP_NAME="${CONFIG}_refactor_merge"
+EXP_NAME="${CONFIG}_refactor_merge_nw16"
 ASSETS_BASE_DIR="/mnt/data/u/dingj0b/code/openpi_libero/openpi/assets"
 ASSETS_NAME="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor"
 
@@ -47,6 +47,7 @@ XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
         --project-name=openpi \
         --exp-name="$EXP_NAME" \
         --assets-base-dir="$ASSETS_BASE_DIR" \
+        --num-workers=16 \
         --resume &
 pid=$!
 wait "$pid"

@@ -15,7 +15,7 @@ set -euo pipefail
 REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
 CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"
 POLICY_CONFIG="$CONFIG"
-EXP_NAME="${CONFIG}_refactor_merge"
+EXP_NAME="${CONFIG}_refactor_merge_nw16"
 ITER="${ITER:-19999}"
 CHECKPOINT_DIR="checkpoints/${CONFIG}/${EXP_NAME}/${ITER}"
 RUN_ID="${RUN_ID:-orix_refactor_merge_$(date +%Y%m%d)}"
