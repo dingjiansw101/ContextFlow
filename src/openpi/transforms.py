@@ -1,5 +1,6 @@
 from collections.abc import Callable, Mapping, Sequence
 import dataclasses
+import hashlib
 import logging
 import json
 from pathlib import Path
@@ -25,6 +26,32 @@ NormStats: TypeAlias = _normalize.NormStats
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+
+def stable_sample_seed(seed_base: int, *components: Any) -> int:
+    """Create a deterministic seed from a base seed and sample-specific values."""
+    hasher = hashlib.blake2b(digest_size=8)
+    hasher.update(str(int(seed_base)).encode("utf-8"))
+    for component in components:
+        hasher.update(b"\0")
+        hasher.update(_seed_component_bytes(component))
+    return int.from_bytes(hasher.digest(), "little")
+
+
+def _seed_component_bytes(component: Any) -> bytes:
+    if component is None:
+        return b"<none>"
+    if isinstance(component, bytes):
+        return component
+    if isinstance(component, str):
+        return component.encode("utf-8")
+    try:
+        array = np.asarray(component)
+    except Exception:
+        return repr(component).encode("utf-8")
+    if array.dtype == object:
+        return repr(component).encode("utf-8")
+    return f"{array.shape}:{array.dtype}:".encode("utf-8") + array.tobytes()
 
 
 def reindex_filtered_dict(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -168,6 +195,7 @@ class InjectDemoIndexes(DataTransformFn):
     random_select: bool = True
     sample_episodes: int = 1
     train_episode_index_list: Optional[List[int]] = None
+    seed_base: Optional[int] = None
 
     def __post_init__(self):
         task_to_episode_path = Path(self.task_to_episode)
@@ -251,7 +279,20 @@ class InjectDemoIndexes(DataTransformFn):
             )
         if split == "train" and self.random_select:
             k = min(self.sample_episodes, len(candidates))
-            selected_episodes = random.sample(candidates, k)
+            if self.seed_base is None:
+                selected_episodes = random.sample(candidates, k)
+            else:
+                rng = random.Random(
+                    stable_sample_seed(
+                        self.seed_base,
+                        "InjectDemoIndexes",
+                        task_index,
+                        data.get("index"),
+                        data.get("frame_index"),
+                        data.get("episode_index"),
+                    )
+                )
+                selected_episodes = rng.sample(candidates, k)
         else:
             selected_episodes = candidates[: self.sample_episodes]
         if not selected_episodes:

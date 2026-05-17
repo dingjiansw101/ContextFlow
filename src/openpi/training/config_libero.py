@@ -52,6 +52,7 @@ def build(api) -> list[api.TrainConfig]:
                     task_to_episode=task_to_episode_path,
                     episode_to_indexes=episode_to_indexes_file,
                     train_episode_index_list=train_episode,
+                    seed_base=factory.seed_base,
                 )
             ],
             outputs=[],
@@ -332,6 +333,7 @@ def build(api) -> list[api.TrainConfig]:
                         task_to_episode=self.task_to_episode,
                         episode_to_indexes=self.episode_to_indexes_file,
                         train_episode_index_list=train_epi,
+                        seed_base=self.seed_base,
                     )
                 ],
                 outputs=[],

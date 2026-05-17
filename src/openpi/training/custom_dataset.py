@@ -14,6 +14,8 @@ import torch
 import numpy as np
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
+import openpi.transforms as _transforms
+
 
 class CustomLeRobotDataset(LeRobotDataset):
     """Custom dataset that extends LeRobotDataset with modified data loading.
@@ -49,6 +51,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         num_sample_actions: int = 32,
         task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
         random_select: bool = True,
+        seed_base: int | None = None,
     ):
         """
         CustomLeRobotDataset extends LeRobotDataset to load both sequences and in-context demonstrations.
@@ -60,6 +63,7 @@ class CustomLeRobotDataset(LeRobotDataset):
             num_sample_actions (int): Number of actions for in-context demonstration.
             task_to_episode_path (str): Path to task_to_episode.json mapping file.
             random_select (bool): If True, randomly select demo episodes; if False, use deterministic selection (first episode).
+            seed_base (int | None): Optional base seed for deterministic random demo selection.
         """
 
         # Initialize parent - all LeRobotDataset code, including file loading and indexing
@@ -78,6 +82,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         self.num_sample_actions = num_sample_actions
         self.action_horizon = len(delta_timestamps["actions"])
         self.random_select = random_select
+        self.seed_base = seed_base
 
         # Load task-to-episode and episode-to-indexes mappings
         self.task_to_episode = {}
@@ -91,9 +96,9 @@ class CustomLeRobotDataset(LeRobotDataset):
         """Get a single sample from the dataset with custom processing."""
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
+        current_ep_idx = self.episodes.index(ep_idx) if self.episodes is not None else ep_idx
         query_indices = None
         if self.delta_indices is not None:
-            current_ep_idx = self.episodes.index(ep_idx) if self.episodes is not None else ep_idx
             query_indices, padding = self._get_query_indices(idx, current_ep_idx)
             query_result = self._query_hf_dataset(query_indices)
             item = {**item, **padding}
@@ -102,12 +107,41 @@ class CustomLeRobotDataset(LeRobotDataset):
 
         # Load in-context demonstration from another episode with the same task
         task_index = int(item["task_index"])
-        incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index)
+        incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index, sample_index=idx)
         item.update(incontext_demo)
 
         return item
 
-    def load_incontext_demonstration(self, current_ep_idx: int, task_index: int) -> Dict[str, Any]:
+    def select_incontext_episode(
+        self,
+        other_episodes: list[int],
+        *,
+        current_ep_idx: int,
+        task_index: int,
+        sample_index: SupportsIndex | None,
+    ) -> int:
+        if not self.random_select:
+            return other_episodes[0]
+        if self.seed_base is None:
+            return random.choice(other_episodes)
+
+        rng = random.Random(
+            _transforms.stable_sample_seed(
+                self.seed_base,
+                "CustomLeRobotDataset",
+                task_index,
+                current_ep_idx,
+                sample_index,
+            )
+        )
+        return other_episodes[rng.randrange(len(other_episodes))]
+
+    def load_incontext_demonstration(
+        self,
+        current_ep_idx: int,
+        task_index: int,
+        sample_index: SupportsIndex | None = None,
+    ) -> Dict[str, Any]:
         """Load in-context demonstration from another episode with the same task.
 
         Args:
@@ -124,10 +158,12 @@ class CustomLeRobotDataset(LeRobotDataset):
             raise ValueError(f"No episodes available for task {task_index}")
 
         # print(f"other_episodes: {other_episodes}")
-        if self.random_select:
-            selected_ep_idx = random.choice(other_episodes)
-        else:
-            selected_ep_idx = other_episodes[0]
+        selected_ep_idx = self.select_incontext_episode(
+            other_episodes,
+            current_ep_idx=current_ep_idx,
+            task_index=task_index,
+            sample_index=sample_index,
+        )
 
         episode_idx = selected_ep_idx if self.episodes is None else self.episodes.index(selected_ep_idx)
         # get the frame indices for the episode

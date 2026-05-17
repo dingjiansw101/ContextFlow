@@ -201,12 +201,14 @@ def create_custom_dataset(
             data_config_factory, "task_to_episode_path", "metadata/libero/task_to_episode.json"
         )
         random_select = getattr(data_config_factory, "random_select", True)
+        seed_base = getattr(data_config_factory, "seed_base", None)
     else:
         # Fallback to defaults if no factory provided
         num_sample_frames = 2
         num_sample_actions = 32
         task_to_episode_path = "metadata/libero/task_to_episode.json"
         random_select = True
+        seed_base = None
 
     # Build delta_timestamps for each action sequence key (for compatibility)
     dataset = CustomLeRobotDataset(
@@ -222,6 +224,7 @@ def create_custom_dataset(
         num_sample_actions=num_sample_actions,
         task_to_episode_path=task_to_episode_path,
         random_select=random_select,
+        seed_base=seed_base,
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)
     if data_config.prompt_from_task:

@@ -210,7 +210,8 @@ def build(api) -> list["api.TrainConfig"]:
                                                     sample_frames=model_config.sample_frames,
                                                     random_select=model_config.random_select,
                                                     sample_episodes=model_config.sample_episodes,
-                                                    train_episode_index_list=train_epi)],
+                                                    train_episode_index_list=train_epi,
+                                                    seed_base=self.seed_base)],
                 outputs=[],
             )
 
