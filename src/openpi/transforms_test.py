@@ -163,6 +163,42 @@ def test_inject_demo_indexes_seed_base_is_deterministic(tmp_path):
     assert first["dem_prompt_indexes"] == second["dem_prompt_indexes"]
 
 
+def test_inject_demo_indexes_without_seed_base_uses_global_random(tmp_path):
+    task_to_episode_path = tmp_path / "task_to_episode.json"
+    episode_to_indexes_path = tmp_path / "episode_to_indexes.json"
+    task_to_episode_path.write_text(json.dumps({"0": [0, 1, 2, 3]}))
+    episode_to_indexes_path.write_text(
+        json.dumps(
+            {
+                "0": [0, 1, 2],
+                "1": [3, 4, 5],
+                "2": [6, 7, 8],
+                "3": [9, 10, 11],
+            }
+        )
+    )
+
+    transform = _transforms.InjectDemoIndexes(
+        task_to_episode=str(task_to_episode_path),
+        episode_to_indexes=str(episode_to_indexes_path),
+        sample_frames=2,
+        sample_episodes=2,
+        random_select=True,
+    )
+    item = {
+        "task_index": np.array(0),
+        "index": np.array(17),
+        "frame_index": np.array(2),
+        "episode_index": np.array(0),
+    }
+
+    random.seed(123)
+    result = transform(dict(item))
+
+    expected = random.Random(123).sample([0, 1, 2, 3], 2)
+    assert np.array_equal(result["selected_episode"], np.array(expected, dtype=np.int32))
+
+
 # def test_injectdemoindexes():
 #     item = {"task_index": 0}
 #     transform = _transforms.InjectDemoIndexes(random_select=False, train_episode_index_list=[0, 1, 2])
