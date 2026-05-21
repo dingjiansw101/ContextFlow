@@ -337,6 +337,10 @@ class Pi0Incontextv18(_model.BaseModel):
         self.num_image_queries = config.num_image_queries
         self.num_state_queries = config.num_state_queries
         self.num_action_queries = config.num_action_queries
+        self._image_embed_dim = prompt_expert_config.width
+        siglip_variant = "So400m/14"
+        self._image_patch_size = _siglip.decode_variant(siglip_variant)["patch_size"]
+        self._image_token_dtype = jnp.dtype(config.dtype)
         # TODO: rewrite gemma in NNX. For now, use bridge.
         llm = nnx_bridge.ToNNX(
             _gemma.Module(
@@ -348,7 +352,7 @@ class Pi0Incontextv18(_model.BaseModel):
         img = nnx_bridge.ToNNX(
             _siglip.Module(
                 num_classes=prompt_expert_config.width,
-                variant="So400m/14",
+                variant=siglip_variant,
                 pool_type="none",
                 scan=True,
                 dtype_mm=config.dtype,
@@ -399,6 +403,18 @@ class Pi0Incontextv18(_model.BaseModel):
                 rngs=rngs
             )
 
+    def _empty_image_tokens(self, image: at.Array) -> at.Array:
+        patch_h, patch_w = self._image_patch_size
+        num_patches = (image.shape[-3] // patch_h) * (image.shape[-2] // patch_w)
+        return jnp.zeros((image.shape[0], num_patches, self._image_embed_dim), dtype=self._image_token_dtype)
+
+    def _encode_image_tokens(self, image: at.Array, mask: at.Array) -> at.Array:
+        def encode(x):
+            image_tokens, _ = self.PaliGemma.img(x, train=False)
+            return image_tokens
+
+        return jax.lax.cond(jnp.any(mask), encode, self._empty_image_tokens, image)
+
     @at.typecheck
     def embed_midfix(
         self, obs: _model.ObservationIncontext, train: bool = False
@@ -409,7 +425,7 @@ class Pi0Incontextv18(_model.BaseModel):
         tokens = []
 
         for name in obs.images:
-            image_tokens, _ = self.PaliGemma.img(obs.images[name], train=False)
+            image_tokens = self._encode_image_tokens(obs.images[name], obs.image_masks[name])
             # image_tokens = self.obs_img_proj(image_tokens)
             if self.avg_current_img:
                 image_tokens = jnp.mean(image_tokens, axis=1, keepdims=True)
@@ -440,12 +456,13 @@ class Pi0Incontextv18(_model.BaseModel):
         if self.use_image_prompts:
             for name in obs.incontext_images:
                 image_sequence = obs.incontext_images[name]
+                image_sequence_mask = obs.incontext_image_masks[name]
                 if len(image_sequence.shape) == 6:
                     batch_size, episode_len, seq_len = image_sequence.shape[0], image_sequence.shape[1], image_sequence.shape[2]
                     image_sequence = image_sequence.reshape(
                         image_sequence.shape[0] * image_sequence.shape[1] * image_sequence.shape[2], *image_sequence.shape[3:]
                     )
-                    image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+                    image_sqeuence_tokens = self._encode_image_tokens(image_sequence, image_sequence_mask)
                     # TODO: to organize multiple episode prompts in order
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, episode_len * seq_len, -1, image_sqeuence_tokens.shape[-1]
@@ -456,7 +473,7 @@ class Pi0Incontextv18(_model.BaseModel):
                     image_sequence = image_sequence.reshape(
                         image_sequence.shape[0] * image_sequence.shape[1], *image_sequence.shape[2:]
                     )
-                    image_sqeuence_tokens, _ = self.PaliGemma.img(image_sequence, train=False)
+                    image_sqeuence_tokens = self._encode_image_tokens(image_sequence, image_sequence_mask)
                     image_sqeuence_tokens = image_sqeuence_tokens.reshape(
                         batch_size, seq_len, -1, image_sqeuence_tokens.shape[-1]
                     )

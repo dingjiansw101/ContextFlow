@@ -1030,7 +1030,7 @@ class Normalize(DataTransformFn):
     def __post_init__(self):
         if self.norm_stats is not None and self.use_quantiles:
             _assert_quantile_stats(self.norm_stats)
-        # Validate that aliases point to existing norm_stats keys
+        # Validate that aliases point to existing norm_stats keys.
         if self.norm_stats_aliases is not None and self.norm_stats:
             flat_stats = flatten_dict(self.norm_stats)
             for alias_key, target_key in self.norm_stats_aliases.items():
@@ -1039,19 +1039,32 @@ class Normalize(DataTransformFn):
                         f"Alias '{alias_key}' points to non-existent norm_stats key '{target_key}'. "
                         f"Available keys: {list(flat_stats.keys())}"
                     )
+        # Cache the alias-expanded, flat norm_stats once. Both fields are
+        # frozen-dataclass attrs so the cache is valid for the lifetime of
+        # this transform; this avoids re-flattening (3×) and re-unflattening
+        # (2×) on every __call__.
+        if self.norm_stats:
+            flat = flatten_dict(self.norm_stats)
+            if self.norm_stats_aliases is not None:
+                for alias_key, target_key in self.norm_stats_aliases.items():
+                    if alias_key not in flat:
+                        flat[alias_key] = flat[target_key]
+            object.__setattr__(self, "_flat_expanded_norm_stats", flat)
+        else:
+            object.__setattr__(self, "_flat_expanded_norm_stats", {})
 
     def __call__(self, data: DataDict) -> DataDict:
         if not self.norm_stats:
             return data
-
-        # Expand norm_stats to include aliases
-        expanded_norm_stats = self._expand_norm_stats_with_aliases()
-        return apply_tree(
-            data,
-            expanded_norm_stats,
-            self._normalize_quantile if self.use_quantiles else self._normalize,
-            strict=self.strict,
-        )
+        fn = self._normalize_quantile if self.use_quantiles else self._normalize
+        selector = self._flat_expanded_norm_stats
+        flat_data = flatten_dict(data)
+        if self.strict:
+            for k in selector:
+                if k not in flat_data:
+                    raise ValueError(f"Selector key {k} not found in tree")
+        out = {k: (fn(v, selector[k]) if k in selector else v) for k, v in flat_data.items()}
+        return unflatten_dict(out)
 
     def _expand_norm_stats_with_aliases(self) -> at.PyTree[NormStats]:
         """Create an expanded norm_stats dict that includes alias mappings.
@@ -1100,7 +1113,7 @@ class Unnormalize(DataTransformFn):
         if self.norm_stats is not None and self.use_quantiles:
             _assert_quantile_stats(self.norm_stats)
 
-        # Validate that aliases point to existing norm_stats keys
+        # Validate that aliases point to existing norm_stats keys.
         if self.norm_stats_aliases is not None and self.norm_stats:
             flat_stats = flatten_dict(self.norm_stats)
             for alias_key, target_key in self.norm_stats_aliases.items():
@@ -1109,21 +1122,29 @@ class Unnormalize(DataTransformFn):
                         f"Alias '{alias_key}' points to non-existent norm_stats key '{target_key}'. "
                         f"Available keys: {list(flat_stats.keys())}"
                     )
+        # See Normalize.__post_init__ for the cache rationale.
+        if self.norm_stats:
+            flat = flatten_dict(self.norm_stats)
+            if self.norm_stats_aliases is not None:
+                for alias_key, target_key in self.norm_stats_aliases.items():
+                    if alias_key not in flat:
+                        flat[alias_key] = flat[target_key]
+            object.__setattr__(self, "_flat_expanded_norm_stats", flat)
+        else:
+            object.__setattr__(self, "_flat_expanded_norm_stats", {})
 
     def __call__(self, data: DataDict) -> DataDict:
         if not self.norm_stats:
             return data
-
-        # Expand norm_stats to include aliases
-        expanded_norm_stats = self._expand_norm_stats_with_aliases()
-
-        # Make sure that all the keys in the norm stats are present in the data.
-        return apply_tree(
-            data,
-            expanded_norm_stats,
-            self._unnormalize_quantile if self.use_quantiles else self._unnormalize,
-            strict=True,
-        )
+        fn = self._unnormalize_quantile if self.use_quantiles else self._unnormalize
+        selector = self._flat_expanded_norm_stats
+        flat_data = flatten_dict(data)
+        # Unnormalize originally passed strict=True; preserve that contract.
+        for k in selector:
+            if k not in flat_data:
+                raise ValueError(f"Selector key {k} not found in tree")
+        out = {k: (fn(v, selector[k]) if k in selector else v) for k, v in flat_data.items()}
+        return unflatten_dict(out)
 
     def _expand_norm_stats_with_aliases(self) -> at.PyTree[NormStats]:
         """Create an expanded norm_stats dict that includes alias mappings.

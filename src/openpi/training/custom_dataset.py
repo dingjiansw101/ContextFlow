@@ -8,13 +8,46 @@ functionality for specific use cases.
 import json
 import random
 from pathlib import Path
-from typing import Any, Dict, SupportsIndex
-from typing import Callable
-import torch
+from typing import Any, Callable, Dict, SupportsIndex
+
 import numpy as np
+import torch
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
 import openpi.transforms as _transforms
+
+
+def _identity_hf_transform(items_dict):
+    return items_dict
+
+
+def _list_column_to_numpy(chunked_array, dtype=np.float32) -> np.ndarray:
+    """Materialize a pyarrow ChunkedArray of fixed-length lists into a (N, D) numpy array.
+
+    Used to pre-cache small numeric columns (state, raw actions) so demo sampling
+    does not pay the per-row PIL→tensor decode that HuggingFace's set_transform
+    applies to every column on every dataset access.
+    """
+    combined = chunked_array.combine_chunks()
+    n_rows = len(combined)
+    if n_rows == 0:
+        return np.zeros((0, 0), dtype=dtype)
+    # FixedSizeListArray exposes list_size; ListArray exposes offsets.
+    inner_len = getattr(combined.type, "list_size", -1)
+    if inner_len < 0:
+        offsets = np.asarray(combined.offsets)
+        inner_lens = np.diff(offsets)
+        if not np.all(inner_lens == inner_lens[0]):
+            raise ValueError("Expected fixed-length inner lists; got varying lengths.")
+        inner_len = int(inner_lens[0])
+    flat = np.asarray(combined.values.to_numpy(zero_copy_only=False), dtype=dtype)
+    return flat.reshape(n_rows, int(inner_len))
+
+
+def _index_tensor_to_numpy(value) -> np.ndarray:
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().numpy().astype(np.int64, copy=True)
+    return np.asarray(value, dtype=np.int64).copy()
 
 
 class CustomLeRobotDataset(LeRobotDataset):
@@ -35,7 +68,6 @@ class CustomLeRobotDataset(LeRobotDataset):
     Args:
         Same as LeRobotDataset parent class.
     """
-
     def __init__(
         self,
         repo_id: str,
@@ -47,6 +79,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         download_videos: bool = True,
         local_files_only: bool = False,
         video_backend: str | None = None,
+        num_current_frames: int = 1,
         num_sample_frames: int = 2,
         num_sample_actions: int = 32,
         task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
@@ -59,6 +92,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         Args:
             repo_id: Dataset repository id.
             root, episodes, image_transforms, delta_timestamps, tolerance_s, download_videos, local_files_only, video_backend: Same as LeRobotDataset.
+            num_current_frames (int): Number of consecutive frames for current frames sequence.
             num_sample_frames (int): Number of frames for in-context demonstration.
             num_sample_actions (int): Number of actions for in-context demonstration.
             task_to_episode_path (str): Path to task_to_episode.json mapping file.
@@ -78,25 +112,79 @@ class CustomLeRobotDataset(LeRobotDataset):
             local_files_only=local_files_only,
             video_backend=video_backend,
         )
+        self.num_current_frames = num_current_frames
         self.num_sample_frames = num_sample_frames
         self.num_sample_actions = num_sample_actions
         self.action_horizon = len(delta_timestamps["actions"])
         self.random_select = random_select
         self.seed_base = seed_base
 
-        # Load task-to-episode and episode-to-indexes mappings
-        self.task_to_episode = {}
-
+        # Load task-to-episode mapping. Stored as a tuple of ints per task so
+        # random.choice / [0] indexing avoid rebuilding lists on every call.
         assert task_to_episode_path is not None, "task_to_episode_path is not set"
         with Path(task_to_episode_path).open("r") as f:
             task_to_episode_str = json.load(f)
-        self.task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
+        self.task_to_episode = {
+            int(k): tuple(int(e) for e in v) for k, v in task_to_episode_str.items()
+        }
+
+        # Pre-cache small numeric columns so demo-state/action sampling does not
+        # pay the per-row PIL decode cost from hf_transform_to_torch.
+        # state/raw-actions are O(state_dim) per frame — tiny in aggregate.
+        self._states_np = _list_column_to_numpy(self.hf_dataset.data["state"], dtype=np.float32)
+        self._raw_actions_np = _list_column_to_numpy(self.hf_dataset.data["actions"], dtype=np.float32)
+        # Raw image view for prompt frames. LeRobot's default transform converts
+        # PIL images to float32 torch tensors, then the LIBERO transform converts
+        # them back to uint8; this view avoids that round-trip for demo images.
+        self._hf_dataset_raw = self.hf_dataset.with_transform(_identity_hf_transform)
+
+        # Pre-compute O(1) episode-id → position lookup. Replaces self.episodes.index(...)
+        # which is O(len(self.episodes)) and called twice per __getitem__.
+        if self.episodes is not None:
+            self._episode_id_to_idx = {int(ep): i for i, ep in enumerate(self.episodes)}
+        else:
+            self._episode_id_to_idx = None
+
+        # Episode bounds as plain numpy ints for cheap arithmetic.
+        self._ep_starts_np = _index_tensor_to_numpy(self.episode_data_index["from"])
+        self._ep_ends_np = _index_tensor_to_numpy(self.episode_data_index["to"])
+
+    def _query_hf_dataset(self, query_indices: dict[str, list[int]]) -> dict:
+        """Fast path for action/state chunk reads.
+
+        The parent's implementation calls ``self.hf_dataset.select(q_idx)[key]``,
+        which constructs a fresh ``Dataset`` and triggers ``hf_transform_to_torch``
+        over every column — including the (~100 wasted) PIL image decodes for the
+        action-chunk rows we only need numeric data from. Read from the cached
+        numpy arrays instead; fall back to the parent for any other key.
+        """
+        out: dict = {}
+        fallback: dict[str, list[int]] = {}
+        for key, q_idx in query_indices.items():
+            if key in self.meta.video_keys:
+                continue
+            if key == "actions" and self._raw_actions_np is not None:
+                out[key] = torch.from_numpy(
+                    self._raw_actions_np[np.asarray(q_idx, dtype=np.int64)]
+                )
+            elif key == "state" and self._states_np is not None:
+                out[key] = torch.from_numpy(
+                    self._states_np[np.asarray(q_idx, dtype=np.int64)]
+                )
+            else:
+                fallback[key] = q_idx
+        if fallback:
+            out.update(super()._query_hf_dataset(fallback))
+        return out
 
     def __getitem__(self, idx: SupportsIndex) -> Dict[str, Any]:
         """Get a single sample from the dataset with custom processing."""
         item = self.hf_dataset[idx]
         ep_idx = item["episode_index"].item()
-        current_ep_idx = self.episodes.index(ep_idx) if self.episodes is not None else ep_idx
+        if self._episode_id_to_idx is not None:
+            current_ep_idx = self._episode_id_to_idx[ep_idx]
+        else:
+            current_ep_idx = ep_idx
         query_indices = None
         if self.delta_indices is not None:
             query_indices, padding = self._get_query_indices(idx, current_ep_idx)
@@ -153,7 +241,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         """
         # Mirror InjectDemoIndexes selection so comparison tests match the baseline loader.
         # TODO: do we need to exclude the current episode?
-        other_episodes = [int(ep) for ep in self.task_to_episode.get(task_index, [])]
+        other_episodes = self.task_to_episode.get(task_index)
         if not other_episodes:
             raise ValueError(f"No episodes available for task {task_index}")
 
@@ -165,37 +253,41 @@ class CustomLeRobotDataset(LeRobotDataset):
             sample_index=sample_index,
         )
 
-        episode_idx = selected_ep_idx if self.episodes is None else self.episodes.index(selected_ep_idx)
-        # get the frame indices for the episode
+        if self._episode_id_to_idx is not None:
+            episode_idx = self._episode_id_to_idx[selected_ep_idx]
+        else:
+            episode_idx = selected_ep_idx
 
-        ep_start = self.episode_data_index["from"][episode_idx]
-        ep_end = self.episode_data_index["to"][episode_idx]
+        ep_start = int(self._ep_starts_np[episode_idx])
+        ep_end = int(self._ep_ends_np[episode_idx])
+        num_frames = ep_end - ep_start
 
-        # Uniformly sample m frames between ep_start and ep_end
-        frame_indices = list(range(ep_start, ep_end))
-        num_frames = len(frame_indices)
+        assert self.num_sample_frames <= num_frames, (
+            f"num_sample_frames ({self.num_sample_frames}) must be less than or equal to num_frames ({num_frames})"
+        )
+        # Frame positions for images. Pay PIL decode only on the kept frames.
+        frame_positions = np.linspace(0, num_frames - 1, num=self.num_sample_frames, dtype=int)
+        sampled_indices = (ep_start + frame_positions).tolist()
+        # Direct indexing is cheaper than .select() and the raw view avoids
+        # PIL -> float tensor -> uint8 conversion churn for demo images.
+        sampled_frames = self._hf_dataset_raw[sampled_indices]
 
-        assert (
-            self.num_sample_frames <= num_frames
-        ), f"num_sample_frames ({self.num_sample_frames}) must be less than or equal to num_frames ({num_frames})"
-        # Use evenly-spaced sampling when we have enough frames
-        positions = np.linspace(0, num_frames - 1, num=self.num_sample_frames, dtype=int)
-        sampled_indices = [frame_indices[p] for p in positions]
+        data = {
+            "dem_prompt_images": {
+                "image": np.asarray(sampled_frames["image"], dtype=np.uint8),
+                "wrist_image": np.asarray(sampled_frames["wrist_image"], dtype=np.uint8),
+            }
+        }
 
-        # Load the frames using HuggingFace dataset API
-        sampled_frames = self.hf_dataset.select(sampled_indices)
-
-        data = {}
-        data["dem_prompt_images"] = {}
-        data["dem_prompt_images"]["image"] = torch.stack(sampled_frames["image"])
-        data["dem_prompt_images"]["wrist_image"] = torch.stack(sampled_frames["wrist_image"])
-
+        # State/action positions. Pulled from the pre-cached numpy arrays so we
+        # never trigger PIL→tensor on the (discarded) image columns of these rows.
         num_actions_to_sample = min(self.num_sample_actions, num_frames)
-        positions_actions = np.linspace(0, num_frames - 1, num=num_actions_to_sample, dtype=int)
-        sampled_indices_actions = [frame_indices[p] for p in positions_actions]
-        sampled_frames_actions = self.hf_dataset.select(sampled_indices_actions)
-        dem_prompt_states = torch.stack(sampled_frames_actions["state"])
-        dem_prompt_actions = torch.stack(sampled_frames_actions["actions"])
+        action_positions = np.linspace(0, num_frames - 1, num=num_actions_to_sample, dtype=int)
+        action_abs_indices = ep_start + action_positions
+        # Fancy indexing already returns a fresh C-contiguous array, so the
+        # explicit .copy() the parent version used was redundant.
+        dem_prompt_states = torch.from_numpy(self._states_np[action_abs_indices])
+        dem_prompt_actions = torch.from_numpy(self._raw_actions_np[action_abs_indices])
         # TODO: review the implementation of padding
         if num_actions_to_sample < self.num_sample_actions:
             pad = self.num_sample_actions - num_actions_to_sample
