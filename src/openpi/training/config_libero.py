@@ -271,14 +271,85 @@ def build(api) -> list[api.TrainConfig]:
 
         @override
         def create_policy(self, assets_dirs: pathlib.Path, model_config):
-            return _make_lerobot_incontext_data_config(
-                self,
-                assets_dirs,
-                model_config,
-                train_episode=None,
+            # Cache-free eval path: pull in-context demos directly from CustomLeRobotDataset
+            # instead of the older InjectDemoIndexes + AddImagePromptTransform +
+            # AddStatesActionsPromptTransform pipeline (which depended on JSON state/action
+            # caches under metadata/libero/).
+            # Lazy imports avoid a circular import (config -> data_loader -> config).
+            from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
+            from openpi.training.custom_dataset import CustomLeRobotDataset
+
+            base_config = self.create_base_config(assets_dirs)
+            if self.policy_local_files_only:
+                base_config = dataclasses.replace(base_config, local_files_only=True)
+
+            # Construct the demo source as a bare CustomLeRobotDataset (no
+            # PromptFromLeRobotTask wrapper — the live env supplies the prompt directly).
+            # load_incontext_demonstration is defined on CustomLeRobotDataset itself, so
+            # the new transform needs the bare instance, not a TransformedDataset wrapper.
+            dataset_meta = lerobot_dataset_mod.LeRobotDatasetMetadata(
+                base_config.repo_id, local_files_only=base_config.local_files_only
+            )
+            custom_dataset = CustomLeRobotDataset(
+                base_config.repo_id,
+                episodes=None,  # policy spans all episodes
+                delta_timestamps={
+                    key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
+                    for key in base_config.action_sequence_keys
+                },
+                local_files_only=base_config.local_files_only,
+                num_sample_frames=self.sample_frames,
+                num_sample_actions=self.sample_actions,
                 task_to_episode_path=self.task_to_episode_path,
-                episode_to_indexes_file=self.episode_to_indexes_file,
-                local_files_only=self.policy_local_files_only,
+                random_select=self.random_select,
+            )
+
+            # Eval-only repack: lists only keys that the WebSocket client sends
+            # (examples/libero/main_incontext.py). Listing keys absent from the live env
+            # input (e.g. "actions", "frame_index", "dem_prompt_*") would crash
+            # RepackTransform.__call__ with a KeyError.
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "observation/image": "image",
+                            "observation/wrist_image": "wrist_image",
+                            "observation/state": "state",
+                            "prompt": "prompt",
+                            "task_index": "task_index",
+                            "split": "split",
+                        }
+                    )
+                ]
+            )
+
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    api._transforms.InjectDemoFromCustomDataset(dataset=custom_dataset),
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim,
+                        model_type=model_config.model_type,
+                    ),
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                base_config,
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                train_episode=None,
+                provides_incontext_demos=True,
             )
 
     @dataclasses.dataclass(frozen=True)

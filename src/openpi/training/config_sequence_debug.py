@@ -19,7 +19,43 @@ def build(api):
 
     @dataclasses.dataclass(frozen=True)
     class SequenceDebugLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
-        use_delta_joint_actions: bool = True
+        """FAST in-context LIBERO config backed by CustomLeRobotDataset.
+
+        Both training (``create``) and evaluation (``create_policy``) source the
+        in-context demonstration directly from ``CustomLeRobotDataset`` /
+        ``InjectDemoFromCustomDataset``, mirroring the proven
+        ``CustomLeRobotLiberoIncontextDataConfig`` (config_libero.py). Because the
+        dataset spans all episodes (``episodes=None``), demos can be drawn for
+        held-out (unseen) tasks too — unlike the older ``InjectDemoIndexes`` path,
+        which was filtered to the train split and crashed on unseen tasks.
+        """
+
+        use_delta_joint_actions: bool = False
+        # CustomLeRobotDataset in-context parameters (read by create_custom_dataset
+        # via getattr on this factory, and by create_policy below).
+        sample_frames: int = 2  # Number of frames for the in-context demonstration.
+        sample_actions: int = 32  # Number of demo states/actions for the in-context prompt.
+        task_to_episode_path: str = "metadata/libero/task_to_episode.json"
+        random_select: bool = True  # If True, randomly select demo episodes; else deterministic.
+        policy_local_files_only: bool = False
+        # Demo tensors ARE normalized, matching the pre-migration pipeline: the old
+        # JSON caches (episode_states/actions_without_delta_cache.json) were built
+        # from transform_dataset(skip_norm_stats=False), i.e. post-Normalize, so the
+        # FAST in-context model was trained on z-scored demo tensors with zero pads
+        # (e.g. cached action dim3 = 8.465 = (0 + 2.9716) / 0.3511). Demo actions are
+        # padded to demo_action_dim=32 before Normalize while the "actions" stats are
+        # 7-dim, so the alias is identity-padded to 32 (pads stay zero).
+        norm_stats_aliases: dict[str, str] | None = dataclasses.field(
+            default_factory=lambda: {
+                "dem_prompt_all_states": "state",
+                "dem_prompt_all_actions": "actions",
+            }
+        )
+        norm_stats_alias_pad_dims: dict[str, int] | None = dataclasses.field(
+            default_factory=lambda: {"dem_prompt_all_actions": 32}
+        )
+        # Retained for backward compatibility with make_data kwargs; unused by the
+        # CustomLeRobotDataset path (kept so existing call sites do not break).
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
         task_to_episode: str = "metadata/libero/task_to_episode.json"
@@ -30,6 +66,7 @@ def build(api):
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config):
+            # Pass through dem_prompt_* keys produced by CustomLeRobotDataset.
             repack_transform = api._transforms.Group(
                 inputs=[
                     api._transforms.RepackTransform(
@@ -43,30 +80,31 @@ def build(api):
                             "frame_index": "frame_index",
                             "index": "index",
                             "task_index": "task_index",
+                            # dem_prompt_images is nested, so map the flattened keys.
+                            "dem_prompt_images": {
+                                "image": "dem_prompt_images/image",
+                                "wrist_image": "dem_prompt_images/wrist_image",
+                            },
+                            "dem_prompt_states": "dem_prompt_states",
+                            "dem_prompt_actions": "dem_prompt_actions",
+                            "selected_episode": "selected_episode",
                         }
                     )
                 ]
             )
 
             train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+            # CustomLeRobotDataset handles demo loading internally, so we do NOT use
+            # InjectDemoIndexes / AddImagePromptTransform / AddStatesActionsPromptTransform.
             data_transforms = api._transforms.Group(
                 inputs=[
-                    api._transforms.InjectDemoIndexes(
-                        sample_frames=model_config.sample_frames,
-                        random_select=model_config.random_select,
-                        sample_episodes=model_config.sample_episodes,
-                        task_to_episode=self.task_to_episode,
-                        episode_to_indexes=self.episode_to_indexes_file,
-                        train_episode_index_list=train_epi,
-                        seed_base=self.seed_base,
-                    )
-                ],
-                outputs=[],
-            )
-            data_transforms = data_transforms.push(
-                inputs=[
-                    libero_incontext_policy.LiberoIncontextInputs(
-                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim,
+                        model_type=model_config.model_type,
+                        # FAST in-context: action_dim (7) != demo dims; pad demos to
+                        # the model's demo_action_proj / demo_state_proj input dims.
+                        demo_action_dim=model_config.demo_action_dim,
+                        demo_state_dim=model_config.demo_state_dim,
                     )
                 ],
                 outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
@@ -85,7 +123,84 @@ def build(api):
                 data_transforms=data_transforms,
                 model_transforms=api.ModelTransformFactory()(model_config),
                 train_episode=train_epi,
-                demo_state_dim=self.demo_state_dim,
+            )
+
+        @override
+        def create_policy(self, assets_dirs: pathlib.Path, model_config):
+            # Cache-free eval path: pull in-context demos directly from
+            # CustomLeRobotDataset (spanning all episodes, so unseen tasks work)
+            # instead of the train-split-filtered InjectDemoIndexes pipeline.
+            # Lazy imports avoid a circular import (config -> data_loader -> config).
+            from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
+
+            from openpi.training.custom_dataset import CustomLeRobotDataset
+
+            base_config = self.create_base_config(assets_dirs)
+            if self.policy_local_files_only:
+                base_config = dataclasses.replace(base_config, local_files_only=True)
+
+            dataset_meta = lerobot_dataset_mod.LeRobotDatasetMetadata(
+                base_config.repo_id, local_files_only=base_config.local_files_only
+            )
+            custom_dataset = CustomLeRobotDataset(
+                base_config.repo_id,
+                episodes=None,  # policy spans all episodes (incl. unseen tasks)
+                delta_timestamps={
+                    key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
+                    for key in base_config.action_sequence_keys
+                },
+                local_files_only=base_config.local_files_only,
+                num_sample_frames=self.sample_frames,
+                num_sample_actions=self.sample_actions,
+                task_to_episode_path=self.task_to_episode_path,
+                random_select=self.random_select,
+            )
+
+            # Eval-only repack: only the keys the WebSocket client sends.
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "observation/image": "image",
+                            "observation/wrist_image": "wrist_image",
+                            "observation/state": "state",
+                            "prompt": "prompt",
+                            "task_index": "task_index",
+                            "split": "split",
+                        }
+                    )
+                ]
+            )
+
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    api._transforms.InjectDemoFromCustomDataset(dataset=custom_dataset),
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim,
+                        model_type=model_config.model_type,
+                        demo_action_dim=model_config.demo_action_dim,
+                        demo_state_dim=model_config.demo_state_dim,
+                    ),
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                base_config,
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                train_episode=None,
+                provides_incontext_demos=True,
             )
 
     def make_model(*, paligemma_variant: str | None = None):
@@ -145,6 +260,8 @@ def build(api):
             num_workers=8,
             batch_size=32,
             save_interval=save_interval,
+            # Route training through CustomLeRobotDataset (scripts/train.py keys on this).
+            use_custom_dataloader=True,
         )
 
     split_variants = [

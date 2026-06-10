@@ -141,53 +141,76 @@ def create_trained_policy_incontext(
         if data_config.asset_id is None:
             raise ValueError("Asset id is required to load norm stats.")
         norm_stats = _checkpoints.load_norm_stats(checkpoint_dir / "assets", data_config.asset_id)
-    dataset_data_config = dataclasses.replace(data_config, norm_stats=norm_stats)
-    dataset = create_dataset(data_config, train_config.model)
-    dataset = transform_dataset(dataset, dataset_data_config)
+    # When the data config already populates dem_prompt_* via its own data_transforms
+    # (e.g. CustomLeRobotLiberoIncontextDataConfig), we must NOT also build a dataset and
+    # append the cache-based AddImagePromptTransform / AddStatesActionsPromptTransform,
+    # which would re-read or rebuild JSON state/action caches at startup.
+    provides_incontext_demos = getattr(data_config, "provides_incontext_demos", False)
+
+    if not provides_incontext_demos:
+        dataset_data_config = dataclasses.replace(data_config, norm_stats=norm_stats)
+        dataset = create_dataset(data_config, train_config.model)
+        dataset = transform_dataset(dataset, dataset_data_config)
+    else:
+        dataset = None
+
+    # Mirror training (data_loader.py: transform_dataset forwards
+    # config.data.norm_stats_aliases into Normalize). When a config sets aliases —
+    # e.g. CustomLeRobotLiberoIncontextDataConfig maps dem_prompt_all_states → "state"
+    # and dem_prompt_all_actions → "actions" — eval must apply the same aliases or the
+    # demos arrive un-normalized while training had them normalized.
+    norm_stats_aliases = getattr(train_config.data, "norm_stats_aliases", None)
+    norm_stats_alias_pad_dims = getattr(train_config.data, "norm_stats_alias_pad_dims", None)
 
     input_transforms = [
         *repack_transforms.inputs,
         transforms.InjectDefaultPrompt(default_prompt),  # prompt here is language instruction for a task
         *data_config.data_transforms.inputs,
-        transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
+        transforms.Normalize(
+            norm_stats,
+            use_quantiles=data_config.use_quantile_norm,
+            norm_stats_aliases=norm_stats_aliases,
+            norm_stats_alias_pad_dims=norm_stats_alias_pad_dims,
+        ),
         *data_config.model_transforms.inputs,
     ]
 
-    if train_config.model.use_image_prompts:
-        print("Inference: Adding image prompts")
-        input_transforms.append(transforms.AddImagePromptTransform(dataset))
+    if not provides_incontext_demos:
+        if train_config.model.use_image_prompts:
+            print("Inference: Adding image prompts")
+            input_transforms.append(transforms.AddImagePromptTransform(dataset))
 
-    if train_config.model.use_action_state_prompts:
-        print("Inference: Adding action state prompts")
-        demo_state_dim = getattr(train_config.data, "demo_state_dim", None)
-        episode_to_indexes_file = getattr(train_config.data, "episode_to_indexes_file", None)
-        padding_mode = getattr(train_config.data, "padding_mode", "keep_all")
-        mask_padding_as_valid = getattr(train_config.data, "mask_padding_as_valid", False)
-        if episode_to_indexes_file is not None:
-            input_transforms.append(
-                transforms.AddStatesActionsPromptTransform(
-                    dataset=dataset,
-                    max_len=train_config.model.sample_actions,
-                    states_cache_path=train_config.data.states_cache_path,
-                    actions_cache_path=train_config.data.actions_cache_path,
-                    episode_to_indexes_file=episode_to_indexes_file,
-                    padding_mode=padding_mode,
-                    mask_padding_as_valid=mask_padding_as_valid,
-                    demo_state_dim=demo_state_dim,
+        if train_config.model.use_action_state_prompts:
+            print("Inference: Adding action state prompts")
+            demo_state_dim = getattr(train_config.data, "demo_state_dim", None)
+            episode_to_indexes_file = getattr(train_config.data, "episode_to_indexes_file", None)
+            padding_mode = getattr(train_config.data, "padding_mode", "keep_all")
+            mask_padding_as_valid = getattr(train_config.data, "mask_padding_as_valid", False)
+            if episode_to_indexes_file is not None:
+                input_transforms.append(
+                    transforms.AddStatesActionsPromptTransform(
+                        dataset=dataset,
+                        max_len=train_config.model.sample_actions,
+                        states_cache_path=train_config.data.states_cache_path,
+                        actions_cache_path=train_config.data.actions_cache_path,
+                        episode_to_indexes_file=episode_to_indexes_file,
+                        padding_mode=padding_mode,
+                        mask_padding_as_valid=mask_padding_as_valid,
+                        demo_state_dim=demo_state_dim,
+                    )
                 )
-            )
-        else:
-            input_transforms.append(
-                transforms.AddStatesActionsPromptTransform(
-                    dataset=dataset,
-                    max_len=train_config.model.sample_actions,
-                    states_cache_path=train_config.data.states_cache_path,
-                    actions_cache_path=train_config.data.actions_cache_path,
-                    padding_mode=padding_mode,
-                    mask_padding_as_valid=mask_padding_as_valid,
-                    demo_state_dim=demo_state_dim,
+            else:
+                input_transforms.append(
+                    transforms.AddStatesActionsPromptTransform(
+                        dataset=dataset,
+                        max_len=train_config.model.sample_actions,
+                        states_cache_path=train_config.data.states_cache_path,
+                        actions_cache_path=train_config.data.actions_cache_path,
+                        padding_mode=padding_mode,
+                        mask_padding_as_valid=mask_padding_as_valid,
+                        demo_state_dim=demo_state_dim,
+                    )
                 )
-            )
 
     if isinstance(train_config.model, Pi0FASTIncontextConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         return create_trained_policy_fast_incontext(
@@ -226,39 +249,55 @@ def _build_fast_incontext_transforms(
     norm_stats: dict[str, transforms.NormStats],
 ) -> tuple[list[transforms.DataTransformFn], list[transforms.DataTransformFn]]:
     data_config = train_config.data.create_policy(train_config.assets_dirs, train_config.model)
-    dataset_data_config = dataclasses.replace(data_config, norm_stats=norm_stats)
-    dataset = create_dataset(data_config, train_config.model)
-    dataset = transform_dataset(dataset, dataset_data_config)
+    provides_incontext_demos = getattr(data_config, "provides_incontext_demos", False)
+
+    if not provides_incontext_demos:
+        dataset_data_config = dataclasses.replace(data_config, norm_stats=norm_stats)
+        dataset = create_dataset(data_config, train_config.model)
+        dataset = transform_dataset(dataset, dataset_data_config)
+    else:
+        dataset = None
+
+    # Mirror training: forward norm_stats_aliases so dem_prompt_all_states / actions
+    # are normalized using "state" / "actions" norm stats, matching training.
+    norm_stats_aliases = getattr(train_config.data, "norm_stats_aliases", None)
+    norm_stats_alias_pad_dims = getattr(train_config.data, "norm_stats_alias_pad_dims", None)
 
     inputs_layers: list[transforms.DataTransformFn] = [
         *repack_transforms.inputs,
         transforms.InjectDefaultPrompt(default_prompt),
         *data_config.data_transforms.inputs,
-        transforms.Normalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
+        transforms.Normalize(
+            norm_stats,
+            use_quantiles=data_config.use_quantile_norm,
+            norm_stats_aliases=norm_stats_aliases,
+            norm_stats_alias_pad_dims=norm_stats_alias_pad_dims,
+        ),
         *data_config.model_transforms.inputs,
     ]
 
     model_config = train_config.model
 
-    if getattr(model_config, "use_image_prompts", False):
-        logging.info("Inference: Adding image prompts")
-        inputs_layers.append(transforms.AddImagePromptTransform(dataset))
+    if not provides_incontext_demos:
+        if getattr(model_config, "use_image_prompts", False):
+            logging.info("Inference: Adding image prompts")
+            inputs_layers.append(transforms.AddImagePromptTransform(dataset))
 
-    if getattr(model_config, "use_action_state_prompts", False):
-        logging.info("Inference: Adding action state prompts")
-        transform_kwargs: dict[str, Any] = {
-            "dataset": dataset,
-            "max_len": getattr(model_config, "sample_actions", 0),
-            "states_cache_path": getattr(train_config.data, "states_cache_path", None),
-            "actions_cache_path": getattr(train_config.data, "actions_cache_path", None),
-            "padding_mode": getattr(train_config.data, "padding_mode", "keep_all"),
-            "mask_padding_as_valid": getattr(train_config.data, "mask_padding_as_valid", False),
-            "demo_state_dim": getattr(train_config.data, "demo_state_dim", None),
-        }
-        episode_map = getattr(train_config.data, "episode_to_indexes_file", None)
-        if episode_map is not None:
-            transform_kwargs["episode_to_indexes_file"] = episode_map
-        inputs_layers.append(transforms.AddStatesActionsPromptTransform(**transform_kwargs))
+        if getattr(model_config, "use_action_state_prompts", False):
+            logging.info("Inference: Adding action state prompts")
+            transform_kwargs: dict[str, Any] = {
+                "dataset": dataset,
+                "max_len": getattr(model_config, "sample_actions", 0),
+                "states_cache_path": getattr(train_config.data, "states_cache_path", None),
+                "actions_cache_path": getattr(train_config.data, "actions_cache_path", None),
+                "padding_mode": getattr(train_config.data, "padding_mode", "keep_all"),
+                "mask_padding_as_valid": getattr(train_config.data, "mask_padding_as_valid", False),
+                "demo_state_dim": getattr(train_config.data, "demo_state_dim", None),
+            }
+            episode_map = getattr(train_config.data, "episode_to_indexes_file", None)
+            if episode_map is not None:
+                transform_kwargs["episode_to_indexes_file"] = episode_map
+            inputs_layers.append(transforms.AddStatesActionsPromptTransform(**transform_kwargs))
 
     # For Pi0FASTIncontextSeqConfig, TokenizeFASTInputs is already in
     # data_config.model_transforms.inputs (see ModelTransformFactory in

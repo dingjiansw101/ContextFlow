@@ -132,9 +132,19 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
     # Determines which model will be used.
     model_type: _model.ModelType = _model.ModelType.PI0_INCONTEXT
 
+    # Explicit dims for the in-context demo tensors. When None, fall back to
+    # action_dim (preserves behavior for callers where action_dim already
+    # equals the demo dims, e.g. the pi0-diffusion in-context configs). The
+    # pi0-FAST in-context models have action_dim != demo_action_dim, so they
+    # set these explicitly to match the model's demo_action_proj / demo_state_proj.
+    demo_action_dim: int | None = None
+    demo_state_dim: int | None = None
+
     def __call__(self, data: dict) -> dict:
         # TODO: check to see if mask_padding is correct
         mask_padding = self.model_type == _model.ModelType.PI0_INCONTEXT  # We don't mask for pi0-FAST.
+        demo_action_dim = self.demo_action_dim if self.demo_action_dim is not None else self.action_dim
+        demo_state_dim = self.demo_state_dim if self.demo_state_dim is not None else self.action_dim
 
         # Process current observation (same as LiberoIncontextInputs)
         state = transforms.pad_to_dim(data["observation/state"], self.action_dim)
@@ -195,8 +205,8 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             # dem_prompt_states: torch.Tensor [sample_actions, D_s]
             dem_states = np.asarray(data["dem_prompt_states"])
 
-            # Pad entire batch at once (VECTORIZED)
-            padded_states = transforms.pad_to_dim(dem_states, self.action_dim, axis=-1)
+            # Pad entire batch at once (VECTORIZED) to the model's demo_state_dim.
+            padded_states = transforms.pad_to_dim(dem_states, demo_state_dim, axis=-1)
 
             inputs["dem_prompt_all_states"] = padded_states
             inputs["dem_prompt_all_states_mask"] = np.ones(len(padded_states), dtype=bool)
@@ -206,8 +216,8 @@ class CustomLeRobotLiberoIncontextInputs(transforms.DataTransformFn):
             # dem_prompt_actions: torch.Tensor [sample_actions, D_a]
             dem_actions = np.asarray(data["dem_prompt_actions"])
 
-            # Pad entire batch at once (VECTORIZED)
-            padded_actions = transforms.pad_to_dim(dem_actions, self.action_dim, axis=-1)
+            # Pad entire batch at once (VECTORIZED) to the model's demo_action_dim.
+            padded_actions = transforms.pad_to_dim(dem_actions, demo_action_dim, axis=-1)
 
             inputs["dem_prompt_all_actions"] = padded_actions
             inputs["dem_prompt_all_actions_mask"] = np.ones(len(padded_actions), dtype=bool)

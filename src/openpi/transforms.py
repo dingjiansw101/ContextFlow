@@ -1,22 +1,22 @@
 from collections.abc import Callable, Mapping, Sequence
 import dataclasses
 import hashlib
-import logging
 import json
+import logging
 from pathlib import Path
 import random
 import re
-from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable, Optional, List, Dict, Tuple
+from typing import Any, Protocol, TypeAlias, TypeVar, runtime_checkable
 
 import flax.traverse_util as traverse_util
 import jax
 import numpy as np
 from openpi_client import image_tools
+from tqdm import tqdm
 
 from openpi.models import tokenizer as _tokenizer
 from openpi.shared import array_typing as at
 from openpi.shared import normalize as _normalize
-from tqdm import tqdm
 
 # from openpi.training.data_loader import Dataset
 
@@ -51,10 +51,10 @@ def _seed_component_bytes(component: Any) -> bytes:
         return repr(component).encode("utf-8")
     if array.dtype == object:
         return repr(component).encode("utf-8")
-    return f"{array.shape}:{array.dtype}:".encode("utf-8") + array.tobytes()
+    return f"{array.shape}:{array.dtype}:".encode() + array.tobytes()
 
 
-def reindex_filtered_dict(data: Dict[str, Any]) -> Dict[str, Any]:
+def reindex_filtered_dict(data: dict[str, Any]) -> dict[str, Any]:
     # TODO: check this function
     new_data = {}
     current_frame_index = 0
@@ -194,8 +194,8 @@ class InjectDemoIndexes(DataTransformFn):
     sample_frames: int = 2
     random_select: bool = True
     sample_episodes: int = 1
-    train_episode_index_list: Optional[List[int]] = None
-    seed_base: Optional[int] = None
+    train_episode_index_list: list[int] | None = None
+    seed_base: int | None = None
 
     def __post_init__(self):
         task_to_episode_path = Path(self.task_to_episode)
@@ -299,7 +299,7 @@ class InjectDemoIndexes(DataTransformFn):
             raise ValueError(f"InjectDemoIndexes: unable to choose prompt episodes for task {task_index}")
 
         # 2) choose frames per episode
-        dem_prompt_indexes: List[List[int]] = []
+        dem_prompt_indexes: list[list[int]] = []
 
         for ep in selected_episodes:
             frame_idxs = self.episode_to_indexes.get(int(ep), [])
@@ -343,6 +343,86 @@ class InjectDemoIndexes(DataTransformFn):
             self._cache["task_index"] = task_index
             self._cache["selected_episode"] = np.array(selected_episodes, dtype=np.int32)
             self._cache["dem_prompt_indexes"] = dem_prompt_indexes
+
+        return data
+
+
+@dataclasses.dataclass(frozen=True)
+class InjectDemoFromCustomDataset(DataTransformFn):
+    """Populates in-context demonstration fields by calling a CustomLeRobotDataset directly.
+
+    Drop-in replacement for `InjectDemoIndexes` + `AddImagePromptTransform` +
+    `AddStatesActionsPromptTransform` at policy-serving time. Avoids the JSON state/action
+    cache files that the older eval path depended on.
+
+    On call, reads ``task_index`` from the data dict and delegates to
+    ``CustomLeRobotDataset.load_incontext_demonstration`` to populate:
+        - ``dem_prompt_images`` (dict {"image", "wrist_image"} of torch tensors)
+        - ``dem_prompt_states`` (torch tensor)
+        - ``dem_prompt_actions`` (torch tensor)
+        - ``selected_episode`` (np.ndarray[int32])
+
+    For ``split == "test"``, demos are cached per ``task_index`` so all frames of a rollout
+    see the same demonstration (matches `InjectDemoIndexes` test-split caching).
+    """
+
+    dataset: Any  # CustomLeRobotDataset; typed as Any to avoid a hard import cycle.
+
+    def __post_init__(self):
+        object.__setattr__(
+            self,
+            "_cache",
+            {
+                "task_index": None,
+                "dem_prompt_images": None,
+                "dem_prompt_states": None,
+                "dem_prompt_actions": None,
+                "selected_episode": None,
+            },
+        )
+
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
+        task_index = int(data["task_index"])
+        split = data.get("split", "train")
+
+        if split == "test" and self._cache["task_index"] == task_index:
+            data["dem_prompt_images"] = self._cache["dem_prompt_images"]
+            data["dem_prompt_states"] = self._cache["dem_prompt_states"]
+            data["dem_prompt_actions"] = self._cache["dem_prompt_actions"]
+            data["selected_episode"] = self._cache["selected_episode"]
+            return data
+
+        # Mirror InjectDemoIndexes (transforms.py:252-256): on test split, demo
+        # selection is deterministic regardless of the dataset's random_select flag,
+        # so repeated eval runs see the same demos. The dataset's random_select is
+        # honored for train split only.
+        saved_random_select = self.dataset.random_select
+        if split == "test":
+            self.dataset.random_select = False
+        try:
+            demo = self.dataset.load_incontext_demonstration(current_ep_idx=-1, task_index=task_index)
+        finally:
+            self.dataset.random_select = saved_random_select
+        data["dem_prompt_images"] = demo["dem_prompt_images"]
+        data["dem_prompt_states"] = demo["dem_prompt_states"]
+        data["dem_prompt_actions"] = demo["dem_prompt_actions"]
+        data["selected_episode"] = demo["selected_episode"]
+
+        if split == "test":
+            prompt = data.get("prompt", "")
+            if hasattr(prompt, "item"):
+                prompt = prompt.item()
+            logging.info(
+                "[InjectDemoFromCustomDataset] Test task: '%s' (index=%d), demo episode(s): %s",
+                prompt,
+                task_index,
+                demo["selected_episode"].tolist(),
+            )
+            self._cache["task_index"] = task_index
+            self._cache["dem_prompt_images"] = demo["dem_prompt_images"]
+            self._cache["dem_prompt_states"] = demo["dem_prompt_states"]
+            self._cache["dem_prompt_actions"] = demo["dem_prompt_actions"]
+            self._cache["selected_episode"] = demo["selected_episode"]
 
         return data
 
@@ -452,8 +532,8 @@ class AddImagePromptTransform(DataTransformFn):
 
     #     return data
 
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        idx_lists: List[List[int]] = data.get("dem_prompt_indexes", [])
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
+        idx_lists: list[list[int]] = data.get("dem_prompt_indexes", [])
 
         # ---- Check cache for test split ----
         split = data.get("split", "train")
@@ -463,8 +543,8 @@ class AddImagePromptTransform(DataTransformFn):
             data["dem_prompt_images_mask"] = self._cache["dem_prompt_images_mask"]
             return data
 
-        images_dict: Dict[str, List[np.ndarray]] = {}
-        masks_dict: Dict[str, List[np.ndarray]] = {}
+        images_dict: dict[str, list[np.ndarray]] = {}
+        masks_dict: dict[str, list[np.ndarray]] = {}
         for idx_list in idx_lists:
             if len(idx_list) == 0:
                 raise ValueError(f"Empty idx_list found! dem_prompt_indexes={idx_lists}")
@@ -651,8 +731,8 @@ class AddStatesActionsPromptTransform(DataTransformFn):
     max_len: int = 32
     demo_state_dim: int | None = None
 
-    episode_to_all_states: Dict[int, np.ndarray] = dataclasses.field(init=False)
-    episode_to_all_first_actions: Dict[int, np.ndarray] = dataclasses.field(init=False)
+    episode_to_all_states: dict[int, np.ndarray] = dataclasses.field(init=False)
+    episode_to_all_first_actions: dict[int, np.ndarray] = dataclasses.field(init=False)
 
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
@@ -675,7 +755,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 f"Invalid padding_mode: '{self.padding_mode}'. " f"Must be 'keep_all' or 'linspace_repeat'."
             )
 
-        expected_idx_map: Optional[Dict[int, List[int]]] = None
+        expected_idx_map: dict[int, list[int]] | None = None
         # ---- Load / Build caches for states & actions ----
         try:
             states = load_episode_states_from_json(self.states_cache_path)
@@ -714,10 +794,10 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             },
         )
 
-    def _maybe_slice_states(self, states: Dict[int, np.ndarray]) -> Dict[int, np.ndarray]:
+    def _maybe_slice_states(self, states: dict[int, np.ndarray]) -> dict[int, np.ndarray]:
         if self.demo_state_dim is None:
             return states
-        sliced: Dict[int, np.ndarray] = {}
+        sliced: dict[int, np.ndarray] = {}
         for ep, arr in states.items():
             arr_np = np.asarray(arr, dtype=np.float32)
             sliced[ep] = arr_np[..., : self.demo_state_dim]
@@ -733,7 +813,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             return np.zeros((max_len,), dtype=int)
         return np.linspace(0, T - 1, num=max_len, dtype=int)
 
-    def _linspace_sample_and_pad(self, arr: np.ndarray, s: int, e: int) -> Tuple[np.ndarray, np.ndarray]:
+    def _linspace_sample_and_pad(self, arr: np.ndarray, s: int, e: int) -> tuple[np.ndarray, np.ndarray]:
         """
         Sample using linspace, then repeat last sample if needed (training behavior).
         Mimics CustomLeRobotDataset padding strategy.
@@ -778,7 +858,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
 
         return sampled, mask
 
-    def _window_sample_and_pad(self, arr: np.ndarray, s: int, e: int) -> Tuple[np.ndarray, np.ndarray]:
+    def _window_sample_and_pad(self, arr: np.ndarray, s: int, e: int) -> tuple[np.ndarray, np.ndarray]:
         """
         Sample / pad from window [s, e) to max_len.
         Returns: (sampled, mask) with mask True for valid frames.
@@ -797,7 +877,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
         L = window.shape[0]
         D = window.shape[1] if window.ndim > 1 else 1
 
-        if L >= self.max_len:
+        if self.max_len <= L:
             idxs = self._even_sample_len(L, self.max_len)
             sampled = window[idxs]
             mask = np.ones((self.max_len,), dtype=bool)
@@ -813,8 +893,8 @@ class AddStatesActionsPromptTransform(DataTransformFn):
                 mask[:L] = True
         return sampled, mask
 
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        eps: List[int] = data.get("selected_episode", [])
+    def __call__(self, data: dict[str, Any]) -> dict[str, Any]:
+        eps: list[int] = data.get("selected_episode", [])
         split = data.get("split", "train")
 
         # ---- Cache hit for test split ----
@@ -1016,6 +1096,26 @@ class InjectDefaultPrompt(DataTransformFn):
         return data
 
 
+def _pad_norm_stats_identity(stats: NormStats, target_dim: int) -> NormStats:
+    """Extend stats to target_dim with identity values so extra dims pass through Normalize unchanged."""
+    cur_dim = stats.mean.shape[-1]
+    if cur_dim >= target_dim:
+        return stats
+    pad = target_dim - cur_dim
+
+    def _extend(arr, fill):
+        if arr is None:
+            return None
+        return np.concatenate([arr, np.full((*arr.shape[:-1], pad), fill, dtype=arr.dtype)], axis=-1)
+
+    return NormStats(
+        mean=_extend(stats.mean, 0.0),
+        std=_extend(stats.std, 1.0),
+        q01=_extend(stats.q01, -1.0),
+        q99=_extend(stats.q99, 1.0),
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class Normalize(DataTransformFn):
     norm_stats: at.PyTree[NormStats] | None
@@ -1026,6 +1126,12 @@ class Normalize(DataTransformFn):
     # Optional mapping from data keys to norm_stats keys for aliasing
     # Example: {"dem_prompt_states": "state", "dem_prompt_actions": "actions"}
     norm_stats_aliases: dict[str, str] | None = None
+    # Optional mapping from alias key to target trailing dim. Used when the aliased
+    # data is zero-padded beyond its native dim before Normalize runs (e.g. demo
+    # actions padded from 7 to demo_action_dim=32): the aliased stats are extended
+    # with identity values (mean 0, std 1, q01 -1, q99 1) so padding dims pass
+    # through unchanged, matching a pad-after-normalize layout.
+    norm_stats_alias_pad_dims: dict[str, int] | None = None
 
     def __post_init__(self):
         if self.norm_stats is not None and self.use_quantiles:
@@ -1039,17 +1145,13 @@ class Normalize(DataTransformFn):
                         f"Alias '{alias_key}' points to non-existent norm_stats key '{target_key}'. "
                         f"Available keys: {list(flat_stats.keys())}"
                     )
-        # Cache the alias-expanded, flat norm_stats once. Both fields are
+        # Cache the alias-expanded, flat norm_stats once. All fields are
         # frozen-dataclass attrs so the cache is valid for the lifetime of
         # this transform; this avoids re-flattening (3×) and re-unflattening
-        # (2×) on every __call__.
+        # (2×) on every __call__. Built via _expand_norm_stats_with_aliases so
+        # alias padding (norm_stats_alias_pad_dims) has a single source of truth.
         if self.norm_stats:
-            flat = flatten_dict(self.norm_stats)
-            if self.norm_stats_aliases is not None:
-                for alias_key, target_key in self.norm_stats_aliases.items():
-                    if alias_key not in flat:
-                        flat[alias_key] = flat[target_key]
-            object.__setattr__(self, "_flat_expanded_norm_stats", flat)
+            object.__setattr__(self, "_flat_expanded_norm_stats", flatten_dict(self._expand_norm_stats_with_aliases()))
         else:
             object.__setattr__(self, "_flat_expanded_norm_stats", {})
 
@@ -1086,7 +1188,11 @@ class Normalize(DataTransformFn):
         for alias_key, target_key in self.norm_stats_aliases.items():
             # Only add if alias doesn't already exist (original takes precedence)
             if alias_key not in flat_stats:
-                flat_stats[alias_key] = flat_stats[target_key]
+                stats = flat_stats[target_key]
+                pad_dim = (self.norm_stats_alias_pad_dims or {}).get(alias_key)
+                if pad_dim is not None:
+                    stats = _pad_norm_stats_identity(stats, pad_dim)
+                flat_stats[alias_key] = stats
 
         # Unflatten back to nested structure
         return unflatten_dict(flat_stats)

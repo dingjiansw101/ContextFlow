@@ -11,21 +11,15 @@ import jax.numpy as jnp
 import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
-from tqdm import tqdm
 
-import openpi.models.model as _model
 from openpi.models import pi0_fast_incontext as _pi0_fast_incontext
-from openpi.models import pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 from openpi.models import tokenizer as _tokenizer
+import openpi.models.model as _model
 import openpi.training.config as _config
+from openpi.training.custom_dataset import CustomLeRobotDataset
 import openpi.transforms as _transforms
 
-from openpi.training.custom_dataset import CustomLeRobotDataset
-
 T_co = TypeVar("T_co", covariant=True)
-
-import dataclasses
-from typing import Any, Dict, Sequence as _Seq  # avoid shadowing the Sequence import above
 
 
 # TODO: refactor: checking passed train_episode is None or not
@@ -259,6 +253,7 @@ def transform_dataset(
     *,
     skip_norm_stats: bool = False,
     norm_stats_aliases: dict[str, str] | None = None,
+    norm_stats_alias_pad_dims: dict[str, int] | None = None,
 ) -> Dataset:
     """Transform the dataset by applying the data transforms."""
     norm_stats = {}
@@ -277,6 +272,7 @@ def transform_dataset(
             norm_stats,
             use_quantiles=data_config.use_quantile_norm,
             norm_stats_aliases=norm_stats_aliases,
+            norm_stats_alias_pad_dims=norm_stats_alias_pad_dims,
         ),
         *data_config.model_transforms.inputs,
     ]
@@ -472,7 +468,11 @@ def create_custom_incontext_data_loader(
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_custom_dataset(data_config, config.model, config.data)
     dataset = transform_dataset(
-        dataset, data_config, skip_norm_stats=skip_norm_stats, norm_stats_aliases=config.data.norm_stats_aliases
+        dataset,
+        data_config,
+        skip_norm_stats=skip_norm_stats,
+        norm_stats_aliases=config.data.norm_stats_aliases,
+        norm_stats_alias_pad_dims=getattr(config.data, "norm_stats_alias_pad_dims", None),
     )
 
     data_loader = TorchDataLoader(
@@ -485,19 +485,26 @@ def create_custom_incontext_data_loader(
         seed=config.seed,
     )
 
+    # Select the observation class by model type, mirroring create_incontext_data_loader:
+    # FAST in-context models need ObservationFASTIncontext (extra tokenized demo fields).
+    observation_cls = _model.ObservationIncontext
+    if config.model.model_type == _model.ModelType.PI0_FAST_INCONTEXT:
+        observation_cls = _model.ObservationFASTIncontext
+
     class DataLoaderImpl(DataLoader):
-        def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader):
+        def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader, obs_cls):
             self._data_config = data_config
             self._data_loader = data_loader
+            self._observation_cls = obs_cls
 
         def data_config(self) -> _config.DataConfig:
             return self._data_config
 
         def __iter__(self):
             for batch in self._data_loader:
-                yield _model.ObservationIncontext.from_dict(batch), batch["actions"]
+                yield self._observation_cls.from_dict(batch), batch["actions"]
 
-    return DataLoaderImpl(data_config, data_loader)
+    return DataLoaderImpl(data_config, data_loader, observation_cls)
 
 
 class TorchDataLoader:

@@ -471,6 +471,12 @@ class DataConfig:
     # Optional override for incontext demo state dimension (applied before tokenization).
     demo_state_dim: int | None = None
 
+    # When True, the in-context demonstration fields (dem_prompt_images, dem_prompt_states,
+    # dem_prompt_actions, selected_episode) are populated by data_transforms.inputs at policy
+    # time, so the policy server must NOT also append AddImagePromptTransform /
+    # AddStatesActionsPromptTransform (which read JSON state/action caches).
+    provides_incontext_demos: bool = False
+
 
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
