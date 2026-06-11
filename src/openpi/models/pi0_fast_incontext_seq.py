@@ -44,6 +44,7 @@ class Pi0FASTIncontextSeqConfig(_model.BaseModelConfig):
     sample_frames: int = 16
     sample_actions: int = 32
     random_select: bool = True
+    avg_incontext_image_tokens: bool = False
 
     @property
     @override
@@ -92,6 +93,7 @@ class Pi0FASTIncontextSeq(_model.BaseModel):
 
         self.siglip_variant = config.siglip_variant
         self.pool_type = config.pool_type
+        self.avg_incontext_image_tokens = config.avg_incontext_image_tokens
 
         llm = nnx_bridge.ToNNX(
             _gemma.Module(
@@ -165,28 +167,38 @@ class Pi0FASTIncontextSeq(_model.BaseModel):
                     flat_images = image_sequence.reshape(batch_size * seq_len, height, width, channel)
                     flat_tokens, _ = self.PaliGemma.img(flat_images, train=False)
                     token_len = flat_tokens.shape[1]
-                    tokens = flat_tokens.reshape(batch_size, seq_len * token_len, flat_tokens.shape[-1])
 
                     if mask_sequence is None:
                         frame_mask = jnp.ones((batch_size, seq_len), dtype=jnp.bool_)
                     else:
                         frame_mask = mask_sequence.reshape(batch_size, seq_len)
 
-                    token_mask = einops.repeat(frame_mask, "b t -> b (t tok)", tok=token_len)
+                    if self.avg_incontext_image_tokens:
+                        tokens = flat_tokens.reshape(batch_size, seq_len, token_len, flat_tokens.shape[-1])
+                        tokens = jnp.mean(tokens, axis=2)
+                        token_mask = frame_mask
+                    else:
+                        tokens = flat_tokens.reshape(batch_size, seq_len * token_len, flat_tokens.shape[-1])
+                        token_mask = einops.repeat(frame_mask, "b t -> b (t tok)", tok=token_len)
 
                 elif image_sequence.ndim == 6:
                     batch_size, episodes, seq_len, height, width, channel = image_sequence.shape
                     flat_images = image_sequence.reshape(batch_size * episodes * seq_len, height, width, channel)
                     flat_tokens, _ = self.PaliGemma.img(flat_images, train=False)
                     token_len = flat_tokens.shape[1]
-                    tokens = flat_tokens.reshape(batch_size, episodes * seq_len * token_len, flat_tokens.shape[-1])
 
                     if mask_sequence is None:
                         frame_mask = jnp.ones((batch_size, episodes * seq_len), dtype=jnp.bool_)
                     else:
                         frame_mask = mask_sequence.reshape(batch_size, episodes * seq_len)
 
-                    token_mask = einops.repeat(frame_mask, "b m -> b (m tok)", tok=token_len)
+                    if self.avg_incontext_image_tokens:
+                        tokens = flat_tokens.reshape(batch_size, episodes * seq_len, token_len, flat_tokens.shape[-1])
+                        tokens = jnp.mean(tokens, axis=2)
+                        token_mask = frame_mask
+                    else:
+                        tokens = flat_tokens.reshape(batch_size, episodes * seq_len * token_len, flat_tokens.shape[-1])
+                        token_mask = einops.repeat(frame_mask, "b m -> b (m tok)", tok=token_len)
 
                 else:
                     raise ValueError(f"incontext image tensor '{name}' must be 5-D or 6-D, got {image_sequence.ndim}-D")

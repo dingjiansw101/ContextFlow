@@ -7,6 +7,7 @@ from typing_extensions import override
 
 import openpi.policies.libero_incontext_policy as libero_incontext_policy
 import openpi.policies.libero_policy as libero_policy
+from openpi.training.dataset_spec import DatasetSpec
 
 
 def build(api) -> list[api.TrainConfig]:
@@ -308,6 +309,166 @@ def build(api) -> list[api.TrainConfig]:
             # (examples/libero/main_incontext.py). Listing keys absent from the live env
             # input (e.g. "actions", "frame_index", "dem_prompt_*") would crash
             # RepackTransform.__call__ with a KeyError.
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "observation/image": "image",
+                            "observation/wrist_image": "wrist_image",
+                            "observation/state": "state",
+                            "prompt": "prompt",
+                            "task_index": "task_index",
+                            "split": "split",
+                        }
+                    )
+                ]
+            )
+
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    api._transforms.InjectDemoFromCustomDataset(dataset=custom_dataset),
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim,
+                        model_type=model_config.model_type,
+                    ),
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                base_config,
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                train_episode=None,
+                provides_incontext_demos=True,
+            )
+
+    @dataclasses.dataclass(frozen=True)
+    class MultiCustomLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
+        """Multi-dataset variant of CustomLeRobotLiberoIncontextDataConfig.
+
+        Inherited DataConfigFactory.repo_id is set to the FIRST spec's repo_id and
+        serves only as a placeholder (used by transform_dataset's "fake" check and
+        as a fall-through asset_id default). Norm stats are loaded via the
+        TrainConfig's assets_repo_override.
+
+        The DataConfig returned has train_episode=None; per-dataset filtering
+        happens inside create_custom_dataset using each spec's
+        episode_json_path + remove_task_list.
+        """
+
+        dataset_specs: tuple[DatasetSpec, ...] = ()
+        use_delta_joint_actions: bool = False
+
+        custom_dataloader_version: str = "v1"
+        sample_frames: int = 2
+        sample_actions: int = 32
+        random_select: bool = True
+        policy_local_files_only: bool = False
+        norm_stats_aliases: dict[str, str] | None = dataclasses.field(
+            default_factory=lambda: {
+                "dem_prompt_all_states": "state",
+                "dem_prompt_all_actions": "actions",
+            }
+        )
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: BaseModelConfig) -> DataConfig:
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "observation/image": "image",
+                            "observation/wrist_image": "wrist_image",
+                            "observation/state": "state",
+                            "actions": "actions",
+                            "prompt": "prompt",
+                            "episode_index": "episode_index",
+                            "frame_index": "frame_index",
+                            "index": "index",
+                            "task_index": "task_index",
+                            "dem_prompt_images": {
+                                "image": "dem_prompt_images/image",
+                                "wrist_image": "dem_prompt_images/wrist_image",
+                            },
+                            "dem_prompt_states": "dem_prompt_states",
+                            "dem_prompt_actions": "dem_prompt_actions",
+                            "selected_episode": "selected_episode",
+                        }
+                    )
+                ]
+            )
+
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
+                        action_dim=model_config.action_dim, model_type=model_config.model_type
+                    )
+                ],
+                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
+            )
+
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                train_episode=None,
+            )
+
+        @override
+        def create_policy(self, assets_dirs: pathlib.Path, model_config):
+            # Cache-free eval path mirroring CustomLeRobotLiberoIncontextDataConfig.
+            # Demos come from the FIRST dataset spec (libero): split0 unseen-eval
+            # tasks are libero tasks, so libero_90 is never needed at eval time.
+            from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
+
+            from openpi.training.custom_dataset import CustomLeRobotDataset
+
+            if not self.dataset_specs:
+                raise ValueError("dataset_specs must be non-empty to create a policy.")
+            demo_spec = self.dataset_specs[0]
+
+            base_config = self.create_base_config(assets_dirs)
+            if self.policy_local_files_only:
+                base_config = dataclasses.replace(base_config, local_files_only=True)
+
+            dataset_meta = lerobot_dataset_mod.LeRobotDatasetMetadata(
+                demo_spec.repo_id, local_files_only=base_config.local_files_only
+            )
+            custom_dataset = CustomLeRobotDataset(
+                demo_spec.repo_id,
+                episodes=None,  # policy spans all episodes
+                delta_timestamps={
+                    key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
+                    for key in base_config.action_sequence_keys
+                },
+                local_files_only=base_config.local_files_only,
+                num_sample_frames=self.sample_frames,
+                num_sample_actions=self.sample_actions,
+                task_to_episode_path=demo_spec.task_to_episode_path,
+                random_select=self.random_select,
+            )
+
             repack_transform = api._transforms.Group(
                 inputs=[
                     api._transforms.RepackTransform(
@@ -2488,6 +2649,135 @@ def build(api) -> list[api.TrainConfig]:
             ).get_freeze_filter(),
             ema_decay=None,
             num_workers=2,
+            batch_size=32,
+            use_custom_dataloader=True,
+        ),
+        # Multi-dataset (libero train split + libero_90) in-context configs.
+        # Ported from feature/multi-dataset with the fixed 70k LR schedule
+        # (warmup 1k + decay 69k), matching ECCV rebuttal rows 71-72.
+        api.TrainConfig(
+            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90",
+            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
+            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+                prompt_expert_variant="gemma_300m_v2",
+                action_expert_variant="gemma_300m_lora",
+                sample_frames=2,
+                sample_actions=32,
+                random_select=True,
+            ),
+            data=MultiCustomLeRobotLiberoIncontextDataConfig(
+                repo_id="physical-intelligence/libero",
+                base_config=api.DataConfig(
+                    local_files_only=False,
+                    prompt_from_task=True,
+                ),
+                dataset_specs=(
+                    DatasetSpec(
+                        repo_id="physical-intelligence/libero",
+                        episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+                        task_to_episode_path="metadata/libero/task_to_episode.json",
+                        remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                        local_files_only=False,
+                    ),
+                    DatasetSpec(
+                        repo_id="vo2yager/libero_90",
+                        episode_json_path=str(
+                            pathlib.Path(
+                                "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
+                            ).expanduser()
+                        ),
+                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
+                        remove_task_list=None,
+                        local_files_only=True,
+                    ),
+                ),
+                use_delta_joint_actions=False,
+                sample_frames=2,
+                sample_actions=32,
+                random_select=True,
+            ),
+            weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext(
+                "s3://openpi-assets/checkpoints/pi0_base/params"
+            ),
+            lr_schedule=api._optimizer.CosineDecaySchedule(
+                warmup_steps=1_000,
+                peak_lr=2.5e-5,
+                decay_steps=69_000,
+                decay_lr=2.5e-6,
+            ),
+            num_train_steps=70_000,
+            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+                prompt_expert_variant="gemma_300m_v2",
+                action_expert_variant="gemma_300m_lora",
+                sample_frames=2,
+                sample_actions=32,
+                random_select=True,
+            ).get_freeze_filter(),
+            ema_decay=None,
+            num_workers=8,
+            batch_size=32,
+            use_custom_dataloader=True,
+        ),
+        api.TrainConfig(
+            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90",
+            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
+            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+                prompt_expert_variant="gemma_300m_v2",
+                action_expert_variant="gemma_300m_lora",
+                sample_frames=8,
+                sample_actions=128,
+                random_select=True,
+            ),
+            data=MultiCustomLeRobotLiberoIncontextDataConfig(
+                repo_id="physical-intelligence/libero",
+                base_config=api.DataConfig(
+                    local_files_only=False,
+                    prompt_from_task=True,
+                ),
+                dataset_specs=(
+                    DatasetSpec(
+                        repo_id="physical-intelligence/libero",
+                        episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
+                        task_to_episode_path="metadata/libero/task_to_episode.json",
+                        remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                        local_files_only=False,
+                    ),
+                    DatasetSpec(
+                        repo_id="vo2yager/libero_90",
+                        episode_json_path=str(
+                            pathlib.Path(
+                                "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
+                            ).expanduser()
+                        ),
+                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
+                        remove_task_list=None,
+                        local_files_only=True,
+                    ),
+                ),
+                use_delta_joint_actions=False,
+                sample_frames=8,
+                sample_actions=128,
+                random_select=True,
+            ),
+            weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext(
+                "s3://openpi-assets/checkpoints/pi0_base/params"
+            ),
+            lr_schedule=api._optimizer.CosineDecaySchedule(
+                warmup_steps=1_000,
+                peak_lr=2.5e-5,
+                decay_steps=69_000,
+                decay_lr=2.5e-6,
+            ),
+            num_train_steps=70_000,
+            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+                prompt_expert_variant="gemma_300m_v2",
+                action_expert_variant="gemma_300m_lora",
+                sample_frames=8,
+                sample_actions=128,
+                random_select=True,
+            ).get_freeze_filter(),
+            ema_decay=None,
+            num_workers=32,
             batch_size=32,
             use_custom_dataloader=True,
         ),

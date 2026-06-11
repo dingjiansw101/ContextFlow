@@ -185,6 +185,40 @@ def create_custom_dataset(
         raise ValueError("Repo ID is not set. Cannot create dataset.")
     if repo_id == "fake":
         return FakeDataset(model_config, num_samples=1024)
+
+    # Multi-dataset: the factory carries dataset_specs; build a ConcatDataset of
+    # per-spec CustomLeRobotDataset instances. Each sub-dataset is wrapped in
+    # PromptFromLeRobotTask BEFORE concatenation because task_index is
+    # dataset-local (task 0 in libero != task 0 in libero_90).
+    dataset_specs = getattr(data_config_factory, "dataset_specs", None) if data_config_factory is not None else None
+    if dataset_specs:
+        num_sample_frames = getattr(data_config_factory, "sample_frames", 2)
+        num_sample_actions = getattr(data_config_factory, "sample_actions", 32)
+        random_select = getattr(data_config_factory, "random_select", True)
+        seed_base = getattr(data_config_factory, "seed_base", None)
+        sub_datasets: list[Dataset] = []
+        for spec in dataset_specs:
+            spec_meta = lerobot_dataset.LeRobotDatasetMetadata(spec.repo_id, local_files_only=spec.local_files_only)
+            train_eps = _config.get_kept_episode_indices(spec.episode_json_path, spec.remove_task_list)
+            sub_dataset = CustomLeRobotDataset(
+                spec.repo_id,
+                episodes=train_eps if not is_effective_none(train_eps) else None,
+                delta_timestamps={
+                    key: [t / spec_meta.fps for t in range(model_config.action_horizon)]
+                    for key in data_config.action_sequence_keys
+                },
+                local_files_only=spec.local_files_only,
+                num_sample_frames=num_sample_frames,
+                num_sample_actions=num_sample_actions,
+                task_to_episode_path=spec.task_to_episode_path,
+                random_select=random_select,
+                seed_base=seed_base,
+            )
+            if data_config.prompt_from_task:
+                sub_dataset = TransformedDataset(sub_dataset, [_transforms.PromptFromLeRobotTask(spec_meta.tasks)])
+            sub_datasets.append(sub_dataset)
+        return torch.utils.data.ConcatDataset(sub_datasets)
+
     dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, local_files_only=data_config.local_files_only)
 
     # Get CustomLeRobotDataset-specific parameters from factory (if provided) or use defaults
