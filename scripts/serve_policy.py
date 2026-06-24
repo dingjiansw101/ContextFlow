@@ -1,7 +1,13 @@
 import dataclasses
 import enum
 import logging
+import os
 import socket
+
+# Allocate GPU memory on demand instead of JAX's default 75% (or the 90% the eval scripts
+# request via XLA_PYTHON_CLIENT_MEM_FRACTION) up-front preallocation, so a policy server only
+# takes the ~15-18 GB it needs and can co-locate with training. Override by exporting the var.
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import tyro
 
