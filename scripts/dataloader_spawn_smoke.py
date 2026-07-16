@@ -63,7 +63,7 @@ def _create_loader(config: _config.TrainConfig, *, num_batches: int, num_workers
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="pi0_libero_incontextv18_low_mem_finetune_sample_frames8")
+    parser.add_argument("--config", default="ContextFlow")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--num-batches", type=int, default=8)

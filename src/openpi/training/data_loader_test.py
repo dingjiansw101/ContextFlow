@@ -118,7 +118,7 @@ def test_custom_lerobot_dataset():
 def test_libero_incontext_data_loader():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune_sample2")
-    config = _config.get_config("pi0_fast_incontext_prompt_action_7_state_8_train_split")
+    config = _config.get_config("ContextAR")
     data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=False, num_batches=2)
     data_iter = iter(data_loader)
     next(data_iter)
@@ -195,7 +195,7 @@ def test_create_custom_incontext_data_loader():
 
 def test_AddImagePromptTransform():
     # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
-    config = _config.get_config("pi0_fast_incontext_prompt_action_7_state_8_train_split")
+    config = _config.get_config("ContextAR")
     # TODO: add assets_dirs to the config in the future
     data_config = config.data.create(config.assets_dirs, config.model)
     dataset = create_dataset(data_config, config.model)

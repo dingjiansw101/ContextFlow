@@ -38,7 +38,7 @@ def test_libero_incontext_inference_configs_removed():
 
 
 def test_custom_libero_incontext_create_policy_uses_lerobot_path():
-    config = _config.get_config("pi0_libero_incontextv18_low_mem_finetune_sample_frames8")
+    config = _config.get_config("ContextFlow")
     data_config = config.data.create_policy(config.assets_dirs, config.model)
 
     input_transform_names = [type(transform).__name__ for transform in data_config.data_transforms.inputs]

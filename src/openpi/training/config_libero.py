@@ -653,7 +653,12 @@ def build(api) -> list[api.TrainConfig]:
             # wandb_enabled=False,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
+            name="ContextFlow_Plain",
+            # Renamed from pi0_libero_refactor_incontextv12_..._dataset_refactor.
+            # Keep the original name as the assets key so the 44 configs whose
+            # assets_repo_override points at it (and the on-disk ./assets/<old name>
+            # norm stats) still resolve. See CONFIG_NAME_MAPPING.md.
+            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
             model=api.pi0_incontextv12.Pi0IncontextConfigv12(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
@@ -1075,7 +1080,7 @@ def build(api) -> list[api.TrainConfig]:
             # wandb_enabled=False,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8",
+            name="ContextFlow",
             assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
             model=api.pi0_incontextv18.Pi0IncontextConfigv18(
                 prompt_expert_variant="gemma_300m_v2",

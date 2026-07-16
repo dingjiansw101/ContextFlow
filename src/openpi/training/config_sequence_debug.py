@@ -528,9 +528,12 @@ def build(api):
     ]
 
     for suffix, remove_task_list in split_variants:
+        # The bare/empty-suffix variant is renamed to the paper name "ContextAR";
+        # the numbered siblings (train_split2..8) keep their original names.
+        cfg_name = "ContextAR" if suffix == "" else f"pi0_fast_incontext_prompt_action_7_state_8_train_split{suffix}"
         configs.append(
             make_config(
-                name=f"pi0_fast_incontext_prompt_action_7_state_8_train_split{suffix}",
+                name=cfg_name,
                 remove_task_list=remove_task_list,
                 save_interval=1000,
             )

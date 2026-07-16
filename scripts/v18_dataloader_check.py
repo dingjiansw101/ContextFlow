@@ -1,7 +1,7 @@
 """Deterministic batch artifact dump for the v18 in-context dataloader.
 
 Used to verify exact behavior preservation across dataloader refactors. Loads
-``pi0_libero_incontextv18_low_mem_finetune_sample_frames8`` with fixed seeds
+``ContextFlow`` (formerly ``pi0_libero_incontextv18_low_mem_finetune_sample_frames8``) with fixed seeds
 and a synchronous (num_workers=0) loader, fetches a fixed number of items
 directly from the underlying dataset, hashes their contents, and writes a JSON
 report plus per-item .npz dumps.
@@ -61,7 +61,7 @@ def _flatten_record(record, prefix=""):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="pi0_libero_incontextv18_low_mem_finetune_sample_frames8")
+    parser.add_argument("--config", default="ContextFlow")
     parser.add_argument("--num-items", type=int, default=4)
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--stride", type=int, default=4096)
