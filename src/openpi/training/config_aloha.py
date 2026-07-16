@@ -25,6 +25,25 @@ ALOHA_OBJECT_TEST_TASK = [
     "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_right_hand",
 ]
 
+ALOHA_DATA_UNIQUE_TEST_TASK = [
+    # Explicitly selected test tasks
+    "pen_uncap_red_right_b5",
+    "pen_uncap_blue_left_b5",
+    "put_red_egg_close_box",
+    "separate_cups_big_right",
+    # All pick-up-and-place tasks with 1 demonstration
+    "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_orange_juice_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_cucumber_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_kiwi_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_right_hand",
+    "pick_up_the_pear_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_apple_and_place_it_in_the_basket_with_right_hand",
+    "pick_up_the_onion_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_bottle_and_place_it_in_the_basket_with_left_hand",
+    "pick_up_the_blue_milk_and_place_it_in_the_basket_with_left_hand",
+]
+
 def build(api) -> list["api.TrainConfig"]:
     g = globals()
     g["DataConfig"] = getattr(api, "DataConfig")
@@ -1143,6 +1162,96 @@ def build(api) -> list["api.TrainConfig"]:
         num_train_steps=20_000,
         freeze_filter=api.pi0.Pi0Config(
             paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=16,
+        batch_size=32,
+    ),
+
+    #
+    # aloha_data_unique in-context (v18, gemma_300m_v2) -- ported from the `aloha` branch.
+    # Training excludes the held-out test tasks (ALOHA_DATA_UNIQUE_TEST_TASK); the
+    # _inference variant does no task filtering (used for eval/serving).
+    #
+    # aloha_data_unique: test tasks excluded, delta joint actions
+    api.TrainConfig(
+        name="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test",
+        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/aloha_data_unique",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="perform the task",
+            base_config=api.DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=True,
+            task_to_episode="metadata/aloha_data_unique/task_to_episode.json",
+            episode_to_indexes_file="metadata/aloha_data_unique/episode_to_indexes.json",
+            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
+            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=80,
+        batch_size=32,
+    ),
+    # aloha_data_unique inference variant (no task filtering)
+    api.TrainConfig(
+        name="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_inference",
+        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
+        ),
+        data=LeRobotAlohaMobileIncontextDataConfig(
+            repo_id="vo2yager/aloha_data_unique",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            default_prompt="perform the task",
+            base_config=api.DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=True,
+            task_to_episode="metadata/aloha_data_unique/task_to_episode.json",
+            episode_to_indexes_file="metadata/aloha_data_unique/episode_to_indexes.json",
+            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
+            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+            multi_process=False,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            prompt_expert_variant="gemma_300m_v2",
+            action_expert_variant="gemma_300m_lora",
+            sample_frames=8,
+            sample_actions=128,
+            random_select=True,
         ).get_freeze_filter(),
         ema_decay=None,
         num_workers=16,
