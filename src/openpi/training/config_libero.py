@@ -616,7 +616,7 @@ def build(api) -> list[api.TrainConfig]:
         # Xianjie: pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32 with train_test_split
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -639,7 +639,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -658,8 +658,8 @@ def build(api) -> list[api.TrainConfig]:
             # Keep the original name as the assets key so the 44 configs whose
             # assets_repo_override points at it (and the on-disk ./assets/<old name>
             # norm stats) still resolve. See CONFIG_NAME_MAPPING.md.
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -684,7 +684,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -701,8 +701,8 @@ def build(api) -> list[api.TrainConfig]:
         *[
             api.TrainConfig(
                 name=f"pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_gemma2b_split{_split_idx}",
-                assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-                model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+                assets_repo_override="ContextFlow_Plain",
+                model=api.contextflow.ContextFlowConfig(
                     paligemma_variant="gemma_2b",
                     action_expert_variant="gemma_300m",
                     sample_frames=2,
@@ -746,8 +746,8 @@ def build(api) -> list[api.TrainConfig]:
         ],
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v5",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -772,7 +772,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -789,8 +789,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- Split V1 (train_split_v2) ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v2",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -815,7 +815,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -830,8 +830,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- Split V2 (train_split_v3) ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -856,7 +856,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -871,8 +871,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- Split V3 (train_split_v4) ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v4",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -897,7 +897,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -911,8 +911,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample128_random_select_without_delta_train_split_dataset_refactor",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -937,7 +937,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -953,8 +953,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample64_random_select_without_delta_train_split_dataset_refactor",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -979,7 +979,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -995,8 +995,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=4,
@@ -1021,7 +1021,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=4,
@@ -1037,8 +1037,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_without_img",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=1,
@@ -1064,7 +1064,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=1,
@@ -1081,8 +1081,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="ContextFlow",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1107,7 +1107,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1124,8 +1124,8 @@ def build(api) -> list[api.TrainConfig]:
         # v2 defined here, corresponds to split1 in eval.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v2",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1150,7 +1150,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1164,8 +1164,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_low_mem_finetune_sample_frames8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1190,7 +1190,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=30_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1204,8 +1204,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split0",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1236,8 +1236,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split1",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1268,8 +1268,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split2",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1300,8 +1300,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1332,8 +1332,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split4",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1364,8 +1364,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_train_split_v5",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1390,7 +1390,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1406,8 +1406,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_paligemma_init",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1432,7 +1432,7 @@ def build(api) -> list[api.TrainConfig]:
             # weight_loader=api.weight_loaders.PaliGemmaWeightLoader(),  # This causes shape mismatch with gemma_300m
             weight_loader=api.weight_loaders.VisionEncoderOnlyLoader(verbose=True, include_embedder=True),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1448,8 +1448,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_selective_init",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1474,7 +1474,7 @@ def build(api) -> list[api.TrainConfig]:
                 params_path="s3://openpi-assets/checkpoints/pi0_base/params", verbose=True
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1490,8 +1490,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_avg_current_img",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1517,7 +1517,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1534,8 +1534,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_wo_compress_state",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1561,7 +1561,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1578,8 +1578,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions64",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1604,7 +1604,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1620,8 +1620,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions256",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1646,7 +1646,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1662,8 +1662,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions32",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1688,7 +1688,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1704,8 +1704,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_without_text",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1731,7 +1731,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1748,8 +1748,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_without_state_action",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1775,7 +1775,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1793,8 +1793,8 @@ def build(api) -> list[api.TrainConfig]:
         # v3 defined here, corresponds to v2 in google sheet.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1819,7 +1819,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1836,8 +1836,8 @@ def build(api) -> list[api.TrainConfig]:
         # v3 defined here, corresponds to v2 in google sheet.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions64_split_v3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1862,7 +1862,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1879,8 +1879,8 @@ def build(api) -> list[api.TrainConfig]:
         # v4 defined here, corresponds to v3 in google sheet.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v4",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1905,7 +1905,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2408,8 +2408,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v12 train split_v6 ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v6",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2434,7 +2434,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2449,8 +2449,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v18 split_v6 ---
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v6",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2475,7 +2475,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2493,8 +2493,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v12 train split_v7 ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v7",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2519,7 +2519,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2535,8 +2535,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v18 split_v7 ---
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v7",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2561,7 +2561,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2579,8 +2579,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v12 train split_v8 ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2605,7 +2605,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2620,8 +2620,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v18 split_v8 ---
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2646,7 +2646,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2663,8 +2663,8 @@ def build(api) -> list[api.TrainConfig]:
         # (warmup 1k + decay 69k), matching ECCV rebuttal rows 71-72.
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2712,7 +2712,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2726,8 +2726,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2775,7 +2775,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2789,8 +2789,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2838,7 +2838,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2852,8 +2852,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2901,7 +2901,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2915,8 +2915,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2964,7 +2964,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2978,8 +2978,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3027,7 +3027,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3041,8 +3041,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3090,7 +3090,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3104,8 +3104,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3153,7 +3153,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,

@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from openpi.models import pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
-from openpi.models.pi0_fast_incontext import Pi0FASTIncontextConfig
+from openpi.models.contextar import ContextARConfig
 import openpi.policies.policy as _policy
 import openpi.policies.policy_incontext as _policy_incontext
 from openpi.policies.policy_incontext import PolicyFASTIncontext
@@ -212,7 +212,7 @@ def create_trained_policy_incontext(
                     )
                 )
 
-    if isinstance(train_config.model, Pi0FASTIncontextConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+    if isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         return create_trained_policy_fast_incontext(
             train_config,
             checkpoint_dir,
@@ -303,7 +303,7 @@ def _build_fast_incontext_transforms(
     # data_config.model_transforms.inputs (see ModelTransformFactory in
     # training/config.py) and has already run above, so we must not append a
     # second copy (it would find `prompt` already popped and raise).
-    # For the tokenized Pi0FASTIncontextConfig variant, the model transforms
+    # For the tokenized ContextARConfig variant, the model transforms
     # don't include an incontext tokenizer, so add it here.
     if not isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         fast_tokenizer = _tokenizer.FASTTokenizer(
@@ -336,9 +336,9 @@ def create_trained_policy_fast_incontext(
     default_prompt: str | None = None,
     norm_stats: dict[str, transforms.NormStats] | None = None,
 ) -> PolicyFASTIncontext:
-    if not isinstance(train_config.model, Pi0FASTIncontextConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+    if not isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         raise TypeError(
-            "create_trained_policy_fast_incontext requires a Pi0FASTIncontextConfig or Pi0FASTIncontextSeqConfig model."
+            "create_trained_policy_fast_incontext requires a ContextARConfig or Pi0FASTIncontextSeqConfig model."
         )
 
     repack_transforms = repack_transforms or transforms.Group()

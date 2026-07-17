@@ -23,7 +23,7 @@ def build(api):
     g["BaseModelConfig"] = api._model.BaseModelConfig
 
     @dataclasses.dataclass(frozen=True)
-    class SequenceDebugLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
+    class SequenceLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
         """FAST in-context LIBERO config backed by CustomLeRobotDataset.
 
         Both training (``create``) and evaluation (``create_policy``) source the
@@ -209,8 +209,8 @@ def build(api):
             )
 
     @dataclasses.dataclass(frozen=True)
-    class MultiCustomSequenceDebugLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
-        """Multi-dataset variant of SequenceDebugLeRobotLiberoIncontextDataConfig.
+    class MultiCustomSequenceLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
+        """Multi-dataset variant of SequenceLeRobotLiberoIncontextDataConfig.
 
         Inherited DataConfigFactory.repo_id is set to the FIRST spec's repo_id and
         serves only as a placeholder; norm stats are loaded via the TrainConfig's
@@ -297,7 +297,7 @@ def build(api):
 
         @override
         def create_policy(self, assets_dirs: pathlib.Path, model_config):
-            # Cache-free eval path mirroring SequenceDebugLeRobotLiberoIncontextDataConfig.
+            # Cache-free eval path mirroring SequenceLeRobotLiberoIncontextDataConfig.
             # Demos come from the FIRST dataset spec (libero): unseen-eval tasks are
             # libero tasks, so libero_90 is never needed at eval time.
             from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
@@ -399,7 +399,7 @@ def build(api):
                 remove_task_list=remove_task_list,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             )
-        return SequenceDebugLeRobotLiberoIncontextDataConfig(
+        return SequenceLeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=api.DataConfig(prompt_from_task=True),
             use_delta_joint_actions=False,
@@ -442,7 +442,7 @@ def build(api):
         )
 
     def make_plus_libero90_data():
-        return MultiCustomSequenceDebugLeRobotLiberoIncontextDataConfig(
+        return MultiCustomSequenceLeRobotLiberoIncontextDataConfig(
             repo_id="physical-intelligence/libero",
             base_config=api.DataConfig(local_files_only=False, prompt_from_task=True),
             use_delta_joint_actions=False,

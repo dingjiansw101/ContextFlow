@@ -239,8 +239,8 @@ def test_selective_loader_vs_paligemma_loader_difference():
     3. Both loaders randomly initialize LLM layers
     """
     # Create model
-    from openpi.models import pi0_incontextv18
-    config = pi0_incontextv18.Pi0IncontextConfigv18(
+    from openpi.models import contextflow
+    config = contextflow.ContextFlowConfig(
         prompt_expert_variant="gemma_300m_v2",
         action_expert_variant="gemma_300m_lora",
         sample_frames=8,

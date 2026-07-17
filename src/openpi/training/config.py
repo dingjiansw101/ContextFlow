@@ -24,9 +24,9 @@ import openpi.models.model as _model
 import openpi.models.pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
-import openpi.models.pi0_incontextv12 as pi0_incontextv12
-import openpi.models.pi0_incontextv18 as pi0_incontextv18
-import openpi.models.pi0_fast_incontext as pi0_fast_incontext
+import openpi.models.contextflow_plain as contextflow_plain
+import openpi.models.contextflow as contextflow
+import openpi.models.contextar as contextar
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.droid_policy as droid_policy
 import openpi.shared.download as _download

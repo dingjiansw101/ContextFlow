@@ -65,7 +65,7 @@ def posemb_sincos(
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0IncontextConfigv12(_model.BaseModelConfig):
+class ContextFlowPlainConfig(_model.BaseModelConfig):
     # The version without using vlm
     dtype: str = "bfloat16"
     prompt_expert_variant: _gemma.Variant = "gemma_300m_v2"
@@ -90,8 +90,8 @@ class Pi0IncontextConfigv12(_model.BaseModelConfig):
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv12":
-        return Pi0Incontextv12(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "ContextFlowPlain":
+        return ContextFlowPlain(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(
@@ -231,8 +231,8 @@ class Pi0IncontextConfigv12(_model.BaseModelConfig):
         return nnx.All(*filters)
 
 
-class Pi0Incontextv12(_model.BaseModel):
-    def __init__(self, config: Pi0IncontextConfigv12, rngs: nnx.Rngs):
+class ContextFlowPlain(_model.BaseModel):
+    def __init__(self, config: ContextFlowPlainConfig, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         prompt_expert_config = _gemma.get_config(config.prompt_expert_variant, "prompt_expert")

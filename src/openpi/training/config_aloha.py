@@ -531,7 +531,7 @@ def build(api) -> list["api.TrainConfig"]:
     # TODO: check the prompt
     api.TrainConfig(
         name="pi0_aloha_pen_uncap_incontextv12_low_mem_finetune_sample2_actionssample32_random_select",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        model=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
             sample_frames=2, sample_actions=32, random_select=True, 
         ),
@@ -554,7 +554,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2", action_expert_variant="gemma_300m_lora", 
             sample_frames=2, sample_actions=32, random_select=True, 
         ).get_freeze_filter(),
@@ -568,7 +568,7 @@ def build(api) -> list["api.TrainConfig"]:
     # Objects pickup/place configs
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        model=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -597,7 +597,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -612,7 +612,7 @@ def build(api) -> list["api.TrainConfig"]:
     # Inference variant (no test task filtering)
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_inference",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        model=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -639,7 +639,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -653,7 +653,7 @@ def build(api) -> list["api.TrainConfig"]:
 
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8",
-        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        model=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -682,7 +682,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        freeze_filter=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -697,7 +697,7 @@ def build(api) -> list["api.TrainConfig"]:
     # Inference variant (no test task filtering)
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv18_low_mem_finetune_sample_frames8_inference",
-        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        model=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -724,7 +724,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        freeze_filter=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -738,7 +738,7 @@ def build(api) -> list["api.TrainConfig"]:
 
     api.TrainConfig(
         name="pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8",
-        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        model=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -760,7 +760,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        freeze_filter=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -776,7 +776,7 @@ def build(api) -> list["api.TrainConfig"]:
     # TODO: need to set a dataset of unseen tasks in test config
     api.TrainConfig(
         name="pi0_aloha_objects_task_suite_incontextv18_low_mem_finetune_sample_frames8_inference",
-        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        model=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -799,7 +799,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        freeze_filter=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -814,7 +814,7 @@ def build(api) -> list["api.TrainConfig"]:
     # 40k variant
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_40k",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        model=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -843,7 +843,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=40_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -858,7 +858,7 @@ def build(api) -> list["api.TrainConfig"]:
     # 80k variant
     api.TrainConfig(
         name="pi0_aloha_objects_all_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_80k",
-        model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        model=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -887,7 +887,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=80_000,
-        freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+        freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=2,
@@ -1254,12 +1254,13 @@ def build(api) -> list["api.TrainConfig"]:
     #
     # aloha_data_unique: test tasks excluded, delta joint actions
     api.TrainConfig(
-        # Renamed to the paper method name (ALOHA variant of ContextFlow).
-        # Keep the original name as the assets key so any norm stats / checkpoints
-        # computed under the old name still resolve. See CONFIG_NAME_MAPPING.md.
+        # Paper method name (ALOHA variant of ContextFlow). The assets key matches the
+        # config name; the on-disk ./assets/<key> dir must be renamed to match (see
+        # CONFIG_NAME_MAPPING.md). assets_repo_override is kept explicit so the inference
+        # sibling can share this key.
         name="ContextFlow_Aloha",
-        assets_repo_override="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test",
-        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        assets_repo_override="ContextFlow_Aloha",
+        model=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -1288,7 +1289,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        freeze_filter=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -1301,11 +1302,11 @@ def build(api) -> list["api.TrainConfig"]:
     ),
     # aloha_data_unique inference variant (no task filtering)
     api.TrainConfig(
-        # Renamed to the paper method name (ALOHA variant of ContextFlow, inference).
-        # Keep the original name as the assets key so norm stats resolve unchanged.
+        # Paper method name (ALOHA variant of ContextFlow, inference). Assets key matches
+        # the config name; rename the on-disk ./assets/<key> dir to match.
         name="ContextFlow_Aloha_Inference",
-        assets_repo_override="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_inference",
-        model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        assets_repo_override="ContextFlow_Aloha_Inference",
+        model=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -1332,7 +1333,7 @@ def build(api) -> list["api.TrainConfig"]:
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
-        freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+        freeze_filter=api.contextflow.ContextFlowConfig(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
             sample_frames=8,
@@ -1392,13 +1393,12 @@ def build(api) -> list["api.TrainConfig"]:
 
     # Training config with test tasks excluded
     api.TrainConfig(
-        # Renamed to the paper method name (ALOHA variant of ContextAR).
-        # Keep the original name as the assets key so norm stats resolve unchanged.
-        # The inference sibling below already points its assets_repo_override at
-        # this old name, so both keep resolving to the same on-disk assets.
+        # Paper method name (ALOHA variant of ContextAR). Assets key matches the config
+        # name; the inference sibling below shares this same key. Rename the on-disk
+        # ./assets/<key> dir to match (see CONFIG_NAME_MAPPING.md).
         name="ContextAR_Aloha",
-        assets_repo_override="pi0_fast_aloha_data_unique_incontext_train_split_v1",
-        model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
+        assets_repo_override="ContextAR_Aloha",
+        model=api.contextar.ContextARConfig(
             action_dim=32, action_horizon=10, max_token_len=256,
             sample_frames=2, sample_actions=4, random_select=True,
         ),
@@ -1427,12 +1427,11 @@ def build(api) -> list["api.TrainConfig"]:
 
     # Inference config (no test task filtering)
     api.TrainConfig(
-        # Renamed to the paper method name (ALOHA variant of ContextAR, inference).
-        # assets_repo_override already targets the train config's original name, so
-        # asset resolution is unchanged by the rename.
+        # Paper method name (ALOHA variant of ContextAR, inference). Shares the train
+        # config's assets key (ContextAR_Aloha), matching the pre-rename behavior.
         name="ContextAR_Aloha_Inference",
-        assets_repo_override="pi0_fast_aloha_data_unique_incontext_train_split_v1",
-        model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
+        assets_repo_override="ContextAR_Aloha",
+        model=api.contextar.ContextARConfig(
             action_dim=32, action_horizon=10, max_token_len=256,
             sample_frames=2, sample_actions=4, random_select=True,
         ),

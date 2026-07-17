@@ -12,7 +12,7 @@ import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
 
-from openpi.models import pi0_fast_incontext as _pi0_fast_incontext
+from openpi.models import contextar as _contextar
 from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
 import openpi.training.config as _config
@@ -427,7 +427,7 @@ def create_incontext_data_loader(
             )
         dataset = TransformedDataset(dataset, [add_demo_transform])
 
-    if isinstance(config.model, _pi0_fast_incontext.Pi0FASTIncontextConfig):
+    if isinstance(config.model, _contextar.ContextARConfig):
         fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
         dataset = TransformedDataset(
             dataset,

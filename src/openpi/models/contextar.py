@@ -73,7 +73,7 @@ def put_along_last_axis(arr, indices, values):
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0FASTIncontextConfig(_model.BaseModelConfig):
+class ContextARConfig(_model.BaseModelConfig):
     dtype: str = "bfloat16"
     paligemma_variant: _gemma.Variant = "gemma_2b"
 
@@ -100,8 +100,8 @@ class Pi0FASTIncontextConfig(_model.BaseModelConfig):
         return _model.ModelType.PI0_FAST_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0FASTIncontext":
-        return Pi0FASTIncontext(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "ContextAR":
+        return ContextAR(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(self, *, batch_size: int = 1) -> tuple[_model.ObservationFASTIncontext, _model.Actions]:
@@ -147,8 +147,8 @@ class Pi0FASTIncontextConfig(_model.BaseModelConfig):
         return nnx.Nothing
 
 
-class Pi0FASTIncontext(_model.BaseModel):
-    def __init__(self, config: Pi0FASTIncontextConfig, rngs: nnx.Rngs):
+class ContextAR(_model.BaseModel):
+    def __init__(self, config: ContextARConfig, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         paligemma_config = _gemma.get_config(config.paligemma_variant)
         

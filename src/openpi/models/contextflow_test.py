@@ -1,4 +1,4 @@
-"""Unit tests for pi0_incontextv18 - Perceiver compression features.
+"""Unit tests for contextflow - Perceiver compression features.
 
 This test file focuses ONLY on NEW functionality compared to v17:
 - PerceiverCompressor module
@@ -12,16 +12,16 @@ are covered by pi0_incontextv17_test.py and not duplicated here.
 USAGE:
 ------
     # Run all tests
-    uv run pytest src/openpi/models/pi0_incontextv18_test.py
+    uv run pytest src/openpi/models/contextflow_test.py
 
     # Run specific test class
-    uv run pytest src/openpi/models/pi0_incontextv18_test.py::TestPerceiverCompressor
+    uv run pytest src/openpi/models/contextflow_test.py::TestPerceiverCompressor
 
     # Run with verbose output
-    uv run pytest src/openpi/models/pi0_incontextv18_test.py -v
+    uv run pytest src/openpi/models/contextflow_test.py -v
 
     # Run specific test
-    uv run pytest src/openpi/models/pi0_incontextv18_test.py::TestPerceiverCompressor::test_compression_shape
+    uv run pytest src/openpi/models/contextflow_test.py::TestPerceiverCompressor::test_compression_shape
 """
 
 import flax.nnx as nnx
@@ -29,7 +29,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from openpi.models import pi0_incontextv18 as _pi0v18
+from openpi.models import contextflow as _contextflow
 from openpi.shared import nnx_utils
 
 
@@ -41,7 +41,7 @@ from openpi.shared import nnx_utils
 @pytest.fixture
 def default_config():
     """Create default v18 configuration with Perceiver compression."""
-    return _pi0v18.Pi0IncontextConfigv18(
+    return _contextflow.ContextFlowConfig(
         prompt_expert_variant="gemma_300m_v2",
         action_expert_variant="gemma_300m",
     )
@@ -51,7 +51,7 @@ def default_config():
 def compressor():
     """Create standalone PerceiverCompressor for unit testing."""
     key = jax.random.key(0)
-    return _pi0v18.PerceiverCompressor(
+    return _contextflow.PerceiverCompressor(
         num_queries=32,
         embed_dim=2048,
         num_heads=8,
@@ -80,7 +80,7 @@ class TestPerceiverCompressor:
         key = jax.random.key(0)
         num_queries, embed_dim, num_heads, num_layers = 32, 2048, 8, 4
 
-        compressor = _pi0v18.PerceiverCompressor(
+        compressor = _contextflow.PerceiverCompressor(
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=num_heads,
@@ -134,7 +134,7 @@ class TestPerceiverCompressor:
         batch_size, seq_len, embed_dim = 2, 100, 2048
         num_queries = 16
 
-        compressor = _pi0v18.PerceiverCompressor(
+        compressor = _contextflow.PerceiverCompressor(
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=8,
@@ -165,7 +165,7 @@ class TestPerceiverCompressor:
         key = jax.random.key(0)
         batch_size, seq_len, embed_dim = 1, 50, 128
 
-        compressor = _pi0v18.PerceiverCompressor(
+        compressor = _contextflow.PerceiverCompressor(
             num_queries=8,
             embed_dim=embed_dim,
             num_heads=4,
@@ -196,7 +196,7 @@ class TestPerceiverCompressor:
         key = jax.random.key(0)
         embed_dim, num_queries = 512, 16
 
-        compressor = _pi0v18.PerceiverCompressor(
+        compressor = _contextflow.PerceiverCompressor(
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=8,
@@ -222,7 +222,7 @@ class TestPerceiverCompressor:
 
         # Test with 1, 2, 4, 6 layers
         for num_layers in [1, 2, 4, 6]:
-            compressor = _pi0v18.PerceiverCompressor(
+            compressor = _contextflow.PerceiverCompressor(
                 num_queries=num_queries,
                 embed_dim=embed_dim,
                 num_heads=4,
@@ -254,7 +254,7 @@ class TestPerceiverCompressor:
         batch_size, seq_len = 2, 64
 
         # Create single-layer (cross-only) compressor
-        compressor_1layer = _pi0v18.PerceiverCompressor(
+        compressor_1layer = _contextflow.PerceiverCompressor(
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=4,
@@ -263,7 +263,7 @@ class TestPerceiverCompressor:
         )
 
         # Create multi-layer (cross + self) compressor
-        compressor_4layer = _pi0v18.PerceiverCompressor(
+        compressor_4layer = _contextflow.PerceiverCompressor(
             num_queries=num_queries,
             embed_dim=embed_dim,
             num_heads=4,
@@ -295,7 +295,7 @@ class TestPerceiverCompressor:
         key = jax.random.key(0)
 
         # Create compressor with 4 layers (2 cross + 2 self)
-        compressor = _pi0v18.PerceiverCompressor(
+        compressor = _contextflow.PerceiverCompressor(
             num_queries=32,
             embed_dim=512,
             num_heads=8,
@@ -353,7 +353,7 @@ class TestPerceiverConfig:
 
     def test_default_values(self):
         """Test default values for Perceiver parameters."""
-        config = _pi0v18.Pi0IncontextConfigv18()
+        config = _contextflow.ContextFlowConfig()
 
         assert config.num_image_queries == 32, \
             f"Expected num_image_queries=32, got {config.num_image_queries}"
@@ -372,7 +372,7 @@ class TestPerceiverConfig:
 
     def test_custom_values(self):
         """Test configuration with custom query counts."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             num_image_queries=16,
             num_state_queries=64,
             num_action_queries=8,
@@ -401,7 +401,7 @@ class TestCompressorInitialization:
 
     def test_compressors_exist(self):
         """Test image/state/action compressors are created when prompts enabled."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             use_image_prompts=True,
             use_action_state_prompts=True
         )
@@ -417,13 +417,13 @@ class TestCompressorInitialization:
             "action_compressor should exist when use_action_state_prompts=True"
 
         # Check they are PerceiverCompressor instances
-        assert isinstance(model.image_compressor, _pi0v18.PerceiverCompressor)
-        assert isinstance(model.state_compressor, _pi0v18.PerceiverCompressor)
-        assert isinstance(model.action_compressor, _pi0v18.PerceiverCompressor)
+        assert isinstance(model.image_compressor, _contextflow.PerceiverCompressor)
+        assert isinstance(model.state_compressor, _contextflow.PerceiverCompressor)
+        assert isinstance(model.action_compressor, _contextflow.PerceiverCompressor)
 
     def test_compressors_not_created_when_disabled(self):
         """Test compressors not created when prompts disabled."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             use_image_prompts=False,
             use_action_state_prompts=False
         )
@@ -440,7 +440,7 @@ class TestCompressorInitialization:
 
     def test_stored_parameters(self):
         """Test num_*_queries parameters are stored in model."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             num_image_queries=16,
             num_state_queries=24,
             num_action_queries=8
@@ -467,7 +467,7 @@ class TestEmbedMidfixCompression:
 
     def test_image_compression_reduces_tokens(self):
         """Test demo images are compressed to num_image_queries per camera."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             num_image_queries=32,
             use_image_prompts=True,
             use_text_prompts=False,
@@ -502,7 +502,7 @@ class TestEmbedMidfixCompression:
 
     def test_state_action_compression(self):
         """Test states and actions are compressed to num_*_queries."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             num_state_queries=16,
             num_action_queries=24,
             use_image_prompts=False,
@@ -530,7 +530,7 @@ class TestEmbedMidfixCompression:
 
     def test_output_mask_validity(self):
         """Test output masks correctly reflect input validity."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             num_image_queries=32,
             use_image_prompts=True
         )
@@ -556,7 +556,7 @@ class TestEmbedMidfixCompression:
 
     def test_compression_preserves_finite_values(self):
         """Test all compressed tokens remain finite."""
-        config = _pi0v18.Pi0IncontextConfigv18(
+        config = _contextflow.ContextFlowConfig(
             use_image_prompts=True,
             use_action_state_prompts=True
         )
@@ -658,7 +658,7 @@ class TestCompressionIntegration:
     def test_different_num_queries_configs(self):
         """Test model works with various num_queries settings."""
         for nq in [8, 16, 32, 64]:
-            config = _pi0v18.Pi0IncontextConfigv18(
+            config = _contextflow.ContextFlowConfig(
                 num_image_queries=nq,
                 num_state_queries=nq,
                 num_action_queries=nq

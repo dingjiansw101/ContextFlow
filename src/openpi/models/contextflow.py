@@ -65,7 +65,7 @@ def posemb_sincos(
 
 
 @dataclasses.dataclass(frozen=True)
-class Pi0IncontextConfigv18(_model.BaseModelConfig):
+class ContextFlowConfig(_model.BaseModelConfig):
     # The version without using vlm
     dtype: str = "bfloat16"
     paligemma_variant: _gemma.Variant | None = None
@@ -101,8 +101,8 @@ class Pi0IncontextConfigv18(_model.BaseModelConfig):
         return _model.ModelType.PI0_INCONTEXT
 
     @override
-    def create(self, rng: at.KeyArrayLike) -> "Pi0Incontextv18":
-        return Pi0Incontextv18(self, rngs=nnx.Rngs(rng))
+    def create(self, rng: at.KeyArrayLike) -> "ContextFlow":
+        return ContextFlow(self, rngs=nnx.Rngs(rng))
 
     @override
     def inputs_spec(
@@ -322,8 +322,8 @@ class PerceiverCompressor(nnx.Module):
         return queries
 
 
-class Pi0Incontextv18(_model.BaseModel):
-    def __init__(self, config: Pi0IncontextConfigv18, rngs: nnx.Rngs):
+class ContextFlow(_model.BaseModel):
+    def __init__(self, config: ContextFlowConfig, rngs: nnx.Rngs):
         super().__init__(config.action_dim, config.action_horizon, config.max_token_len)
         action_expert_config = _gemma.get_config(config.action_expert_variant, "action_expert")
         if config.paligemma_variant is not None:
