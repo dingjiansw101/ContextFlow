@@ -271,6 +271,85 @@ def build(api) -> list["api.TrainConfig"]:
         
         
 
+    @dataclasses.dataclass(frozen=True)
+    class LeRobotAlohaMobileFASTIncontextDataConfig(api.DataConfigFactory):
+        states_cache_path: str = "metadata/aloha_data_unique/episode_states_cache.json"
+        actions_cache_path: str = "metadata/aloha_data_unique/episode_actions_cache.json"
+        task_to_episode: str = "metadata/aloha_data_unique/task_to_episode.json"
+        episode_to_indexes_file: str = "metadata/aloha_data_unique/episode_to_indexes.json"
+        use_delta_joint_actions: bool = True
+        adapt_to_pi: bool = False
+        # Action keys that will be used to read the action sequence from the dataset.
+        action_sequence_keys: Sequence[str] = ("action",)
+
+        # Padding mode for AddStatesActionsPromptTransform
+        padding_mode: str = "keep_all"
+        mask_padding_as_valid: bool = False
+        demo_state_dim: int | None = 32
+
+        @override
+        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
+            repack_transform = api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                            "episode_index": "episode_index",
+                            "index": "index",
+                            "task_index": "task_index",
+                        }
+                    )
+                ]
+            )
+
+            train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
+
+            data_transforms = api._transforms.Group(
+                inputs=[api._transforms.InjectDemoIndexes(
+                    task_to_episode=self.task_to_episode,
+                    episode_to_indexes=self.episode_to_indexes_file,
+                    sample_frames=model_config.sample_frames,
+                    random_select=model_config.random_select,
+                    sample_episodes=model_config.sample_episodes,
+                    train_episode_index_list=train_epi)],
+                outputs=[],
+            )
+
+            data_transforms = data_transforms.push(
+                inputs=[
+                    aloha_incontext_policy.AlohaMobileIncontextInputs(
+                        action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi
+                    )
+                ],
+                outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
+            )
+
+            if self.use_delta_joint_actions:
+                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
+                data_transforms = data_transforms.push(
+                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
+                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
+                )
+
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                self.create_base_config(assets_dirs),
+                repack_transforms=repack_transform,
+                data_transforms=data_transforms,
+                model_transforms=model_transforms,
+                action_sequence_keys=self.action_sequence_keys,
+                train_episode=train_epi,
+                demo_state_dim=self.demo_state_dim,
+            )
+
     # 2) Return this child's api.TrainConfig entries directly (can be multiple)
     return [
         #
@@ -1256,6 +1335,111 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=16,
         batch_size=32,
+    ),
+
+
+    ####### ported from origin/aloha-dev: aloha_data_unique baselines + ContextAR #######
+
+    # aloha_data_unique pi0: test tasks excluded
+    api.TrainConfig(
+        name="pi0_aloha_data_unique_low_mem_finetune_no_test",
+        model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
+        data=LeRobotAlohaMobileDataConfig(
+            repo_id="vo2yager/aloha_data_unique",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            repack_transforms=api._transforms.Group(
+                inputs=[
+                    api._transforms.RepackTransform(
+                        {
+                            "images": {
+                                "cam_high": "observation.images.cam_high",
+                                "cam_left_wrist": "observation.images.cam_left_wrist",
+                                "cam_right_wrist": "observation.images.cam_right_wrist",
+                            },
+                            "state": "observation.state",
+                            "actions": "action",
+                            "prompt": "prompt",
+                        }
+                    )
+                ]
+            ),
+            base_config=api.DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
+        num_train_steps=20_000,
+        freeze_filter=api.pi0.Pi0Config(
+            paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"
+        ).get_freeze_filter(),
+        ema_decay=None,
+        num_workers=80,
+        batch_size=32,
+    ),
+
+    # Training config with test tasks excluded
+    api.TrainConfig(
+        name="pi0_fast_aloha_data_unique_incontext_train_split_v1",
+        model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
+            action_dim=32, action_horizon=10, max_token_len=256,
+            sample_frames=2, sample_actions=4, random_select=True,
+        ),
+        data=LeRobotAlohaMobileFASTIncontextDataConfig(
+            repo_id="vo2yager/aloha_data_unique",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            base_config=api.DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=True,
+            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
+            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+            remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
+            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        ema_decay=None,
+        num_workers=32,
+        batch_size=4,
+    ),
+
+    # Inference config (no test task filtering)
+    api.TrainConfig(
+        name="pi0_fast_aloha_data_unique_incontext_inference",
+        assets_repo_override="pi0_fast_aloha_data_unique_incontext_train_split_v1",
+        model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
+            action_dim=32, action_horizon=10, max_token_len=256,
+            sample_frames=2, sample_actions=4, random_select=True,
+        ),
+        data=LeRobotAlohaMobileFASTIncontextDataConfig(
+            repo_id="vo2yager/aloha_data_unique",
+            assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            base_config=api.DataConfig(
+                local_files_only=True,
+                prompt_from_task=True,
+            ),
+            use_delta_joint_actions=True,
+            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
+            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+        ),
+        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
+        num_train_steps=30_000,
+        ema_decay=None,
+        num_workers=8,
+        batch_size=4,
     ),
 
     ]
