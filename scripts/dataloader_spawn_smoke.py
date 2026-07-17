@@ -1,6 +1,6 @@
 """Smoke-test the production dataloader path with spawned workers.
 
-This is intentionally different from v18_dataloader_check.py: it exercises the
+This is intentionally different from contextflow_dataloader_check.py: it exercises the
 TorchDataLoader path used by training, including multiprocessing spawn and
 persistent workers. Run it from a real .py file, not from stdin, because Python
 spawn needs to be able to import __main__.

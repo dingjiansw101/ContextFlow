@@ -1254,7 +1254,11 @@ def build(api) -> list["api.TrainConfig"]:
     #
     # aloha_data_unique: test tasks excluded, delta joint actions
     api.TrainConfig(
-        name="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test",
+        # Renamed to the paper method name (ALOHA variant of ContextFlow).
+        # Keep the original name as the assets key so any norm stats / checkpoints
+        # computed under the old name still resolve. See CONFIG_NAME_MAPPING.md.
+        name="ContextFlow_Aloha",
+        assets_repo_override="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test",
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
@@ -1297,7 +1301,10 @@ def build(api) -> list["api.TrainConfig"]:
     ),
     # aloha_data_unique inference variant (no task filtering)
     api.TrainConfig(
-        name="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_inference",
+        # Renamed to the paper method name (ALOHA variant of ContextFlow, inference).
+        # Keep the original name as the assets key so norm stats resolve unchanged.
+        name="ContextFlow_Aloha_Inference",
+        assets_repo_override="pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_inference",
         model=api.pi0_incontextv18.Pi0IncontextConfigv18(
             prompt_expert_variant="gemma_300m_v2",
             action_expert_variant="gemma_300m_lora",
@@ -1385,7 +1392,12 @@ def build(api) -> list["api.TrainConfig"]:
 
     # Training config with test tasks excluded
     api.TrainConfig(
-        name="pi0_fast_aloha_data_unique_incontext_train_split_v1",
+        # Renamed to the paper method name (ALOHA variant of ContextAR).
+        # Keep the original name as the assets key so norm stats resolve unchanged.
+        # The inference sibling below already points its assets_repo_override at
+        # this old name, so both keep resolving to the same on-disk assets.
+        name="ContextAR_Aloha",
+        assets_repo_override="pi0_fast_aloha_data_unique_incontext_train_split_v1",
         model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
             action_dim=32, action_horizon=10, max_token_len=256,
             sample_frames=2, sample_actions=4, random_select=True,
@@ -1415,7 +1427,10 @@ def build(api) -> list["api.TrainConfig"]:
 
     # Inference config (no test task filtering)
     api.TrainConfig(
-        name="pi0_fast_aloha_data_unique_incontext_inference",
+        # Renamed to the paper method name (ALOHA variant of ContextAR, inference).
+        # assets_repo_override already targets the train config's original name, so
+        # asset resolution is unchanged by the rename.
+        name="ContextAR_Aloha_Inference",
         assets_repo_override="pi0_fast_aloha_data_unique_incontext_train_split_v1",
         model=api.pi0_fast_incontext.Pi0FASTIncontextConfig(
             action_dim=32, action_horizon=10, max_token_len=256,

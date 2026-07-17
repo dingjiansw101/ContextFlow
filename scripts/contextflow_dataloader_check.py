@@ -1,4 +1,4 @@
-"""Deterministic batch artifact dump for the v18 in-context dataloader.
+"""Deterministic batch artifact dump for the ContextFlow (v18 in-context) dataloader.
 
 Used to verify exact behavior preservation across dataloader refactors. Loads
 ``ContextFlow`` (formerly ``pi0_libero_incontextv18_low_mem_finetune_sample_frames8``) with fixed seeds
@@ -10,7 +10,7 @@ Run BEFORE the refactor to capture the baseline, AFTER the refactor to verify
 identical artifacts.
 
 Usage:
-  uv run python scripts/v18_dataloader_check.py \
+  uv run python scripts/contextflow_dataloader_check.py \
       --output-dir /tmp/openpi_v18_consistency/<run_id>/<label>
 
 Compare two runs with `diff` on the JSON summary (and optional .npz inspection).
