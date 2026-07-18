@@ -127,3 +127,34 @@ scope): the non-paper `pi0_aloha_objects_task_suite_incontextv18_…` key and th
   `..._train_split_900m`, and `..._train_split_plus_libero90*`. Those siblings keep their
   original names; only the empty-suffix base config became `ContextAR`. The ALOHA
   `ContextAR_Aloha` configs are standalone (not f-string-generated) and have no siblings.
+
+## Job-script mapping (old → new)
+
+New-name eval job scripts were added for the renamed LIBERO configs. The old scripts still pass
+the old config names (they fail `get_config` on the rename branch), so use the new ones. All serve
+the **new** config name via `scripts/serve_policy.py --loader=INCONTEXT` (the `serve_policy_incontext.py`
+in older docs does not exist).
+
+### orix SLURM eval wrappers (unseen, split0)
+
+| Config | Old job script | New job script |
+|---|---|---|
+| `ContextFlow` | `jobs/orix/refactor_merge/eval_v18_sample_frames8_unseen.sh` | `jobs/orix/refactor_merge/eval_contextflow_unseen.sh` |
+| `ContextFlow_Plain` | `jobs/orix/refactor_merge/eval_v12_refactor_incontext_unseen.sh` | `jobs/orix/refactor_merge/eval_contextflow_plain_unseen.sh` |
+| `ContextAR` | `jobs/orix/refactor_merge/eval_fast_prompt_action7_state8_unseen.sh` | `jobs/orix/refactor_merge/eval_contextar_unseen.sh` |
+
+The FAST eval historically served the untouched sibling `pi0_fast_incontext_prompt_action_7_state_8_inference`;
+the new script serves `ContextAR` directly. This is serve-identical — same model dims, same assets key
+`debug_pi0_fast_libero_incontext_inference`, and the policy dataset spans all episodes (`episodes=None`),
+so the train-time `remove_task_list` difference between the two configs never affects inference.
+
+### New machine-specific eval scripts (all three configs)
+
+| Machine | New job script | How it runs |
+|---|---|---|
+| visioncair (local) | `jobs/local/eval_incontext_unseen_local.sh <run-name> <policy-config> <ckpt-dir> [run-id]` | borrowed venvs + `PYTHONPATH=src` (renamed code) + system nvidia EGL; server doesn't preallocate GPU, so unseen suites pack across GPUs (env `GPUS`). Supersedes the per-config `eval_unseen_{A_v18,C_orix,D_900m}_*_normdemo_fix.sh` for the renamed configs. |
+| ibex (SLURM) | `jobs/ibex/eval_incontext_unseen_ibex.sh` (`sbatch --export=ALL,NAME=…,POLICY_CONFIG=…,CKPT_DIR=…`) | mirrors the proven `openpi_repro_nw16/jobs/ibex/eval_v18_sf8_repro_nw16_unseen.sh`: one server, sequential suites, ibex EGL env (cuda-12.1 + mujoco210 + `~/nvidia-egl`). |
+
+The shared orchestrator `jobs/local/eval_pi0_libero_incontext_unseen.sh` is unchanged; the orix wrappers
+still call it. The new visioncair/ibex scripts bypass it to inject `PYTHONPATH=src` for the borrowed-venv
+setup (the rename worktree has no synced `.venv`).
