@@ -66,19 +66,21 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/1
 
 ## 3. Generating the Metadata from Scratch
 
-`metadata/libero/task_to_episode.json` (and `episode_to_indexes.json`, produced alongside) can be regenerated from the dataset instead of downloaded. The generator instantiates the full data pipeline, so the norm stats (`assets/ContextFlow_Plain`, Section 2) should be in place first. The config also tries to open the metadata files while it is being constructed, so bootstrap them as empty JSON objects:
+`metadata/libero/task_to_episode.json` (and `episode_to_indexes.json`, produced alongside) can be regenerated from the dataset instead of downloaded:
 
 ```bash
-mkdir -p metadata/libero
-echo '{}' > metadata/libero/task_to_episode.json
-echo '{}' > metadata/libero/episode_to_indexes.json
-
 uv run src/openpi/training/generate_task_to_index.py \
-    --config ContextFlow \
+    --config pi0_libero \
+    --skip_norm_stats \
     --output_dir metadata/libero
 ```
 
-This overwrites the placeholders with the real task→episode and episode→frame-index maps. The result is deterministic — regenerating should reproduce the committed `task_to_episode.json` exactly.
+Two details matter here:
+
+- **Generate with the plain `pi0_libero` config, not an in-context config.** The in-context training configs (`ContextFlow`, …) filter their dataset down to the training episodes (`remove_task_list`), so generating through them would omit the unseen tasks — but evaluation needs demo episodes for unseen tasks too. `pi0_libero` sees the full dataset, and it reads no metadata itself, so there is no bootstrapping problem.
+- `--skip_norm_stats` skips the transform sanity check that runs after the files are written; metadata generation itself does not need norm stats.
+
+The output is deterministic: regenerating reproduces the committed `task_to_episode.json` byte-for-byte.
 
 `metadata/libero/tasks.jsonl` is simply a copy of the dataset's task table:
 

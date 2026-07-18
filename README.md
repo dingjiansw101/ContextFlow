@@ -30,7 +30,7 @@ The LIBERO ContextFlow / ContextAR runs reported in the paper were trained on 2â
 
 ## Installation
 
-Clone the repo with submodules (the LIBERO simulator and LeRobot are submodules):
+Clone the repo with submodules (the LIBERO simulator and the ALOHA client are submodules; LeRobot itself is pulled by `uv sync`):
 
 ```bash
 git clone --recurse-submodules <this-repo-url>
