@@ -396,7 +396,39 @@ def build(api) -> list["api.TrainConfig"]:
             }
         )
 
+        # Optional stats source for the demo aliases. The legacy shared cache
+        # (metadata/aloha_data_unique/episode_{states,actions}_cache.json) was built once,
+        # under the v18/pi0 pipeline, i.e. normalized with the pi0_base trossen_mobile
+        # stats. Configs whose own stats differ (ContextAR uses pi0_fast_base, whose
+        # action mean/std differ from pi0_base while the state stats are identical)
+        # consumed those pi0-normalized demo actions as-is at train time. To reproduce
+        # that behavior byte-for-byte without the cache, set this to the cache-builder's
+        # assets; the stats are injected into norm_stats under demo_ref_state /
+        # demo_ref_actions and norm_stats_aliases can point the demo fields at them.
+        demo_norm_stats_assets: "AssetsConfig | None" = None
+
         action_sequence_keys: Sequence[str] = ("action",)
+
+        def _augment_norm_stats(self, base_config: "DataConfig") -> "DataConfig":
+            if self.demo_norm_stats_assets is None or base_config.norm_stats is None:
+                return base_config
+            demo_stats = self._load_norm_stats(
+                api.epath.Path(self.demo_norm_stats_assets.assets_dir),
+                self.demo_norm_stats_assets.asset_id,
+            )
+            if demo_stats is None:
+                raise FileNotFoundError(
+                    f"demo_norm_stats_assets set but no norm stats found at "
+                    f"{self.demo_norm_stats_assets.assets_dir}/{self.demo_norm_stats_assets.asset_id}"
+                )
+            return dataclasses.replace(
+                base_config,
+                norm_stats={
+                    **base_config.norm_stats,
+                    "demo_ref_state": demo_stats["state"],
+                    "demo_ref_actions": demo_stats["actions"],
+                },
+            )
 
         def _delta_action_mask(self):
             if not self.use_delta_joint_actions:
@@ -458,7 +490,7 @@ def build(api) -> list["api.TrainConfig"]:
             model_transforms = api.ModelTransformFactory()(model_config)
 
             return dataclasses.replace(
-                self.create_base_config(assets_dirs),
+                self._augment_norm_stats(self.create_base_config(assets_dirs)),
                 repack_transforms=repack_transform,
                 data_transforms=self._data_transforms(model_config),
                 model_transforms=model_transforms,
@@ -475,7 +507,7 @@ def build(api) -> list["api.TrainConfig"]:
 
             from openpi.training.custom_dataset import CustomLeRobotDataset
 
-            base_config = self.create_base_config(assets_dirs)
+            base_config = self._augment_norm_stats(self.create_base_config(assets_dirs))
             if self.policy_local_files_only:
                 base_config = dataclasses.replace(base_config, local_files_only=True)
 
@@ -1585,6 +1617,19 @@ def build(api) -> list["api.TrainConfig"]:
             sample_actions=4,
             remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
             episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            # Faithfulness to the legacy shared cache: the cache rows this config trained on
+            # were normalized with the pi0_base trossen_mobile stats (the v18 pipeline built
+            # the cache), NOT this config's own pi0_fast_base stats — the two differ in
+            # action mean/std (state stats are identical). Verified numerically on kw61077:
+            # denorm(cache, pi0_base) -> renorm(pi0_fast_base) reproduces the mismatch.
+            demo_norm_stats_assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            norm_stats_aliases={
+                "dem_prompt_all_states": "demo_ref_state",
+                "dem_prompt_all_actions": "demo_ref_actions",
+            },
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=30_000,
@@ -1618,6 +1663,15 @@ def build(api) -> list["api.TrainConfig"]:
             use_delta_joint_actions=True,
             sample_frames=2,
             sample_actions=4,
+            # Same demo-stats faithfulness as ContextAR_Aloha (see comment there).
+            demo_norm_stats_assets=api.AssetsConfig(
+                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
+                asset_id="trossen_mobile",
+            ),
+            norm_stats_aliases={
+                "dem_prompt_all_states": "demo_ref_state",
+                "dem_prompt_all_actions": "demo_ref_actions",
+            },
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=30_000,
