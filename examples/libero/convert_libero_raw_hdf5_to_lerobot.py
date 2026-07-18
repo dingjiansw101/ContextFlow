@@ -7,8 +7,8 @@ The raw HDF5 files are the official LIBERO libero_90 demonstrations, obtained by
 ``libero_90`` directory.
 
 Usage:
-    PYTHONPATH=src uv run examples/libero_90/convert_libero_raw_hdf5_to_lerobot.py
-    PYTHONPATH=src uv run examples/libero_90/convert_libero_raw_hdf5_to_lerobot.py --push_to_hub
+    PYTHONPATH=src uv run examples/libero/convert_libero_raw_hdf5_to_lerobot.py --data_dir /path/to/libero_90
+    PYTHONPATH=src uv run examples/libero/convert_libero_raw_hdf5_to_lerobot.py --data_dir /path/to/libero_90 --push_to_hub
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from PIL import Image
 from tqdm import tqdm
 import tyro
 
-DEFAULT_DATA_DIR = Path("/home/dingj0b/datasets/libero_90")
+DEFAULT_DATA_DIR = Path("data/libero_90")
 DEFAULT_REPO_ID = "vo2yager/libero_90"
 IMAGE_SIZE = (256, 256)
 IMAGE_WRITER_THREADS = 10
