@@ -61,8 +61,18 @@ def _make_config(config_mod, args: argparse.Namespace):
     if args.deterministic_data and hasattr(data, "seed_base"):
         data = dataclasses.replace(data, seed_base=deterministic_data_seed)
 
+    model = cfg.model
+    if not args.random_select:
+        # Deterministic first-candidate demo selection on branches without seed_base
+        # plumbing (both InjectDemoIndexes and CustomLeRobotDataset honor this).
+        if hasattr(model, "random_select"):
+            model = dataclasses.replace(model, random_select=False)
+        if hasattr(data, "random_select"):
+            data = dataclasses.replace(data, random_select=False)
+
     return dataclasses.replace(
         cfg,
+        model=model,
         seed=args.seed,
         batch_size=max(1, jax.device_count()),
         num_workers=0,
@@ -85,7 +95,7 @@ def _make_loader(kind: str, trainer, data_loader_mod, cfg, data_sharding):
     if kind == "standard":
         return data_loader_mod.create_data_loader(cfg, sharding=data_sharding, num_workers=0, shuffle=True)
     if kind == "incontext":
-        if cfg.use_custom_dataloader:
+        if getattr(cfg, "use_custom_dataloader", False):
             return data_loader_mod.create_custom_incontext_data_loader(
                 cfg,
                 sharding=data_sharding,
@@ -152,6 +162,7 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         "seed": cfg.seed,
         "deterministic_data": bool(args.deterministic_data),
         "deterministic_data_seed": getattr(cfg.data, "seed_base", None),
+        "random_select": bool(args.random_select),
         "batch_hash": batch_hash,
         "batch_shapes": batch_shapes,
         "metrics": None,
@@ -194,6 +205,7 @@ def main() -> None:
     parser.add_argument("--checkpoint-base-dir", default="/tmp/openpi_consistency_checkpoints")
     parser.add_argument("--deterministic-data", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--deterministic-data-seed", type=int)
+    parser.add_argument("--random-select", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
     try:
