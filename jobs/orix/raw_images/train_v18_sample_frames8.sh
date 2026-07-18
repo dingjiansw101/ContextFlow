@@ -12,7 +12,8 @@
 
 set -euo pipefail
 
-export CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"
+export CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"  # on-disk exp/ckpt name (pre-rename)
+export POLICY_CONFIG="ContextFlow"  # get_config lookup (renamed)
 export ASSETS_BASE_DIR="/mnt/data/u/dingj0b/code/openpi_libero/openpi/assets"
 export ASSETS_NAME="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor"
 

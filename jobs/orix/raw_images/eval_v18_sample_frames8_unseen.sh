@@ -11,7 +11,7 @@
 set -euo pipefail
 
 export CONFIG="pi0_libero_incontextv18_low_mem_finetune_sample_frames8"
-export POLICY_CONFIG="$CONFIG"
+export POLICY_CONFIG="ContextFlow"  # served config (renamed); CONFIG stays old for the on-disk ckpt path
 export JOB_TAG="v18_sf8"
 export ASSETS_BASE_DIR="/mnt/data/u/dingj0b/code/openpi_libero/openpi/assets"
 

@@ -45,7 +45,7 @@ for i in "${!SUITES[@]}"; do
     echo "[$SUITE] GPU $i port $PORT"
     (
         CUDA_VISIBLE_DEVICES=$i uv run scripts/serve_policy.py --loader=INCONTEXT --port "$PORT" policy:checkpoint \
-            --policy.inference-dtype=float32 --policy.config="$Name" --policy.dir="$CKPT_DIR" \
+            --policy.inference-dtype=float32 --policy.config="ContextAR_900m" --policy.dir="$CKPT_DIR" \
             > "logs/$EXP/$RUN/${PREFIX}_server.log" 2>&1 &
         SERVER_PID=$!
         trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
