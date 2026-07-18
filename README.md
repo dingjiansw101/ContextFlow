@@ -84,7 +84,7 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
 rclone copy --drive-root-folder-id $FOLDER gdrive:metadata/libero ./metadata/libero
 ```
 
-> **⚠ Norm stats: download, do not recompute.** The released norm stats (`assets/ContextFlow_Plain`, shared by both ContextFlow configs via `assets_repo_override`) were computed by an earlier generation of the configs that used `delta_action=True`. The current configs set `delta_action=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
+> **⚠ Norm stats: download, do not recompute.** The released norm stats (`assets/ContextFlow_Plain`, shared by both ContextFlow configs via `assets_repo_override`) were computed by an earlier generation of the configs that used `use_delta_joint_actions=True`, over the full dataset (provenance verified: re-running the computation with that setting reproduces the released file byte-for-byte). The current configs set `use_delta_joint_actions=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
 
 ## Running Inference
 
