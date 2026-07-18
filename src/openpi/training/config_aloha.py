@@ -1350,7 +1350,7 @@ def build(api) -> list["api.TrainConfig"]:
 
     # aloha_data_unique pi0: test tasks excluded
     api.TrainConfig(
-        name="pi0_aloha_data_unique_low_mem_finetune_no_test",
+        name="Pi0_Aloha",
         model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotAlohaMobileDataConfig(
             repo_id="vo2yager/aloha_data_unique",

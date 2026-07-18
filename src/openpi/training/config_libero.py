@@ -2662,7 +2662,7 @@ def build(api) -> list[api.TrainConfig]:
         # Ported from feature/multi-dataset with the fixed 70k LR schedule
         # (warmup 1k + decay 69k), matching ECCV rebuttal rows 71-72.
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90",
+            name="ContextFlow_Plain_plus_libero90",
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -2725,7 +2725,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90",
+            name="ContextFlow_plus_libero90",
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -2788,7 +2788,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
+            name="ContextFlow_Plain_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -2851,7 +2851,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
+            name="ContextFlow_Plain_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -2914,7 +2914,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
+            name="ContextFlow_Plain_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -2977,7 +2977,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
+            name="ContextFlow_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -3040,7 +3040,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
+            name="ContextFlow_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -3103,7 +3103,7 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
+            name="ContextFlow_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",

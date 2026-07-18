@@ -541,9 +541,12 @@ def build(api):
 
     for suffix, remove_task_list in split_variants:
         name_suffix = f"{suffix}_900m" if suffix else "_900m"
+        # The bare/empty-suffix 900m variant is renamed to the paper name "ContextAR_900m";
+        # the numbered siblings (train_split2_900m..8_900m) keep their original names.
+        cfg_name = "ContextAR_900m" if suffix == "" else f"pi0_fast_incontext_prompt_action_7_state_8_train_split{name_suffix}"
         configs.append(
             make_config(
-                name=f"pi0_fast_incontext_prompt_action_7_state_8_train_split{name_suffix}",
+                name=cfg_name,
                 remove_task_list=remove_task_list,
                 paligemma_variant="gemma_900m",
                 shape_flexible_loader=True,
@@ -559,19 +562,19 @@ def build(api):
             # Base-300M FAST in-context + libero_90 (ECCV rebuttal rows 101-103 architecture,
             # i.e. avg_incontext_image_tokens=False, shape_flexible_loader=False), 70k schedule.
             _fast_split_plus_libero90_config(
-                "pi0_fast_incontext_prompt_action_7_state_8_train_split_plus_libero90",
+                "ContextAR_plus_libero90",
                 api.DEFAULT_LIBERO_TEST_TASK,
             ),  # split0 / Task 1
             _fast_split_plus_libero90_config(
-                "pi0_fast_incontext_prompt_action_7_state_8_train_split_plus_libero90_split1",
+                "ContextAR_plus_libero90_split1",
                 api.DEFAULT_LIBERO_TEST_TASK_V2,
             ),  # eval --task_split split1 (sheet v1)
             _fast_split_plus_libero90_config(
-                "pi0_fast_incontext_prompt_action_7_state_8_train_split_plus_libero90_split2",
+                "ContextAR_plus_libero90_split2",
                 api.DEFAULT_LIBERO_TEST_TASK_V3,
             ),  # eval --task_split split2 (sheet v2)
             _fast_split_plus_libero90_config(
-                "pi0_fast_incontext_prompt_action_7_state_8_train_split_plus_libero90_split3",
+                "ContextAR_plus_libero90_split3",
                 api.DEFAULT_LIBERO_TEST_TASK_V4,
             ),  # eval --task_split split3 (sheet v3)
             _fast_split_plus_libero90_config(
