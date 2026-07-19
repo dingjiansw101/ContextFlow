@@ -115,15 +115,84 @@ Arithmetic check: 1,487 − 138 = **1,349** = 1,318 + 31.
 
 ---
 
-## 2. Open decisions
+## 1.5 Disposition of all 49 released tasks
 
-| # | Decision | Recommendation |
+Every task in `aloha_data_unique` is accounted for as **train**, **test**, or **drop**.
+Nothing is left unclassified — a task absent from the paper in *both* training and testing
+is dropped.
+
+### Pen uncap (10 tasks, 385 episodes)
+
+| Source task | Ep | Disposition | Paper configuration (corrected convention) |
+| --- | ---: | --- | --- |
+| `pen_uncap_gray_left_b5` | 91 | train | gray pen / `<right>` *(merged)* |
+| `pen_uncap_gray_left_b9` | 52 | train | gray pen / `<right>` *(merged)* |
+| `pen_uncap_gray_right_b5` | 51 | train | gray pen / `<left>` |
+| `pen_uncap_red_left_b9` | 39 | train | red pen / `<right>` *(merged)* |
+| `pen_uncap_red_left_b5` | 30 | train | red pen / `<right>` *(merged)* |
+| `pen_uncap_blue_right_b5` | 25 | train | blue pen / `<left>` |
+| `pen_uncap_blue2_left_b5` | 25 | train | blue pen v2 / `<right>` |
+| `pen_uncap_blue2_right_b5` | 25 | train | blue pen v2 / `<left>` |
+| `pen_uncap_red_right_b5` | 22 | **test** | red pen / `<left>` |
+| `pen_uncap_blue_left_b5` | 25 | **drop** | — (in neither seen nor unseen) |
+
+### Pick and place (28 tasks, 546 episodes)
+
+| Source task | Ep | Disposition |
+| --- | ---: | --- |
+| apple/L 25, corn/L 25, gray milk/L 25, carrot/L 25, chips/L 25 | 125 | train (5 configs) |
+| pear/R 50, orange juice/R 25, gray milk/R 26, cucumber/R 50, corn/R 50, red apple/R 25, chips/R 25, blue milk/R 76, carrot/R 75 | 402 | train (9 configs) |
+| pear/L 1, orange juice/L 1, kiwi/R 2, banana/R 2 | 6 | **test** (4 configs) |
+| apple/R 1, blue milk/L 1, bottle/L 1, bottle/R 3, cucumber/L 1, gluten flour/L 1, gluten flour/R 1, kiwi/L 1, onion/L 1, onion/R 2 | 13 | **drop** (10 configs) |
+
+### Remaining suites (11 tasks, 556 episodes)
+
+| Source task | Ep | Disposition | Paper configuration |
+| --- | ---: | --- | --- |
+| `put_white_egg_close_box` | 199 | train | put egg in box (white) |
+| `put_red_egg_close_box` | 3 | **test** | put egg in box (red) |
+| `handover_b9` | 54 | train | handover *(merged)* |
+| `handover_b5` | 50 | train | handover *(merged)* |
+| `cup_stack` | 50 | train | cup stack |
+| `stir` | 50 | train | stir |
+| `water_wipe` | 50 | train | water wipe |
+| `separate_cups_big_left` | 25 | **drop** | — (absent from paper) |
+| `separate_cups_big_right` | 25 | **drop** | — (absent from paper) |
+| `separate_cups_small_left` | 25 | **drop** | — (absent from paper) |
+| `separate_cups_small_right` | 25 | **drop** | — (absent from paper) |
+
+### Ledger
+
+| | Source tasks | Output configs | Episodes |
+| --- | ---: | ---: | ---: |
+| train | 28 | 25 *(3 merges)* | 1,318 |
+| test | 6 | 6 | 31 |
+| drop | 15 | — | 138 |
+| **Total** | **49** | **31** | **1,487** |
+
+---
+
+## 2. Decisions
+
+| # | Decision | Resolution |
 | --- | --- | --- |
-| D1 | Hand convention for new task names: corrected paper convention (picking hand) or the labels as printed in Table S2? | **Corrected paper convention.** The arXiv revision will use it; see `ALOHA_DATASET_NAMING.md`. Note this means the merged gray batch is `gray pen / <right>`, printed in Table S2 as `gray pen / <left>`. |
-| D2 | Merge `handover_b9` (bottle) with `handover_b5` (generic object)? | Follow the paper and merge, **pending confirmation** they are the same configuration. |
-| D3 | Fix the `kiwi/<right>` leak? | **Yes.** It makes the unseen split honest, but the kiwi number will change. |
-| D4 | Task strings: natural-language instructions from the paper templates, or keep folder-style names? | **Natural language**, applied uniformly. The current release mixes both (sentences for pick-and-place, folder names for pen/egg/bimanual). |
+| D1 | Hand convention for new task names | **RESOLVED — corrected paper convention** (picking hand), per `ALOHA_DATASET_NAMING.md`. The merged gray batch is `gray pen / <right>`, printed in Table S2 as `gray pen / <left>`. |
+| D2 | Merge `handover_b9` (bottle) with `handover_b5` (generic object)? | **RESOLVED — merge**, per the paper's single 104-episode `handover` row. |
+| D3 | Fix the `kiwi/<right>` leak? | **Yes.** Makes the unseen split honest; the kiwi number will change. |
+| D4 | Natural-language task strings? | **RESOLVED — yes**, applied uniformly (the current release mixes sentences and folder names). |
 | D5 | Publish as a new HF repo? | **Yes**, e.g. `vo2yager/aloha_contextflow`. Leave `aloha_data_unique` untouched as the raw archive. |
+
+### Instruction templates (D1 + D4)
+
+From the paper, with `<left>`/`<right>` naming the **picking** hand:
+
+- Pick and place — `Pick up the {object} and place it in the basket with the {left|right} hand.`
+- Pen uncap — `Pick up the {pen} with the {left|right} hand, grasp the cap with the other hand and uncap it.`
+- Put egg in box — `Pick up the {object} with the right hand, place it in the box, and close the box.`
+
+The paper gives no template for the four extra bimanual configurations (handover, cup
+stack, stir, water wipe). Their instructions must be **authored** in Phase 1 and flagged as
+such, since they are not quotable from the paper.
 
 ---
 
