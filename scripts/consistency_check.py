@@ -63,8 +63,13 @@ def _make_config(config_mod, args: argparse.Namespace):
 
     model = cfg.model
     if not args.random_select:
-        # Deterministic first-candidate demo selection on branches without seed_base
-        # plumbing (both InjectDemoIndexes and CustomLeRobotDataset honor this).
+        # Cross-branch determinism WITHOUT a shared seed. seed_base makes THIS branch
+        # reproducible, but a reference like aloha-dev has no seed_base plumbing (its
+        # InjectDemoIndexes uses an unseeded random.sample), so its demo draw can't be
+        # reproduced from a seed. Setting random_select=False makes every implementation
+        # deterministically pick candidates[0] instead, so demo selection matches across
+        # branches regardless of seed_base. Covers both loaders: InjectDemoIndexes reads
+        # model.random_select, CustomLeRobotDataset reads the data factory's.
         if hasattr(model, "random_select"):
             model = dataclasses.replace(model, random_select=False)
         if hasattr(data, "random_select"):
