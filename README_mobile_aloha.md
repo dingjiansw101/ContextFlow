@@ -118,5 +118,8 @@ Libero evaluation script to stream observations to the server for rollouts.
 
 ## Additional Resources
 
+- [ALOHA Pen-Task Hand Naming Convention](ALOHA_DATASET_NAMING.md) — the paper and the
+  released dataset use mirror `<left>`/`<right>` conventions for the pen-uncap tasks;
+  includes the mapping and a corrected statistics table.
 - [ALOHA Simulator Quickstart](examples/aloha_sim)
 - [ALOHA Real Robot Guide](examples/aloha_real)

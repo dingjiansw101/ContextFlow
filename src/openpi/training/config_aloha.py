@@ -25,10 +25,15 @@ ALOHA_OBJECT_TEST_TASK = [
     "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_right_hand",
 ]
 
+# Pen task names below use the collected-data convention, where <left>/<right> names the
+# hand that UNCAPS the pen. The ContextFlow paper uses the mirror convention, where
+# <left>/<right> names the hand that PICKS UP the pen. These names are exact keys into the
+# released dataset's meta/tasks.jsonl, so they are intentionally not renamed to match the
+# paper. See ALOHA_DATASET_NAMING.md for the full mapping and corrected statistics table.
 ALOHA_DATA_UNIQUE_TEST_TASK = [
     # Explicitly selected test tasks
-    "pen_uncap_red_right_b5",
-    "pen_uncap_blue_left_b5",
+    "pen_uncap_red_right_b5",  # paper: red pen / <left> (the unseen eval configuration)
+    "pen_uncap_blue_left_b5",  # paper: blue pen / <right>
     "put_red_egg_close_box",
     "separate_cups_big_right",
     # All pick-up-and-place tasks with 1 demonstration
