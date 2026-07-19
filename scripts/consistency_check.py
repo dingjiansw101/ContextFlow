@@ -61,23 +61,12 @@ def _make_config(config_mod, args: argparse.Namespace):
     if args.deterministic_data and hasattr(data, "seed_base"):
         data = dataclasses.replace(data, seed_base=deterministic_data_seed)
 
-    model = cfg.model
-    if not args.random_select:
-        # Cross-branch determinism WITHOUT a shared seed. seed_base makes THIS branch
-        # reproducible, but a reference like aloha-dev has no seed_base plumbing (its
-        # InjectDemoIndexes uses an unseeded random.sample), so its demo draw can't be
-        # reproduced from a seed. Setting random_select=False makes every implementation
-        # deterministically pick candidates[0] instead, so demo selection matches across
-        # branches regardless of seed_base. Covers both loaders: InjectDemoIndexes reads
-        # model.random_select, CustomLeRobotDataset reads the data factory's.
-        if hasattr(model, "random_select"):
-            model = dataclasses.replace(model, random_select=False)
-        if hasattr(data, "random_select"):
-            data = dataclasses.replace(data, random_select=False)
-
+    # Demo selection uses the real random_select=True path; determinism comes from
+    # seed_base (set above via --deterministic-data). Cross-branch comparison against a
+    # reference like aloha-dev requires that reference to carry the same dormant seed_base
+    # plumbing (behavior-preserving when unset); see ALOHA_CACHE_FREE_CONSISTENCY.md.
     return dataclasses.replace(
         cfg,
-        model=model,
         seed=args.seed,
         batch_size=max(1, jax.device_count()),
         num_workers=0,
@@ -167,7 +156,6 @@ def _run(args: argparse.Namespace) -> dict[str, Any]:
         "seed": cfg.seed,
         "deterministic_data": bool(args.deterministic_data),
         "deterministic_data_seed": getattr(cfg.data, "seed_base", None),
-        "random_select": bool(args.random_select),
         "batch_hash": batch_hash,
         "batch_shapes": batch_shapes,
         "metrics": None,
@@ -210,7 +198,6 @@ def main() -> None:
     parser.add_argument("--checkpoint-base-dir", default="/tmp/openpi_consistency_checkpoints")
     parser.add_argument("--deterministic-data", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--deterministic-data-seed", type=int)
-    parser.add_argument("--random-select", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
     try:

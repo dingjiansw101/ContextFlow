@@ -18,30 +18,39 @@ Three code states were compared:
 - **cache-free**: worktree @ this branch
 
 Artifacts: `kw61077:~/aloha_consistency/20260719a/` (harness JSONs, per-leaf hashes,
-action tensors). Harness: in-tree `scripts/consistency_check.py` semantics, extended with
-`--no-random-select` (`aloha-dev` has no `seed_base` plumbing, so cross-branch selection
-determinism uses `--no-random-select`, which both `InjectDemoIndexes` and
-`CustomLeRobotDataset` implement as "first candidate episode").
+action tensors). Harness: in-tree `scripts/consistency_check.py`, seeded via `seed_base`
+(set by `--deterministic-data`) on the real `random_select=True` selection path. `aloha-dev`
+lacks `seed_base`, so it is given the same **dormant, behavior-preserving** `seed_base`
+plumbing (patch `~/aloha_consistency/20260719a/aloha_dev_seedbase.patch`: `seed_base=None`
+is byte-identical to its original unseeded `random.sample`; only when set does it seed).
+With that, all three branches reproduce `InjectDemoIndexes`' seeded draw identically
+(`CustomLeRobotDataset.demo_selection_seed_compat` mirrors it on the cache-free side). This
+replaces the earlier `--no-random-select` first-candidate workaround (now removed from the
+harness).
 
-## Training batch (seed 12345, batch_size 1, num_workers 0, `--deterministic-data`)
+## Training batch (seed 12345, batch_size 1, num_workers 0, `--deterministic-data`, `random_select=True`)
 
-SHA-256 over every tensor (values + shapes + dtypes) of the first batch:
+SHA-256 over every tensor (values + shapes + dtypes) of the first batch, on the seeded
+production selection path (all three seeded with `seed_base=12345`):
 
-| Check | aloha-dev | legacy @ e63059d | cache-free |
+| Check | aloha-dev (+ dormant seed_base patch) | legacy @ e63059d | cache-free |
 |---|---|---|---|
-| ContextFlow, seeded `random_select=True` | n/a (no seed_base on aloha-dev) | `69e7dcf8…` | `69e7dcf8…` ✅ |
-| ContextFlow, `--no-random-select` | `7775e190…` | `7775e190…` | `7775e190…` ✅ |
-| ContextAR, `--no-random-select` (†) | `f6c78ad9…` | `f6c78ad9…` | `f6c78ad9…` ✅ |
+| ContextFlow, seeded `random_select=True` | `69e7dcf8…` | `69e7dcf8…` | `69e7dcf8…` ✅ |
 
-The seeded ContextFlow match exercises `demo_selection_seed_compat`: with `seed_base`
-set, `CustomLeRobotDataset` reproduces `InjectDemoIndexes`' exact seeded draw.
+**Bitwise identical, all three.** aloha-dev's `InjectDemoIndexes` candidate logic is
+byte-identical to the rename branch (verified by diff; the only substantive difference in the
+data config was the `seed_base` threading), and a unit-level check confirmed the seeded
+episode pick matches across branches for multiple `(task_index, index, episode_index)` tuples
+before the batch run. This supersedes the earlier `--no-random-select` first-candidate
+comparison (`7775e190…`, since removed from the harness): the match now holds on the same
+`random_select=True` path used in real training.
 
-(†) This ContextAR row was produced by an earlier variant of the port that **pinned demo
-normalization to the pi0_base stats** to byte-reproduce the legacy cache. That pinning has
-since been intentionally removed — see **ContextAR demo normalization** below — so current
-ContextAR cache-free batches deliberately differ from aloha-dev on the demo-action tensor.
-The row is retained as evidence that the legacy pipeline was reproduced exactly before the
-deliberate correction.
+**ContextAR is intentionally excluded from this 3-way batch match.** Its demos now use
+pi0_fast_base stats (see **ContextAR demo normalization** below), so its cache-free batch
+deliberately differs from aloha-dev/legacy. The ContextAR *loader mechanism* (cache vs
+`CustomLeRobotDataset`) was separately shown equivalent earlier: with demos pinned to pi0_base
+(as the legacy cache stored them) the ContextAR batch matched aloha-dev bitwise (`f6c78ad9…`)
+— that pinning was then deliberately replaced.
 
 ## One-step train (ContextFlow, same batch, pi0_base weights)
 
