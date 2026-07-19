@@ -75,9 +75,15 @@ bf16 low-order bits deterministically → the ~1e-3 relative loss delta. Everyth
 two modules is byte-identical on the numeric path: matmul precision (both
 `jax.lax.Precision.HIGHEST`, attention `preferred_element_type=float32`), compute dtype
 (both bf16), SigLIP/LoRA (0-line diff), and the loss / noise / time-sampling / attention tail
-(empty diff). Matmul-precision and dtype were explicitly ruled out. This delta is a property
-of the rename branch itself (present before the cache drop); the cache drop contributes
-exactly zero (cache-free == legacy bitwise).
+(empty diff). Matmul-precision and dtype were explicitly ruled out. **Confirmed by a toggle experiment**
+(seeded `69e7dcf8` batch, deterministic XLA ops): bypassing the cond — reverting to aloha-dev's
+inline `PaliGemma.img(...)[0]`, the sole edit — reproduces aloha-dev's one-step
+loss / grad_norm / param_norm **bit-for-bit** (`4.018293380737305` / `117.21666717529297` /
+`947.1428833007812`), versus cond-ON `4.01575231552124` (a +0.063% loss shift). All six image
+masks were all-True on this batch, so the cond takes the `encode` branch either way — the delta
+is purely `lax.cond`-induced bf16 fusion/reduction reordering, not mask-driven token zeroing.
+This delta is a property of the rename branch itself (present before the cache drop); the cache
+drop contributes exactly zero (cache-free == legacy bitwise).
 
 ## Inference (shared checkpoints, fixed synthetic observation, `split="test"`, task 5, float32 matmul + deterministic XLA ops)
 
