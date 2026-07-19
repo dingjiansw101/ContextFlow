@@ -141,16 +141,6 @@ def create_trained_policy_incontext(
         if data_config.asset_id is None:
             raise ValueError("Asset id is required to load norm stats.")
         norm_stats = _checkpoints.load_norm_stats(checkpoint_dir / "assets", data_config.asset_id)
-    # Norm stats come from the checkpoint, but a config may inject extra reference
-    # entries (e.g. demo_ref_state / demo_ref_actions for the aloha demo-stats
-    # faithfulness — see CustomLeRobotAlohaMobileIncontextDataConfig) that the
-    # checkpoint assets never contained. Merge them into the INPUT-side stats only:
-    # Unnormalize is strict (every stats key must exist in the output tree), so the
-    # output side keeps the plain checkpoint stats. Checkpoint keys always win.
-    config_norm_stats = data_config.norm_stats or {}
-    extra_norm_stats = {k: v for k, v in config_norm_stats.items() if k not in norm_stats}
-    input_norm_stats = {**norm_stats, **extra_norm_stats} if extra_norm_stats else norm_stats
-
     # When the data config already populates dem_prompt_* via its own data_transforms
     # (e.g. CustomLeRobotLiberoIncontextDataConfig), we must NOT also build a dataset and
     # append the cache-based AddImagePromptTransform / AddStatesActionsPromptTransform,
@@ -177,7 +167,7 @@ def create_trained_policy_incontext(
         transforms.InjectDefaultPrompt(default_prompt),  # prompt here is language instruction for a task
         *data_config.data_transforms.inputs,
         transforms.Normalize(
-            input_norm_stats,
+            norm_stats,
             use_quantiles=data_config.use_quantile_norm,
             norm_stats_aliases=norm_stats_aliases,
             norm_stats_alias_pad_dims=norm_stats_alias_pad_dims,
@@ -261,14 +251,6 @@ def _build_fast_incontext_transforms(
     data_config = train_config.data.create_policy(train_config.assets_dirs, train_config.model)
     provides_incontext_demos = getattr(data_config, "provides_incontext_demos", False)
 
-    # Merge config-injected reference stats (e.g. demo_ref_state / demo_ref_actions)
-    # missing from the checkpoint assets into the INPUT-side stats only: Unnormalize is
-    # strict (every stats key must exist in the output tree), so the output side keeps
-    # the plain checkpoint stats. Checkpoint keys always win.
-    config_norm_stats = data_config.norm_stats or {}
-    extra_norm_stats = {k: v for k, v in config_norm_stats.items() if k not in norm_stats}
-    input_norm_stats = {**norm_stats, **extra_norm_stats} if extra_norm_stats else norm_stats
-
     if not provides_incontext_demos:
         dataset_data_config = dataclasses.replace(data_config, norm_stats=norm_stats)
         dataset = create_dataset(data_config, train_config.model)
@@ -286,7 +268,7 @@ def _build_fast_incontext_transforms(
         transforms.InjectDefaultPrompt(default_prompt),
         *data_config.data_transforms.inputs,
         transforms.Normalize(
-            input_norm_stats,
+            norm_stats,
             use_quantiles=data_config.use_quantile_norm,
             norm_stats_aliases=norm_stats_aliases,
             norm_stats_alias_pad_dims=norm_stats_alias_pad_dims,
