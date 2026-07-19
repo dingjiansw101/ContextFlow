@@ -496,6 +496,7 @@ def build(api) -> list["api.TrainConfig"]:
                 num_sample_actions=self.sample_actions,
                 task_to_episode_path=self.task_to_episode_path,
                 random_select=self.random_select,
+                seed_base=self.seed_base,
                 state_key=self.state_key,
                 actions_key=self.actions_key,
                 demo_image_keys=dict(self.demo_image_keys),
