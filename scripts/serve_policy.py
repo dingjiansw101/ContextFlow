@@ -100,6 +100,12 @@ def _is_incontext_config(train_config: _config.TrainConfig) -> bool:
     model_type = type(model_config)
     if "incontext" in model_type.__name__.lower() or "incontext" in model_type.__module__.lower():
         return True
+    # use_image_prompts / use_action_state_prompts default to True on BaseModelConfig, so on
+    # their own they don't distinguish in-context models. Only trust them when the config also
+    # carries the in-context sampling field the in-context loader dereferences (plain Pi0Config /
+    # Pi0FASTConfig have no sample_actions field, so they must route to the plain loader).
+    if not hasattr(model_config, "sample_actions"):
+        return False
     return bool(
         getattr(model_config, "use_image_prompts", False) or getattr(model_config, "use_action_state_prompts", False)
     )
