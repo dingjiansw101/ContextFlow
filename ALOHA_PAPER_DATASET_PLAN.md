@@ -238,7 +238,75 @@ Cost: a copy of ~215 GB (the 1,349 kept episodes), no video re-encoding.
 4. Spot-check a merged config (e.g. gray pen) — confirm both source batches present and frame counts preserved.
 5. Checksum a sample of copied episodes against the source to prove the copy is faithful.
 
-### Phase 4 — Code revision
+### Phase 4a — Task-name migration in code
+
+**Single source of truth.** Add `src/openpi/training/aloha_paper_tasks.py` holding the 31
+configurations as data — output name, source task name(s), split:
+
+```python
+@dataclasses.dataclass(frozen=True)
+class PaperTask:
+    name: str                  # string written into the new meta/tasks.jsonl
+    sources: tuple[str, ...]   # source task names in aloha_data_unique
+    split: str                 # "train" | "test"
+
+ALOHA_PAPER_TASKS: tuple[PaperTask, ...] = (...)
+ALOHA_PAPER_TEST_TASKS = [t.name for t in ALOHA_PAPER_TASKS if t.split == "test"]
+```
+
+`remove_task_list=ALOHA_PAPER_TEST_TASKS` is then **derived, never hand-written**, and the
+same table drives Phase 2 dataset construction. The dataset and the code cannot drift,
+which is the failure mode behind both defects in Section 0.
+
+**The 31 names.**
+
+*Pick and place (18).* Hand convention unchanged — paper and dataset agree here.
+`Pick up the {object} and place it in the basket with the {left|right} hand.`
+14 train (apple/L, corn/L, gray milk/L, carrot/L, chips/L, pear/R, orange juice/R,
+gray milk/R, cucumber/R, corn/R, red apple/R, chips/R, blue milk/R, carrot/R) and
+4 test (pear/L, orange juice/L, kiwi/R, banana/R).
+
+*Pen uncap (7).* Hand is **flipped** relative to the source folder names, since output uses
+the corrected picking-hand convention.
+`Pick up the {pen} with the {left|right} hand, grasp the cap with the other hand and uncap it.`
+
+| Output configuration | Source task(s) | Ep | Split |
+| --- | --- | ---: | --- |
+| gray pen / `<right>` | `pen_uncap_gray_left_b5` + `_b9` | 143 | train |
+| gray pen / `<left>` | `pen_uncap_gray_right_b5` | 51 | train |
+| red pen / `<right>` | `pen_uncap_red_left_b9` + `_b5` | 69 | train |
+| blue pen / `<left>` | `pen_uncap_blue_right_b5` | 25 | train |
+| blue pen v2 / `<right>` | `pen_uncap_blue2_left_b5` | 25 | train |
+| blue pen v2 / `<left>` | `pen_uncap_blue2_right_b5` | 25 | train |
+| red pen / `<left>` | `pen_uncap_red_right_b5` | 22 | **test** |
+
+*Put egg in box (2).*
+`Pick up the {white|red} egg with the right hand, place it in the box, and close the box.`
+
+*Extra bimanual (4).* `handover`, `cup_stack`, `stir`, `water_wipe` — folder-style, no
+natural-language string (D4).
+
+**Open naming question:** how "blue pen v2" should read inside an instruction sentence
+(`the blue pen v2` vs `the second blue pen`). Needs a call before Phase 2.
+
+### Phase 4b — Code edits
+
+All additive. Existing configs keep pointing at `aloha_data_unique` with the old names, so
+published results stay reproducible; the new names exist only on the new configs.
+
+| Target | Change |
+| --- | --- |
+| `src/openpi/training/aloha_paper_tasks.py` *(new)* | the 31-entry table and derived test list |
+| `src/openpi/training/config_aloha.py` | new config entries with `repo_id="vo2yager/aloha_contextflow"` and `remove_task_list=ALOHA_PAPER_TEST_TASKS`. Leave `ALOHA_DATA_UNIQUE_TEST_TASK` and all existing configs untouched |
+| `src/openpi/training/config.py` | make `get_kept_episode_indices` raise when a `remove_task_list` entry matches no task in `episodes.jsonl` — the defect class in 0.1 |
+| `metadata/aloha_contextflow/*.json` | regenerate demo caches into a **new** directory. These are keyed by `task_index` and `episode_index`, both of which change under merging and dropping, so regeneration is mandatory independent of naming. Do not overwrite `metadata/aloha_pen_uncap/` |
+| `examples/aloha_mobile_real/main_incontext.py` | the `--prompt` default (`pick_up_the_cucumber_and_place_it_in_the_basket`) and `--task_json` path select the in-context demo at eval time; both need new-dataset equivalents |
+
+Note: `metadata/aloha_pen_uncap/` is not checked into the repo (only `libero*` metadata is),
+so these caches are produced out-of-tree. Confirm whether the in-context path still requires
+them at all before regenerating — the cache-free work may have removed the need.
+
+### Phase 4c — Remaining code revision
 1. New config entries with `repo_id="vo2yager/aloha_contextflow"`.
 2. Replace `ALOHA_DATA_UNIQUE_TEST_TASK` with the 6-entry paper test list in the new naming; delete the malformed entry.
 3. **Add validation to `get_kept_episode_indices`**: raise if any string in `remove_task_list` matches no task in `episodes.jsonl`. This would have caught 0.1 and is the highest-value code change here.
