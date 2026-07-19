@@ -8,9 +8,10 @@ The existing release
 1,487 episodes / 49 tasks) stays as the raw archive. The new dataset is a derived,
 metadata-level reorganization of it.
 
-> **Counts below are taken from the dataset statistics notes and the paper appendix.**
-> Phase 1 re-derives every number from the actual `meta/episodes.jsonl` before anything is
-> built. Treat them as the expected values to assert against, not as ground truth.
+> **All counts below are VERIFIED against the actual `meta/episodes.jsonl`** of
+> `aloha_data_unique` (1,487 episodes / 49 tasks / 661,200 frames, matching `meta/info.json`).
+> Every task in the dataset is classified exactly once, no classified name is missing from
+> the dataset, and train + test + drop = 1,487. See Section 5.
 
 ---
 
@@ -18,9 +19,9 @@ metadata-level reorganization of it.
 
 These are why the reorganized dataset cannot simply reproduce the existing checkpoints.
 
-### 0.1 `kiwi/<right>` leaked into training
+### 0.1 `kiwi/<right>` leaked into training — FIXED
 
-`src/openpi/training/config_aloha.py:46` contains:
+The test-task entry in `config_aloha.py` used to read:
 
 ```python
 "pick_up_the_kiwi_and_place_it_in_the_basket_with_right_hand add to test tasks"
@@ -28,8 +29,12 @@ These are why the reorganized dataset cannot simply reproduce the existing check
 
 Exclusion is exact string membership (`src/openpi/training/config.py:351`:
 `if not any(task in exclude_task_language for task in tasks)`), so the trailing
-` add to test tasks` prevents this entry from ever matching. `kiwi/<right>` (2 episodes)
+` add to test tasks` prevented this entry from ever matching. `kiwi/<right>` (2 episodes)
 was therefore **trained on**, while the paper reports it as an *unseen* configuration.
+
+**Corrected** — the trailing text has been removed, so the entry now matches. Note this is
+a forward fix only: the published checkpoints and the reported `kiwi/<right>` number
+predate it and were produced with the leak in place.
 
 ### 0.2 Actual training set was 1,400 episodes, not 1,318
 
@@ -53,6 +58,11 @@ Of the 16 entries in `ALOHA_DATA_UNIQUE_TEST_TASK`, 15 match and exclude 87 epis
 So the separate-cups suite — absent from the paper in both training and testing — supplied
 75 training episodes, and 7 further pick-and-place episodes were trained on without being
 counted.
+
+With the 0.1 fix in place, the current code on the current dataset would train on 1,398
+episodes (`kiwi/<right>`'s 2 now excluded) — still not 1,318, because separate cups and the
+uncounted `bottle/<right>` / `onion/<right>` episodes remain. Only the reorganized dataset
+closes the gap.
 
 **Consequence:** the reorganized dataset changes the training distribution. Norm stats
 change, retraining is required, and reported numbers may shift. This is a re-run, not a
@@ -179,7 +189,7 @@ is dropped.
 | D1 | Hand convention for new task names | **RESOLVED — corrected paper convention** (picking hand), per `ALOHA_DATASET_NAMING.md`. The merged gray batch is `gray pen / <right>`, printed in Table S2 as `gray pen / <left>`. |
 | D2 | Merge `handover_b9` (bottle) with `handover_b5` (generic object)? | **RESOLVED — merge**, per the paper's single 104-episode `handover` row. |
 | D3 | Fix the `kiwi/<right>` leak? | **Yes.** Makes the unseen split honest; the kiwi number will change. |
-| D4 | Natural-language task strings? | **RESOLVED — yes**, applied uniformly (the current release mixes sentences and folder names). |
+| D4 | Natural-language task strings? | **RESOLVED — yes for the three suites the paper gives templates for** (pick and place, pen uncap, put egg in box). The four extra bimanual configs keep their short folder-style names. |
 | D5 | Publish as a new HF repo? | **Yes**, e.g. `vo2yager/aloha_contextflow`. Leave `aloha_data_unique` untouched as the raw archive. |
 
 ### Instruction templates (D1 + D4)
@@ -190,9 +200,10 @@ From the paper, with `<left>`/`<right>` naming the **picking** hand:
 - Pen uncap — `Pick up the {pen} with the {left|right} hand, grasp the cap with the other hand and uncap it.`
 - Put egg in box — `Pick up the {object} with the right hand, place it in the box, and close the box.`
 
-The paper gives no template for the four extra bimanual configurations (handover, cup
-stack, stir, water wipe). Their instructions must be **authored** in Phase 1 and flagged as
-such, since they are not quotable from the paper.
+The four extra bimanual configurations keep their existing short names — `handover`,
+`cup_stack`, `stir`, `water_wipe`. The paper gives no instruction template for them, and
+inventing one would put text in the dataset that is not quotable from the paper, so no
+natural-language string is generated for these.
 
 ---
 
@@ -251,3 +262,55 @@ Cost: a copy of ~215 GB (the 1,349 kept episodes), no video re-encoding.
 | Merged `handover` may combine two distinct tasks | D2 — confirm before building |
 | Metadata regeneration desyncs from the new episode indices | Phase 3 assertions run before any training |
 | ~215 GB copy | Hardlink where source and destination share a filesystem |
+
+---
+
+## 5. Verification against the real metadata
+
+Source: `~/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/{episodes,tasks}.jsonl`.
+
+Dataset totals read back: **1,487 episodes / 49 tasks / 661,200 frames**, matching
+`meta/info.json`.
+
+Integrity of the classification in Section 1.5:
+
+- every classified task name exists in the dataset (0 missing)
+- every dataset task is classified (0 unclassified)
+- no task is classified twice (0 duplicates)
+- train + test + drop = 1,487 = the full dataset
+
+| Group | Source tasks | Episodes | Frames |
+| --- | ---: | ---: | ---: |
+| train | 28 | **1,318** | 582,800 |
+| test | 6 | **31** | 13,100 |
+| drop | 15 | **138** | 65,300 |
+| **Total** | **49** | **1,487** | **661,200** |
+
+The training total of 1,318 matches the paper's reported figure exactly.
+
+### Merged configurations, measured
+
+| Paper configuration | Episodes | Avg length | Source tasks |
+| --- | ---: | ---: | --- |
+| gray pen / `<right>` | 143 | 603.5 | `pen_uncap_gray_left_b5` (91) + `_b9` (52) |
+| gray pen / `<left>` | 51 | 500.0 | `pen_uncap_gray_right_b5` |
+| red pen / `<right>` | 69 | 497.1 | `pen_uncap_red_left_b9` (39) + `_b5` (30) |
+| blue pen / `<left>` | 25 | 500.0 | `pen_uncap_blue_right_b5` |
+| blue pen v2 / `<right>` | 25 | 500.0 | `pen_uncap_blue2_left_b5` |
+| blue pen v2 / `<left>` | 25 | 500.0 | `pen_uncap_blue2_right_b5` |
+| handover | 104 | 641.3 | `handover_b9` (54) + `handover_b5` (50) |
+| red pen / `<left>` *(test)* | 22 | 427.3 | `pen_uncap_red_right_b5` |
+
+Per-suite training subtotals also reconcile with the paper appendix:
+
+| Suite | Episodes | Avg length | Paper |
+| --- | ---: | ---: | --- |
+| Pick & Place | 527 | 235 | 527 / 235 |
+| Pen Uncap | 338 | 543 | 338 / 543 |
+| Put Egg in Box | 199 | 734.7 | 199 / 735 |
+| Extra bimanual | 254 | 508.7 | 254 / 509 |
+
+Every episode count and average length in the paper's Table S2 is reproduced from the
+released metadata. The reorganization is therefore a pure regrouping of the existing
+release — no episode is invented, and the only quantities that change are which tasks are
+merged and which are excluded.
