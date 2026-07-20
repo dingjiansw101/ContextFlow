@@ -5,8 +5,9 @@ exactly — in both training and testing — and update the code to consume it.
 
 The existing release
 ([`vo2yager/aloha_data_unique`](https://huggingface.co/datasets/vo2yager/aloha_data_unique),
-1,487 episodes / 49 tasks) stays as the raw archive. The new dataset is a derived,
-metadata-level reorganization of it.
+1,487 episodes / 49 tasks) stays as the raw archive, untouched. The new dataset is a
+derived regrouping of it, published as a separate HF repo: no episode is invented and no
+image is re-encoded, but the parquet index columns are rewritten (see Phase 2).
 
 > **All counts below are VERIFIED against the actual `meta/episodes.jsonl`** of
 > `aloha_data_unique` (1,487 episodes / 49 tasks / 661,200 frames, matching `meta/info.json`).
@@ -238,29 +239,86 @@ natural-language string is generated for these.
 
 Deliverable: a reviewed manifest. This is the single source of truth for later phases.
 
-### Phase 2 — Build the dataset (metadata-level)
-LeRobot layout means this is a **metadata operation, not a re-encode**: episode parquet
-files are copied or hardlinked unchanged.
+### Phase 2 — Build the dataset
+
+> **CORRECTION.** An earlier draft of this plan called the build "metadata-only" and assumed
+> episode parquet files could be copied or hardlinked unchanged. **That is wrong.** Verified
+> by reading `data/chunk-000/episode_000005.parquet` on kw61077: every parquet carries three
+> index columns *inside* it —
+>
+> ```
+> cols: [observation.state, action, observation.velocity, observation.effort,
+>        observation.images.cam_{high,left_wrist,right_wrist},
+>        timestamp, frame_index, episode_index, index, task_index]
+> episode_index[:3] = [5, 5, 5]   task_index[:3] = [0, 0, 0]   index[:3] = [1000, 1001, 1002]
+> ```
+>
+> `index` is a **global row counter** across the whole dataset, so dropping any earlier
+> episode shifts it for every later one. Renumbering episodes and remapping task indices
+> therefore requires **rewriting all three columns in all 1,349 kept parquets**.
+
+The three image columns pass through as opaque binary, so **no image is re-encoded** — the
+rewrite touches three `int64` columns and is I/O-bound, not CPU-bound. But it is a genuine
+215 GB read + write, not a hardlink.
 
 1. Select the 1,349 source episodes from the manifest.
 2. Renumber episodes 0..1348; place into `data/chunk-000` (1000) and `chunk-001` (349).
-3. Write `meta/tasks.jsonl` with the 31 merged configs and remap every `task_index`.
-4. Write `meta/episodes.jsonl` (new episode index, remapped task index, preserved length).
-5. Write `meta/info.json` (`total_episodes`, `total_frames`, `total_tasks`, unchanged fps / features / camera specs).
-6. Recompute `meta/stats.json` over the new subset.
-7. Derive `metadata/aloha_contextflow/task_to_episode.json` from the new `meta/episodes.jsonl` (Phase 4b edit 5).
+3. For each kept episode, rewrite `episode_index` (new number), `task_index` (merged/remapped), and `index` (recomputed running offset). All other columns copied through untouched.
+4. Write `meta/tasks.jsonl` with the 31 merged configs.
+5. Write `meta/episodes.jsonl` (new episode index, remapped task index, preserved length).
+6. Write `meta/info.json` (`total_episodes` 1349, `total_frames` 595900, `total_tasks` 31, `splits: {"train": "0:1349"}`; fps / features / camera specs unchanged).
+7. Recompute `meta/stats.json` over the new subset.
+8. Derive `metadata/aloha_contextflow/task_to_episode.json` from the new `meta/episodes.jsonl` (Phase 4b edit 5).
 
 No train/test index lists are emitted: the split is expressed only as the 6 names in
 `remove_task_list`, so an episode-index list would be an unused second source of truth.
 
-Cost: a copy of ~215 GB (the 1,349 kept episodes), no video re-encoding.
+#### Rejected alternative: keep the original numbering
+
+Dropping episodes *without* renumbering would leave the parquets byte-identical and make the
+build nearly free. Rejected because (a) the three merges still require a `task_index`
+rewrite on 316 episodes (gray 143 + red 69 + handover 104, ~50 GB), and (b) it leaves gaps in
+`episode_index` and a non-contiguous global `index`, which `splits: {"train": "0:N"}` and
+LeRobot's episode-boundary computation assume are dense. Worth revisiting only if the full
+rewrite proves impractical, and only after checking LeRobot's tolerance for gaps directly.
+
+### Phase 2b — Publishing to Hugging Face
+
+Where the data is (verified):
+
+| Box | `aloha_data_unique` | Free space |
+| --- | --- | --- |
+| visioncair (local) | `meta/` only, 160 KB — **no parquet** | 920 GB of 14 TB (94% used) |
+| kw61077 | full 220 GB (`data/` + `meta/`) | 297 GB of 14 TB (**98% used**) |
+
+kw61077 has the data but almost no headroom, and per prior findings its `/home` also holds
+the **only** copy of the ALOHA checkpoints. Writing a 215 GB output tree there would leave
+~82 GB — too close to the edge to risk.
+
+**Chosen approach: stream on kw61077, one episode at a time, never materializing the full
+output tree.**
+
+1. Authenticate: `huggingface_hub` 0.28.1 is present and `~/.cache/huggingface/token` exists. Confirm the token has **write** scope on the `vo2yager` org before starting.
+2. `HfApi().create_repo("vo2yager/aloha_contextflow", repo_type="dataset", private=True)` — keep it private until Phase 3 verification passes.
+3. Upload `meta/` first (small), so the repo is inspectable early.
+4. For each kept episode, in new-index order: read the source parquet, rewrite the three index columns, write to a local temp file, add to a pending commit batch, delete the temp.
+5. Commit in **batches of ~50 episodes** via `HfApi.create_commit` with `CommitOperationAdd`. One commit per episode would make 1,349 commits; a single commit of 1,349 files risks a timeout.
+6. Record the last successfully committed episode index to a resume file, so an interrupted upload restarts at the batch boundary rather than from zero.
+
+Peak local disk: a few GB. Cost is network — ~215 GB uploaded — with no 220 GB download and
+no large intermediate tree on the box that holds the checkpoints.
+
+7. After Phase 3 passes, flip the repo public and add a dataset card stating: derived from `vo2yager/aloha_data_unique`, the three merges, the 15 dropped tasks, and the corrected picking-hand convention (linking `ALOHA_DATASET_NAMING.md`).
+
+`vo2yager/aloha_data_unique` is **never modified** — the new dataset is a separate repo.
 
 ### Phase 3 — Verify the built dataset
 1. Assert totals: 1,349 episodes / 31 tasks / 25 train + 6 test configs.
 2. Assert per-config counts match the manifest.
 3. Assert every dropped task is absent and no test episode appears in the train split.
 4. Spot-check a merged config (e.g. gray pen) — confirm both source batches present and frame counts preserved.
-5. Checksum a sample of copied episodes against the source to prove the copy is faithful.
+5. Prove the rewrite is faithful on a sample of episodes: every column **except** `episode_index`, `task_index`, and `index` must be bitwise equal to the source, and the image columns must be byte-identical (confirming no re-encode).
+6. Assert the three rewritten columns are internally consistent: `episode_index` constant within a file and matching the filename, `task_index` matching `meta/episodes.jsonl`, and `index` densely increasing 0..595,899 across the dataset in episode order.
 
 ### Phase 4a — The 31 output task names
 
@@ -370,7 +428,10 @@ Edits 2 and 3 both target the four configs `ContextFlow_Aloha`, `ContextFlow_Alo
 | Merged `handover` may combine two distinct tasks | D2 — confirm before building |
 | A typo in the 6 test names silently disables exclusion (defect 0.1 recurring) | Validation was deliberately left out of scope; Phase 4c step 2 asserts the kept-episode count is 1,318 instead |
 | `task_to_episode.json` desyncs from the new episode indices | Regenerated in Phase 4b edit 5 from the new `episodes.jsonl`; Phase 3 assertions run before any training |
-| ~215 GB copy | Hardlink where source and destination share a filesystem |
+| ~215 GB rewrite, not a hardlinkable copy (parquets carry `episode_index` / `task_index` / `index`) | Stream episode-at-a-time and upload directly to HF (Phase 2b); peak local disk stays a few GB |
+| kw61077 `/home` is 98% full and holds the only ALOHA checkpoint copy | Never materialize the output tree there; the streaming build writes only a small rolling temp |
+| A 215 GB upload is interrupted | Batch commits of ~50 episodes with a resume file, so a restart resumes at a batch boundary |
+| Token lacks write scope on the `vo2yager` org | Verified before any data is rewritten (Phase 2b step 1) |
 
 ---
 
