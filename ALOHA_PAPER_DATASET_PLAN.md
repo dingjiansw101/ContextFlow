@@ -298,8 +298,10 @@ the **only** copy of the ALOHA checkpoints. Writing a 215 GB output tree there w
 **Chosen approach: stream on kw61077, one episode at a time, never materializing the full
 output tree.**
 
-1. Authenticate: `huggingface_hub` 0.28.1 is present and `~/.cache/huggingface/token` exists. Confirm the token has **write** scope on the `vo2yager` org before starting.
-2. `HfApi().create_repo("vo2yager/aloha_incontext", repo_type="dataset", private=True)` — keep it private until Phase 3 verification passes. Name checked and free: `dataset_info` 404s for `vo2yager/aloha_incontext` while resolving `vo2yager/aloha_data_unique`, so the token has org read access and the 404 is a genuine absence rather than a permissions artifact.
+1. **Confirm the token can create repos — this is not yet established.** `huggingface_hub` 0.28.1 is present and `~/.cache/huggingface/token` exists. `whoami()` reports the token authenticates as user **`vo2yager`** (so `vo2yager` is the account's own namespace, not an organization) with role **`fineGrained`**. A fine-grained token carries only the scopes selected at creation, and repo *creation* is a separate permission from read — so write access is **unverified**. Verifying it requires a write, which has not been attempted.
+2. `HfApi().create_repo("vo2yager/aloha_incontext", repo_type="dataset", private=True)` — keep it private until Phase 3 verification passes.
+
+**On the name check.** `dataset_info("vo2yager/aloha_incontext")` returns 404, and `list_datasets(author="vo2yager")` shows 15 datasets, all public, none named `aloha_incontext`. The name is therefore almost certainly free. Note the residual ambiguity: the Hub deliberately returns **404 rather than 403** for repos that exist but are invisible to the caller, so that private repos are not disclosed. Since this token is fine-grained and no private repo is visible under the namespace, "no private repos exist" and "this token cannot see private repos" are not distinguishable from the outside. `create_repo` without `exist_ok=True` will fail loudly on a collision, which is the definitive check and the reason not to pass `exist_ok`.
 3. Upload `meta/` first (small), so the repo is inspectable early.
 4. For each kept episode, in new-index order: read the source parquet, rewrite the three index columns, write to a local temp file, add to a pending commit batch, delete the temp.
 5. Commit in **batches of ~50 episodes** via `HfApi.create_commit` with `CommitOperationAdd`. One commit per episode would make 1,349 commits; a single commit of 1,349 files risks a timeout.
@@ -470,7 +472,7 @@ a check scoped to the aloha configs, are both safer intermediate options.
 | ~215 GB rewrite, not a hardlinkable copy (parquets carry `episode_index` / `task_index` / `index`) | Stream episode-at-a-time and upload directly to HF (Phase 2b); peak local disk stays a few GB |
 | kw61077 `/home` is 98% full and holds the only ALOHA checkpoint copy | Never materialize the output tree there; the streaming build writes only a small rolling temp |
 | A 215 GB upload is interrupted | Batch commits of ~50 episodes with a resume file, so a restart resumes at a batch boundary |
-| Token lacks write scope on the `vo2yager` org | Verified before any data is rewritten (Phase 2b step 1) |
+| Token is fine-grained and may lack repo-creation scope | **Unverified** — confirming it requires a write. Attempt `create_repo` as the very first action, before any of the 215 GB rewrite work, so a permissions failure costs nothing |
 
 ---
 
