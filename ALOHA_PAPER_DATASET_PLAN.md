@@ -1,4 +1,4 @@
-# Plan: paper-consistent ALOHA dataset (`aloha_contextflow`)
+# Plan: paper-consistent ALOHA dataset (`aloha_incontext`)
 
 Goal: produce a re-organized ALOHA dataset whose task list matches the ContextFlow paper
 exactly — in both training and testing — and update the code to consume it.
@@ -210,7 +210,7 @@ is dropped.
 | D2 | Merge `handover_b9` (bottle) with `handover_b5` (generic object)? | **RESOLVED — merge**, per the paper's single 104-episode `handover` row. |
 | D3 | Fix the `kiwi/<right>` leak? | **Yes.** Makes the unseen split honest; the kiwi number will change. |
 | D4 | Natural-language task strings? | **RESOLVED — yes for the three suites the paper gives templates for** (pick and place, pen uncap, put egg in box). The four extra bimanual configs keep their short folder-style names. |
-| D5 | Publish as a new HF repo? | **Yes**, e.g. `vo2yager/aloha_contextflow`. Leave `aloha_data_unique` untouched as the raw archive. |
+| D5 | Publish as a new HF repo? | **Yes**, e.g. `vo2yager/aloha_incontext`. Leave `aloha_data_unique` untouched as the raw archive. |
 | D6 | Scope of the code change | **RESOLVED — minimal.** Correct the task names and the dataset paths only; re-point the existing configs in place. No new modules, no parallel configs, no validation or refactoring. See Phase 4b. |
 | D7 | Demo caches for the new dataset | **RESOLVED — none needed.** The cache-free merge (`9658ef7`) removed the JSON state/action caches. Only the 14 KB `task_to_episode.json` is regenerated. |
 
@@ -235,7 +235,7 @@ natural-language string is generated for these.
 1. Pull `meta/episodes.jsonl`, `meta/tasks.jsonl`, `meta/info.json` from `aloha_data_unique`.
 2. Compute the true per-task episode counts and average lengths.
 3. Diff against Section 1. **Every count must reconcile before proceeding**; investigate any mismatch rather than adjusting the target.
-4. Emit `metadata/aloha_contextflow/manifest.json`: for each of the 31 output configs, its paper label, natural-language instruction, source task name(s), and source episode indices.
+4. Emit `metadata/aloha_incontext/manifest.json`: for each of the 31 output configs, its paper label, natural-language instruction, source task name(s), and source episode indices.
 
 Deliverable: a reviewed manifest. This is the single source of truth for later phases.
 
@@ -268,7 +268,7 @@ rewrite touches three `int64` columns and is I/O-bound, not CPU-bound. But it is
 5. Write `meta/episodes.jsonl` (new episode index, remapped task index, preserved length).
 6. Write `meta/info.json` (`total_episodes` 1349, `total_frames` 595900, `total_tasks` 31, `splits: {"train": "0:1349"}`; fps / features / camera specs unchanged).
 7. Recompute `meta/stats.json` over the new subset.
-8. Derive `metadata/aloha_contextflow/task_to_episode.json` from the new `meta/episodes.jsonl` (Phase 4b edit 5).
+8. Derive `metadata/aloha_incontext/task_to_episode.json` from the new `meta/episodes.jsonl` (Phase 4b edit 5).
 
 No train/test index lists are emitted: the split is expressed only as the 6 names in
 `remove_task_list`, so an episode-index list would be an unused second source of truth.
@@ -299,7 +299,7 @@ the **only** copy of the ALOHA checkpoints. Writing a 215 GB output tree there w
 output tree.**
 
 1. Authenticate: `huggingface_hub` 0.28.1 is present and `~/.cache/huggingface/token` exists. Confirm the token has **write** scope on the `vo2yager` org before starting.
-2. `HfApi().create_repo("vo2yager/aloha_contextflow", repo_type="dataset", private=True)` — keep it private until Phase 3 verification passes.
+2. `HfApi().create_repo("vo2yager/aloha_incontext", repo_type="dataset", private=True)` — keep it private until Phase 3 verification passes. Name checked and free: `dataset_info` 404s for `vo2yager/aloha_incontext` while resolving `vo2yager/aloha_data_unique`, so the token has org read access and the 404 is a genuine absence rather than a permissions artifact.
 3. Upload `meta/` first (small), so the repo is inspectable early.
 4. For each kept episode, in new-index order: read the source parquet, rewrite the three index columns, write to a local temp file, add to a pending commit batch, delete the temp.
 5. Commit in **batches of ~50 episodes** via `HfApi.create_commit` with `CommitOperationAdd`. One commit per episode would make 1,349 commits; a single commit of 1,349 files risks a timeout.
@@ -387,10 +387,10 @@ Existing configs are re-pointed in place — no parallel config entries.
 | # | Target | Change |
 | --- | --- | --- |
 | 1 | `config_aloha.py:33` `ALOHA_DATA_UNIQUE_TEST_TASK` | replace the 16 source-name entries with the **6 paper test names** from Phase 4a |
-| 2 | `config_aloha.py:1372,1417,1455,1505,1543` | `repo_id` -> `"vo2yager/aloha_contextflow"` (5 sites) |
-| 3 | `config_aloha.py:1385,1480,1518` | `episode_json_path` -> `.../aloha_contextflow/meta/episodes.jsonl` (3 sites) |
-| 4 | `config_aloha.py:300` | `task_to_episode_path` -> `"metadata/aloha_contextflow/task_to_episode.json"` |
-| 5 | `metadata/aloha_contextflow/task_to_episode.json` *(new, ~14 KB)* | derive from the new `meta/episodes.jsonl` and commit, mirroring the existing `metadata/aloha_data_unique/` file |
+| 2 | `config_aloha.py:1372,1417,1455,1505,1543` | `repo_id` -> `"vo2yager/aloha_incontext"` (5 sites) |
+| 3 | `config_aloha.py:1385,1480,1518` | `episode_json_path` -> `.../aloha_incontext/meta/episodes.jsonl` (3 sites) |
+| 4 | `config_aloha.py:300` | `task_to_episode_path` -> `"metadata/aloha_incontext/task_to_episode.json"` |
+| 5 | `metadata/aloha_incontext/task_to_episode.json` *(new, ~14 KB)* | derive from the new `meta/episodes.jsonl` and commit, mirroring the existing `metadata/aloha_data_unique/` file |
 
 Edits 2 and 3 both target the four configs `ContextFlow_Aloha`, `ContextFlow_Aloha_Inference`,
 `ContextAR_Aloha`, `ContextAR_Aloha_Inference` plus the `pi0` aloha baseline.
@@ -398,14 +398,53 @@ Edits 2 and 3 both target the four configs `ContextFlow_Aloha`, `ContextFlow_Alo
 **Explicitly out of scope** (would be extra modifications):
 
 - no `aloha_paper_tasks.py` or any new module
-- no `get_kept_episode_indices` validation change in `config.py` — the 0.1 defect class stays
-  unguarded; noted as a separate follow-up, not part of this change
+- no `get_kept_episode_indices` validation change in `config.py` — see "The unguarded defect
+  class" below. Deferred to a separate follow-up, not part of this change
 - no renaming of the config names themselves (`ContextFlow_Aloha` etc. keep their names)
 - no changes to `ALOHA_OBJECT_TEST_TASK`, the `objects_pickup_place` / `object_task_suite`
   configs, or `metadata/aloha_pen_uncap/` — a different dataset family, untouched by this reorg
 - no change to `examples/aloha_mobile_real/main_incontext.py`; its `--prompt` / `--task_json`
   defaults point at the separate `objects_pickup_place_right_hand` metadata, and the new task
   string is passed on the command line at eval time
+
+#### The unguarded defect class
+
+`get_kept_episode_indices` (`config.py:282-356`) keeps an episode when none of its task
+strings appear in `remove_task_list`:
+
+```python
+if not any(task in exclude_task_language for task in tasks):
+    kept.append(int(entry["episode_index"]))
+```
+
+Membership is exact. **An entry in `remove_task_list` that matches no task in the dataset
+does nothing at all** — no error, no warning, no log line. The episodes it was meant to hold
+out simply stay in training. That is defect 0.1 exactly: one entry carried a trailing
+` add to test tasks`, matched nothing, and `kiwi/<right>` trained for months while being
+reported as unseen.
+
+The guard would be about two lines: after loading the task set, raise if any
+`remove_task_list` entry is absent from it.
+
+**Why it is deferred, not just "extra work":** the change lives in `config.py`, which is
+shared by *every* config that uses `remove_task_list` — LIBERO included, not just aloha. If
+any existing config anywhere in the repo carries a stale or misspelled entry, adding a raise
+converts a config that loads today into a hard failure at load time. That is a repo-wide
+behavioural change hiding inside a two-line diff, and it deserves to be evaluated against all
+configs on its own rather than riding along with a task-name migration.
+
+**What deferring costs:** this migration replaces all six test names with natural-language
+strings that must match `meta/tasks.jsonl` byte-for-byte — capitalization and trailing period
+included. That is precisely the condition under which a silent mismatch is most likely, and
+the failure mode is invisible: training proceeds on 1,349 episodes instead of 1,318 and
+nothing says so.
+
+**Mitigation in place:** Phase 4c step 2 asserts the kept-episode count is 1,318. It catches
+the same failure once, manually, without touching shared code.
+
+**Recommended follow-up:** land the guard as its own commit after this migration, so its
+blast radius across all configs can be assessed separately. A warning rather than a raise, or
+a check scoped to the aloha configs, are both safer intermediate options.
 
 ### Phase 4c — After the edits
 1. Recompute norm stats: `uv run scripts/compute_norm_stats.py --config-name ContextFlow_Aloha` (and the other three).
