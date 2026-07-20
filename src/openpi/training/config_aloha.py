@@ -170,8 +170,6 @@ def build(api) -> list["api.TrainConfig"]:
     class LeRobotAlohaMobileIncontextDataConfig(api.DataConfigFactory):
         states_cache_path: str = "metadata/aloha_pen_uncap/episode_states_cache.json"
         actions_cache_path: str = "metadata/aloha_pen_uncap/episode_actions_first_cache.json"
-        task_to_episode: str = "metadata/aloha_pen_uncap/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/aloha_pen_uncap/episode_to_indexes.json"
         # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
         # Gripper dimensions will remain in absolute values.
         use_delta_joint_actions: bool = True
@@ -224,10 +222,14 @@ def build(api) -> list["api.TrainConfig"]:
             # TODO: generate the indexes for aloha mobile data
             train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
 
+            # Resolved first so InjectDemoIndexes derives its lookup tables from the same
+            # repo (and local_files_only) the dataset itself will be built from.
+            base_config = self.create_base_config(assets_dirs)
+
             data_transforms = api._transforms.Group(
                 inputs=[api._transforms.InjectDemoIndexes(
-                                                    task_to_episode=self.task_to_episode,
-                                                    episode_to_indexes=self.episode_to_indexes_file,
+                                                    repo_id=base_config.repo_id,
+                                                    local_files_only=base_config.local_files_only,
                                                     sample_frames=model_config.sample_frames,
                                                     random_select=model_config.random_select,
                                                     sample_episodes=model_config.sample_episodes,
@@ -263,12 +265,12 @@ def build(api) -> list["api.TrainConfig"]:
             model_transforms = api.ModelTransformFactory()(model_config)
 
             return dataclasses.replace(
-                self.create_base_config(assets_dirs),
+                base_config,
                 repack_transforms=self.repack_transforms,
                 data_transforms=data_transforms,
                 model_transforms=model_transforms,
                 action_sequence_keys=self.action_sequence_keys,
-                train_episode=api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
+                train_episode=train_epi,
             )
         
         
@@ -292,7 +294,6 @@ def build(api) -> list["api.TrainConfig"]:
         # model config (create_custom_dataset reads them from this factory, not the model).
         sample_frames: int = 8
         sample_actions: int = 128
-        task_to_episode_path: str = "metadata/aloha_incontext/task_to_episode.json"
         random_select: bool = True
         policy_local_files_only: bool = True
 
@@ -417,7 +418,6 @@ def build(api) -> list["api.TrainConfig"]:
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=self.task_to_episode_path,
                 random_select=self.random_select,
                 seed_base=self.seed_base,
                 state_key=self.state_key,
@@ -683,8 +683,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
-            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
             states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
             remove_task_list=ALOHA_OBJECT_TEST_TASK,
@@ -727,8 +725,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
-            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
             states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
             multi_process=False,
@@ -768,8 +764,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
-            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
             states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
             remove_task_list=ALOHA_OBJECT_TEST_TASK,
@@ -812,8 +806,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
-            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
             states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
             multi_process=False,
@@ -848,8 +840,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/object_task_suite/task_to_episode.json",
-            episode_to_indexes_file="metadata/object_task_suite/episode_to_indexes.json",
             states_cache_path="metadata/object_task_suite/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/object_task_suite/episode_actions_without_delta_cache.json",
             multi_process=False,
@@ -887,8 +877,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/demonstrations/task_to_episode.json",
-            episode_to_indexes_file="metadata/demonstrations/episode_to_indexes.json",
             states_cache_path="metadata/demonstrations/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/demonstrations/episode_actions_without_delta_cache.json",
             multi_process=False,
@@ -929,8 +917,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
-            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
             states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
             remove_task_list=ALOHA_OBJECT_TEST_TASK,
@@ -973,8 +959,6 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=False,
-            task_to_episode="metadata/objects_pickup_place/task_to_episode.json",
-            episode_to_indexes_file="metadata/objects_pickup_place/episode_to_indexes.json",
             states_cache_path="metadata/objects_pickup_place/episode_states_without_delta_cache.json",
             actions_cache_path="metadata/objects_pickup_place/episode_actions_without_delta_cache.json",
             remove_task_list=ALOHA_OBJECT_TEST_TASK,

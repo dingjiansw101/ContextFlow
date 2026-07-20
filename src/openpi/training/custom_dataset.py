@@ -5,9 +5,7 @@ lerobot.common.datasets.lerobot_dataset.LeRobotDataset and add or modify
 functionality for specific use cases.
 """
 
-import json
 import random
-from pathlib import Path
 from typing import Any, Callable, Dict, SupportsIndex
 
 import numpy as np
@@ -15,6 +13,7 @@ import torch
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
 import openpi.transforms as _transforms
+from openpi.training import lookup_tables
 
 
 def _identity_hf_transform(items_dict):
@@ -82,7 +81,6 @@ class CustomLeRobotDataset(LeRobotDataset):
         num_current_frames: int = 1,
         num_sample_frames: int = 2,
         num_sample_actions: int = 32,
-        task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
         random_select: bool = True,
         seed_base: int | None = None,
         state_key: str = "state",
@@ -99,7 +97,6 @@ class CustomLeRobotDataset(LeRobotDataset):
             num_current_frames (int): Number of consecutive frames for current frames sequence.
             num_sample_frames (int): Number of frames for in-context demonstration.
             num_sample_actions (int): Number of actions for in-context demonstration.
-            task_to_episode_path (str): Path to task_to_episode.json mapping file.
             random_select (bool): If True, randomly select demo episodes; if False, use deterministic selection (first episode).
             seed_base (int | None): Optional base seed for deterministic random demo selection.
             state_key (str): Dataset column holding the proprioceptive state ("state" for LIBERO,
@@ -138,13 +135,17 @@ class CustomLeRobotDataset(LeRobotDataset):
         self.random_select = random_select
         self.seed_base = seed_base
 
-        # Load task-to-episode mapping. Stored as a tuple of ints per task so
-        # random.choice / [0] indexing avoid rebuilding lists on every call.
-        assert task_to_episode_path is not None, "task_to_episode_path is not set"
-        with Path(task_to_episode_path).open("r") as f:
-            task_to_episode_str = json.load(f)
+        # Derive the task-to-episode mapping from the dataset metadata that
+        # super().__init__ already loaded, rather than a precomputed JSON that could
+        # go stale against it. Restricted to self.episodes so demo candidates always
+        # resolve through self._episode_id_to_idx below; for the task-level splits the
+        # configs actually use, every episode of a kept task is kept, so this drops
+        # only tasks that have no frames in the dataset and is otherwise a no-op.
+        # Stored as a tuple of ints per task so random.choice / [0] indexing avoid
+        # rebuilding lists on every call.
         self.task_to_episode = {
-            int(k): tuple(int(e) for e in v) for k, v in task_to_episode_str.items()
+            task: tuple(eps)
+            for task, eps in lookup_tables.build_task_to_episode(self.meta, self.episodes).items()
         }
 
         # Pre-cache small numeric columns so demo-state/action sampling does not

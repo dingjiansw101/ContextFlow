@@ -40,7 +40,6 @@ def build(api):
         # via getattr on this factory, and by create_policy below).
         sample_frames: int = 2  # Number of frames for the in-context demonstration.
         sample_actions: int = 32  # Number of demo states/actions for the in-context prompt.
-        task_to_episode_path: str = "metadata/libero/task_to_episode.json"
         random_select: bool = True  # If True, randomly select demo episodes; else deterministic.
         policy_local_files_only: bool = False
         # Demo tensors ARE normalized, matching the pre-migration pipeline: the old
@@ -63,8 +62,6 @@ def build(api):
         # CustomLeRobotDataset path (kept so existing call sites do not break).
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-        task_to_episode: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
         padding_mode: str = "keep_all"
         mask_padding_as_valid: bool = False
         demo_state_dim: int | None = 32
@@ -157,7 +154,6 @@ def build(api):
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=self.task_to_episode_path,
                 random_select=self.random_select,
             )
 
@@ -325,7 +321,6 @@ def build(api):
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=demo_spec.task_to_episode_path,
                 random_select=self.random_select,
             )
 
@@ -477,14 +472,12 @@ def build(api):
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=remove_task_list,
                         local_files_only=False,
                     ),
                     DatasetSpec(
                         repo_id="vo2yager/libero_90",
                         episode_json_path=_libero90_episode_json_path(),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),

@@ -21,6 +21,5 @@ class DatasetSpec:
 
     repo_id: str
     episode_json_path: str
-    task_to_episode_path: str
     remove_task_list: list[str] | None = None
     local_files_only: bool = False

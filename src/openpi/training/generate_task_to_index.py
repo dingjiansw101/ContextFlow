@@ -19,13 +19,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from collections import defaultdict
 from typing import Dict, List, Tuple, Union
 
-from tqdm import tqdm
+import numpy as np
 
 from openpi.training import config as _config
 from openpi.training.data_loader import create_dataset, transform_dataset
+
+_LOOKUP_COLUMNS = ["task_index", "episode_index", "index"]
 
 # -----------------------------------------------------------------------------
 # Helper utilities
@@ -34,36 +35,45 @@ from openpi.training.data_loader import create_dataset, transform_dataset
 def build_lookup_tables(hf_dataset) -> Tuple[Dict[int, List[int]], Dict[int, List[int]]]:
     """Build task‑to‑episode and episode‑to‑index lookup tables.
 
+    Reads only the three integer columns as arrow → numpy and groups them by
+    sorting once. Indexing ``hf_dataset[i]`` per frame instead would decode the
+    image columns on every row (they live inside the parquet, ``total_videos: 0``),
+    which costs ~2.5 ms/frame — 11+ minutes on LIBERO versus ~0.2 s here.
+
     Args:
         hf_dataset: A HuggingFace dataset containing the columns
             ``task_index``, ``episode_index``, and ``index`` (per‑frame index).
-            The values may be Python integers or 0‑dim tensors.
 
     Returns:
         (task_to_episode, episode_to_indexes)
             task_to_episode: {task_index: [episode_index, ...]}
             episode_to_indexes: {episode_index: [index, ...]}
     """
-    task_to_episode: Dict[int, set[int]] = defaultdict(set)
-    episode_to_indexes: Dict[int, List[int]] = defaultdict(list)
+    # select_columns honours any indices mapping (.select()/.shuffle()) while
+    # leaving the image columns untouched, so nothing gets decoded.
+    table = hf_dataset.select_columns(_LOOKUP_COLUMNS).with_format("arrow")[:]
+    task_idx = table.column("task_index").to_numpy(zero_copy_only=False)
+    episode_idx = table.column("episode_index").to_numpy(zero_copy_only=False)
+    frame_idx = table.column("index").to_numpy(zero_copy_only=False)
 
-    for i in tqdm(range(len(hf_dataset)), desc="Building lookup tables"):
-        row = hf_dataset[i]
-        task_idx = int(row["task_index"])      # e.g. tensor(3) -> 3
-        episode_idx = int(row["episode_index"])
-        index_idx = int(row["index"])
+    # episode_to_indexes: sort by (episode, index), then split at episode boundaries.
+    order = np.lexsort((frame_idx, episode_idx))
+    episodes_sorted, frames_sorted = episode_idx[order], frame_idx[order]
+    cuts = np.flatnonzero(episodes_sorted[1:] != episodes_sorted[:-1]) + 1
+    episode_keys = episodes_sorted[np.concatenate(([0], cuts))]
+    episode_to_indexes: Dict[int, List[int]] = dict(
+        zip(episode_keys.tolist(), (group.tolist() for group in np.split(frames_sorted, cuts)), strict=True)
+    )
 
-        task_to_episode[task_idx].add(episode_idx)
-        episode_to_indexes[episode_idx].append(index_idx)
-
-    # Convert sets to sorted lists to make JSON deterministic
-    task_to_episode_sorted: Dict[int, List[int]] = {
-        t: sorted(list(eps)) for t, eps in task_to_episode.items()
-    }
-    episode_to_indexes_sorted: Dict[int, List[int]] = {
-        e: sorted(idx_list) for e, idx_list in episode_to_indexes.items()
-    }
-    return task_to_episode_sorted, episode_to_indexes_sorted
+    # task_to_episode: unique (task, episode) pairs come back lexsorted and deduped,
+    # so the same boundary trick groups them by task.
+    pairs = np.unique(np.stack([task_idx, episode_idx], axis=1), axis=0)
+    task_cuts = np.flatnonzero(pairs[1:, 0] != pairs[:-1, 0]) + 1
+    task_keys = pairs[np.concatenate(([0], task_cuts)), 0]
+    task_to_episode: Dict[int, List[int]] = dict(
+        zip(task_keys.tolist(), (group[:, 1].tolist() for group in np.split(pairs, task_cuts)), strict=True)
+    )
+    return task_to_episode, episode_to_indexes
 
 
 def save_lookup_tables(

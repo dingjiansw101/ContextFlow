@@ -210,7 +210,6 @@ def create_custom_dataset(
                 local_files_only=spec.local_files_only,
                 num_sample_frames=num_sample_frames,
                 num_sample_actions=num_sample_actions,
-                task_to_episode_path=spec.task_to_episode_path,
                 random_select=random_select,
                 seed_base=seed_base,
             )
@@ -225,9 +224,6 @@ def create_custom_dataset(
     if data_config_factory is not None:
         num_sample_frames = getattr(data_config_factory, "sample_frames", 2)
         num_sample_actions = getattr(data_config_factory, "sample_actions", 32)
-        task_to_episode_path = getattr(
-            data_config_factory, "task_to_episode_path", "metadata/libero/task_to_episode.json"
-        )
         random_select = getattr(data_config_factory, "random_select", True)
         seed_base = getattr(data_config_factory, "seed_base", None)
         # Dataset column layout + demo selection compat (defaults preserve the LIBERO layout;
@@ -240,7 +236,6 @@ def create_custom_dataset(
         # Fallback to defaults if no factory provided
         num_sample_frames = 2
         num_sample_actions = 32
-        task_to_episode_path = "metadata/libero/task_to_episode.json"
         random_select = True
         seed_base = None
         state_key = "state"
@@ -260,7 +255,6 @@ def create_custom_dataset(
         # Pass CustomLeRobotDataset specific parameters from factory
         num_sample_frames=num_sample_frames,
         num_sample_actions=num_sample_actions,
-        task_to_episode_path=task_to_episode_path,
         random_select=random_select,
         seed_base=seed_base,
         state_key=state_key,
@@ -418,27 +412,15 @@ def create_incontext_data_loader(
         demo_state_dim = getattr(config.data, "demo_state_dim", None)
         padding_mode = getattr(config.data, "padding_mode", "keep_all")
         mask_padding_as_valid = getattr(config.data, "mask_padding_as_valid", False)
-        if config.data.episode_to_indexes_file is not None:
-            add_demo_transform = _transforms.AddStatesActionsPromptTransform(
-                dataset=dataset,
-                max_len=config.model.sample_actions,
-                states_cache_path=config.data.states_cache_path,
-                actions_cache_path=config.data.actions_cache_path,
-                episode_to_indexes_file=config.data.episode_to_indexes_file,
-                padding_mode=padding_mode,
-                mask_padding_as_valid=mask_padding_as_valid,
-                demo_state_dim=demo_state_dim,
-            )
-        else:
-            add_demo_transform = _transforms.AddStatesActionsPromptTransform(
-                dataset=dataset,
-                max_len=config.model.sample_actions,
-                states_cache_path=config.data.states_cache_path,
-                actions_cache_path=config.data.actions_cache_path,
-                padding_mode=padding_mode,
-                mask_padding_as_valid=mask_padding_as_valid,
-                demo_state_dim=demo_state_dim,
-            )
+        add_demo_transform = _transforms.AddStatesActionsPromptTransform(
+            dataset=dataset,
+            max_len=config.model.sample_actions,
+            states_cache_path=config.data.states_cache_path,
+            actions_cache_path=config.data.actions_cache_path,
+            padding_mode=padding_mode,
+            mask_padding_as_valid=mask_padding_as_valid,
+            demo_state_dim=demo_state_dim,
+        )
         dataset = TransformedDataset(dataset, [add_demo_transform])
 
     if isinstance(config.model, _contextar.ContextARConfig):

@@ -564,8 +564,6 @@ class DataConfigFactory(abc.ABC):
     remove_task_list: tyro.conf.Suppress[list[str] | None] = None
     # episode_json_path: a json that contains the episode index and task name
     episode_json_path: tyro.conf.Suppress[str | None] = None
-    task_to_episode: tyro.conf.Suppress[str | None] = None
-    episode_to_indexes_file: tyro.conf.Suppress[str | None] = None
     # white list: a josn path that contains all training episodes
     keep_episode_filename_list: tyro.conf.Suppress[str | Path | list[str] | None] = None
     # Base seed used by data factories that need deterministic per-sample random selection.
