@@ -48,7 +48,7 @@ ALOHA_DATA_UNIQUE_TEST_TASK = [
     "pick_up_the_bottle_and_place_it_in_the_basket_with_left_hand",
     "pick_up_the_blue_milk_and_place_it_in_the_basket_with_left_hand",
     "pick_up_the_banana_and_place_it_in_the_basket_with_right_hand",
-    "pick_up_the_kiwi_and_place_it_in_the_basket_with_right_hand add to test tasks"
+    "pick_up_the_kiwi_and_place_it_in_the_basket_with_right_hand"
 ]
 
 def build(api) -> list["api.TrainConfig"]:
