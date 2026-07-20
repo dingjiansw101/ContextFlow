@@ -279,20 +279,78 @@ def build(api) -> list["api.TrainConfig"]:
         
 
     @dataclasses.dataclass(frozen=True)
-    class LeRobotAlohaMobileFASTIncontextDataConfig(api.DataConfigFactory):
-        states_cache_path: str = "metadata/aloha_data_unique/episode_states_cache.json"
-        actions_cache_path: str = "metadata/aloha_data_unique/episode_actions_cache.json"
-        task_to_episode: str = "metadata/aloha_data_unique/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/aloha_data_unique/episode_to_indexes.json"
+    class CustomLeRobotAlohaMobileIncontextDataConfig(api.DataConfigFactory):
+        """Cache-free aloha in-context config.
+
+        Demonstrations (frames/states/actions) come directly from CustomLeRobotDataset
+        instead of the legacy InjectDemoIndexes + AddImagePromptTransform +
+        AddStatesActionsPromptTransform pipeline, which depended on the JSON state/action
+        caches under metadata/aloha_data_unique/. Training must route through
+        create_custom_incontext_data_loader (TrainConfig.use_custom_dataloader=True).
+        """
+
         use_delta_joint_actions: bool = True
+        default_prompt: str | None = None
         adapt_to_pi: bool = False
-        # Action keys that will be used to read the action sequence from the dataset.
+
+        # CustomLeRobotDataset parameters; sample_frames / sample_actions must match the
+        # model config (create_custom_dataset reads them from this factory, not the model).
+        sample_frames: int = 8
+        sample_actions: int = 128
+        task_to_episode_path: str = "metadata/aloha_data_unique/task_to_episode.json"
+        random_select: bool = True
+        policy_local_files_only: bool = True
+
+        # Aloha LeRobot column layout (differs from the LIBERO defaults in CustomLeRobotDataset).
+        state_key: str = "observation.state"
+        actions_key: str = "action"
+        demo_image_keys: dict[str, str] = dataclasses.field(
+            default_factory=lambda: {
+                "cam_high": "observation.images.cam_high",
+                "cam_left_wrist": "observation.images.cam_left_wrist",
+                "cam_right_wrist": "observation.images.cam_right_wrist",
+            }
+        )
+        # Reproduce InjectDemoIndexes' seeded demo selection whenever seed_base is set, so
+        # deterministic consistency checks line up with the legacy cache-based loader.
+        demo_selection_seed_compat: bool = True
+
+        # Demo states/actions are raw dataset values, normalized with this config's own
+        # state/action stats: the default aliases point the demo fields at "state" /
+        # "actions", so demos are normalized exactly like the current frame. (The legacy
+        # caches stored post-Normalize values, so this reproduces that normalization.)
+        norm_stats_aliases: dict[str, str] | None = dataclasses.field(
+            default_factory=lambda: {
+                "dem_prompt_all_states": "state",
+                "dem_prompt_all_actions": "actions",
+            }
+        )
+
         action_sequence_keys: Sequence[str] = ("action",)
 
-        # Padding mode for AddStatesActionsPromptTransform
-        padding_mode: str = "keep_all"
-        mask_padding_as_valid: bool = False
-        demo_state_dim: int | None = 32
+        def _delta_action_mask(self):
+            if not self.use_delta_joint_actions:
+                return None
+            return api._transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
+
+        def _data_transforms(self, model_config) -> "Group":
+            mask = self._delta_action_mask()
+            group = api._transforms.Group(
+                inputs=[
+                    aloha_incontext_policy.CustomLeRobotAlohaMobileIncontextInputs(
+                        action_dim=model_config.action_dim,
+                        adapt_to_pi=self.adapt_to_pi,
+                        delta_action_mask=tuple(mask) if mask is not None else None,
+                    )
+                ],
+                outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
+            )
+            if mask is not None:
+                group = group.push(
+                    inputs=[api._transforms.DeltaActions(mask)],
+                    outputs=[api._transforms.AbsoluteActions(mask)],
+                )
+            return group
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
@@ -311,50 +369,86 @@ def build(api) -> list["api.TrainConfig"]:
                             "episode_index": "episode_index",
                             "index": "index",
                             "task_index": "task_index",
+                            # dem_prompt_* keys emitted by CustomLeRobotDataset
+                            # (dem_prompt_images is nested, so map the flattened keys).
+                            "dem_prompt_images": {
+                                "cam_high": "dem_prompt_images/cam_high",
+                                "cam_left_wrist": "dem_prompt_images/cam_left_wrist",
+                                "cam_right_wrist": "dem_prompt_images/cam_right_wrist",
+                            },
+                            "dem_prompt_states": "dem_prompt_states",
+                            "dem_prompt_actions": "dem_prompt_actions",
+                            "selected_episode": "selected_episode",
                         }
                     )
                 ]
             )
 
             train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
-
-            data_transforms = api._transforms.Group(
-                inputs=[api._transforms.InjectDemoIndexes(
-                    task_to_episode=self.task_to_episode,
-                    episode_to_indexes=self.episode_to_indexes_file,
-                    sample_frames=model_config.sample_frames,
-                    random_select=model_config.random_select,
-                    sample_episodes=model_config.sample_episodes,
-                    train_episode_index_list=train_epi)],
-                outputs=[],
-            )
-
-            data_transforms = data_transforms.push(
-                inputs=[
-                    aloha_incontext_policy.AlohaMobileIncontextInputs(
-                        action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi
-                    )
-                ],
-                outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
-            )
-
-            if self.use_delta_joint_actions:
-                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
-                data_transforms = data_transforms.push(
-                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
-                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
-                )
-
             model_transforms = api.ModelTransformFactory()(model_config)
 
             return dataclasses.replace(
                 self.create_base_config(assets_dirs),
                 repack_transforms=repack_transform,
+                data_transforms=self._data_transforms(model_config),
+                model_transforms=model_transforms,
+                action_sequence_keys=tuple(self.action_sequence_keys),
+                train_episode=train_epi,
+            )
+
+        @override
+        def create_policy(self, assets_dirs: pathlib.Path, model_config):
+            # Cache-free eval path: pull in-context demos directly from CustomLeRobotDataset
+            # instead of the older cache-based transforms. Lazy imports avoid a circular
+            # import (config -> data_loader -> config).
+            from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
+
+            from openpi.training.custom_dataset import CustomLeRobotDataset
+
+            base_config = self.create_base_config(assets_dirs)
+            if self.policy_local_files_only:
+                base_config = dataclasses.replace(base_config, local_files_only=True)
+
+            dataset_meta = lerobot_dataset_mod.LeRobotDatasetMetadata(
+                base_config.repo_id, local_files_only=base_config.local_files_only
+            )
+            custom_dataset = CustomLeRobotDataset(
+                base_config.repo_id,
+                episodes=None,  # policy spans all episodes
+                delta_timestamps={
+                    key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]
+                    for key in self.action_sequence_keys
+                },
+                local_files_only=base_config.local_files_only,
+                num_sample_frames=self.sample_frames,
+                num_sample_actions=self.sample_actions,
+                task_to_episode_path=self.task_to_episode_path,
+                random_select=self.random_select,
+                seed_base=self.seed_base,
+                state_key=self.state_key,
+                actions_key=self.actions_key,
+                demo_image_keys=dict(self.demo_image_keys),
+                demo_selection_seed_compat=self.demo_selection_seed_compat,
+            )
+
+            data_transforms = self._data_transforms(model_config)
+            data_transforms = api._transforms.Group(
+                inputs=[
+                    api._transforms.InjectDemoFromCustomDataset(dataset=custom_dataset),
+                    *data_transforms.inputs,
+                ],
+                outputs=tuple(data_transforms.outputs),
+            )
+
+            model_transforms = api.ModelTransformFactory()(model_config)
+
+            return dataclasses.replace(
+                base_config,
                 data_transforms=data_transforms,
                 model_transforms=model_transforms,
-                action_sequence_keys=self.action_sequence_keys,
-                train_episode=train_epi,
-                demo_state_dim=self.demo_state_dim,
+                action_sequence_keys=tuple(self.action_sequence_keys),
+                train_episode=None,
+                provides_incontext_demos=True,
             )
 
     # 2) Return this child's api.TrainConfig entries directly (can be multiple)
@@ -1274,7 +1368,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_actions=128,
             random_select=True,
         ),
-        data=LeRobotAlohaMobileIncontextDataConfig(
+        data=CustomLeRobotAlohaMobileIncontextDataConfig(
             repo_id="vo2yager/aloha_data_unique",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
@@ -1286,13 +1380,10 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=True,
-            task_to_episode="metadata/aloha_data_unique/task_to_episode.json",
-            episode_to_indexes_file="metadata/aloha_data_unique/episode_to_indexes.json",
-            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
-            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+            sample_frames=8,
+            sample_actions=128,
             episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
             remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
-            multi_process=False,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -1306,6 +1397,8 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=80,
         batch_size=32,
+        # Route training through CustomLeRobotDataset (cache-free demo loading).
+        use_custom_dataloader=True,
     ),
     # aloha_data_unique inference variant (no task filtering)
     api.TrainConfig(
@@ -1320,7 +1413,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_actions=128,
             random_select=True,
         ),
-        data=LeRobotAlohaMobileIncontextDataConfig(
+        data=CustomLeRobotAlohaMobileIncontextDataConfig(
             repo_id="vo2yager/aloha_data_unique",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
@@ -1332,11 +1425,8 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=True,
-            task_to_episode="metadata/aloha_data_unique/task_to_episode.json",
-            episode_to_indexes_file="metadata/aloha_data_unique/episode_to_indexes.json",
-            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
-            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
-            multi_process=False,
+            sample_frames=8,
+            sample_actions=128,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
         num_train_steps=20_000,
@@ -1350,6 +1440,8 @@ def build(api) -> list["api.TrainConfig"]:
         ema_decay=None,
         num_workers=16,
         batch_size=32,
+        # Route training through CustomLeRobotDataset (cache-free demo loading).
+        use_custom_dataloader=True,
     ),
 
 
@@ -1409,7 +1501,7 @@ def build(api) -> list["api.TrainConfig"]:
             action_dim=32, action_horizon=10, max_token_len=256,
             sample_frames=2, sample_actions=4, random_select=True,
         ),
-        data=LeRobotAlohaMobileFASTIncontextDataConfig(
+        data=CustomLeRobotAlohaMobileIncontextDataConfig(
             repo_id="vo2yager/aloha_data_unique",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
@@ -1420,16 +1512,21 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=True,
-            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
-            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+            sample_frames=2,
+            sample_actions=4,
             remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
             episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            # Demo states/actions use this config's own pi0_fast_base trossen_mobile stats
+            # (factory default aliases dem_prompt_all_* -> state/actions), i.e. demos are
+            # normalized identically to the current frame.
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=30_000,
         ema_decay=None,
         num_workers=32,
         batch_size=4,
+        # Route training through CustomLeRobotDataset (cache-free demo loading).
+        use_custom_dataloader=True,
     ),
 
     # Inference config (no test task filtering)
@@ -1442,7 +1539,7 @@ def build(api) -> list["api.TrainConfig"]:
             action_dim=32, action_horizon=10, max_token_len=256,
             sample_frames=2, sample_actions=4, random_select=True,
         ),
-        data=LeRobotAlohaMobileFASTIncontextDataConfig(
+        data=CustomLeRobotAlohaMobileIncontextDataConfig(
             repo_id="vo2yager/aloha_data_unique",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
@@ -1453,14 +1550,18 @@ def build(api) -> list["api.TrainConfig"]:
                 prompt_from_task=True,
             ),
             use_delta_joint_actions=True,
-            states_cache_path="metadata/aloha_data_unique/episode_states_cache.json",
-            actions_cache_path="metadata/aloha_data_unique/episode_actions_cache.json",
+            sample_frames=2,
+            sample_actions=4,
+            # Demo states/actions use this config's own pi0_fast_base stats (factory
+            # default aliases), i.e. normalized identically to the current frame.
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_fast_base/params"),
         num_train_steps=30_000,
         ema_decay=None,
         num_workers=8,
         batch_size=4,
+        # Route training through CustomLeRobotDataset (cache-free demo loading).
+        use_custom_dataloader=True,
     ),
 
     ]

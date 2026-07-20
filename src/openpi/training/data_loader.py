@@ -230,6 +230,12 @@ def create_custom_dataset(
         )
         random_select = getattr(data_config_factory, "random_select", True)
         seed_base = getattr(data_config_factory, "seed_base", None)
+        # Dataset column layout + demo selection compat (defaults preserve the LIBERO layout;
+        # the aloha factories override these — see CustomLeRobotAlohaMobileIncontextDataConfig).
+        state_key = getattr(data_config_factory, "state_key", "state")
+        actions_key = getattr(data_config_factory, "actions_key", "actions")
+        demo_image_keys = getattr(data_config_factory, "demo_image_keys", None)
+        demo_selection_seed_compat = getattr(data_config_factory, "demo_selection_seed_compat", False)
     else:
         # Fallback to defaults if no factory provided
         num_sample_frames = 2
@@ -237,6 +243,10 @@ def create_custom_dataset(
         task_to_episode_path = "metadata/libero/task_to_episode.json"
         random_select = True
         seed_base = None
+        state_key = "state"
+        actions_key = "actions"
+        demo_image_keys = None
+        demo_selection_seed_compat = False
 
     # Build delta_timestamps for each action sequence key (for compatibility)
     dataset = CustomLeRobotDataset(
@@ -253,6 +263,10 @@ def create_custom_dataset(
         task_to_episode_path=task_to_episode_path,
         random_select=random_select,
         seed_base=seed_base,
+        state_key=state_key,
+        actions_key=actions_key,
+        demo_image_keys=demo_image_keys,
+        demo_selection_seed_compat=demo_selection_seed_compat,
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)
     if data_config.prompt_from_task:
@@ -508,6 +522,20 @@ def create_custom_incontext_data_loader(
         norm_stats_aliases=config.data.norm_stats_aliases,
         norm_stats_alias_pad_dims=getattr(config.data, "norm_stats_alias_pad_dims", None),
     )
+
+    # Mirror create_incontext_data_loader: ContextAR tokenizes the (normalized) demo
+    # state/action sequences into the FAST prompt after all other transforms ran.
+    if isinstance(config.model, _contextar.ContextARConfig):
+        fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
+        dataset = TransformedDataset(
+            dataset,
+            [
+                _transforms.TokenizeFASTIncontextInputs(
+                    tokenizer=fast_tokenizer,
+                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
+                )
+            ],
+        )
 
     data_loader = TorchDataLoader(
         dataset,

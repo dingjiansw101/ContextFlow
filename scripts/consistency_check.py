@@ -61,6 +61,10 @@ def _make_config(config_mod, args: argparse.Namespace):
     if args.deterministic_data and hasattr(data, "seed_base"):
         data = dataclasses.replace(data, seed_base=deterministic_data_seed)
 
+    # Demo selection uses the real random_select=True path; determinism comes from
+    # seed_base (set above via --deterministic-data). Cross-branch comparison against a
+    # reference like aloha-dev requires that reference to carry the same dormant seed_base
+    # plumbing (behavior-preserving when unset); see ALOHA_CACHE_FREE_CONSISTENCY.md.
     return dataclasses.replace(
         cfg,
         seed=args.seed,
@@ -85,7 +89,7 @@ def _make_loader(kind: str, trainer, data_loader_mod, cfg, data_sharding):
     if kind == "standard":
         return data_loader_mod.create_data_loader(cfg, sharding=data_sharding, num_workers=0, shuffle=True)
     if kind == "incontext":
-        if cfg.use_custom_dataloader:
+        if getattr(cfg, "use_custom_dataloader", False):
             return data_loader_mod.create_custom_incontext_data_loader(
                 cfg,
                 sharding=data_sharding,
