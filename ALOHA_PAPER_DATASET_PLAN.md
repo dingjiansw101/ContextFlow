@@ -13,6 +13,25 @@ metadata-level reorganization of it.
 > Every task in the dataset is classified exactly once, no classified name is missing from
 > the dataset, and train + test + drop = 1,487. See Section 5.
 
+### Scope of the code change
+
+**Minimal: correct the task names and the paths that point at the dataset. Nothing else.**
+No new modules, no new config entries, no validation or refactoring. Existing aloha configs
+are re-pointed in place at the new dataset; the previous behaviour stays reachable through
+git history rather than through parallel configs. See Phase 4.
+
+### After the cache-free merge (`9658ef7`)
+
+The merge dropped the ~510 MB JSON state/action caches for the aloha in-context path —
+demos now come straight from `CustomLeRobotDataset`, so **there is no cache to build for
+the new dataset**.
+
+One small derived file survives: `metadata/aloha_data_unique/task_to_episode.json`
+(14 KB, tracked in-repo). `CustomLeRobotDataset` still requires it
+(`src/openpi/training/custom_dataset.py:143`), and it maps `task_index` -> episode indices —
+both of which are renumbered by the reorganization. It must therefore be regenerated, but
+it is a direct derivation from `meta/episodes.jsonl`, not a cache build.
+
 ---
 
 ## 0. Two defects found in the current setup
@@ -191,6 +210,8 @@ is dropped.
 | D3 | Fix the `kiwi/<right>` leak? | **Yes.** Makes the unseen split honest; the kiwi number will change. |
 | D4 | Natural-language task strings? | **RESOLVED — yes for the three suites the paper gives templates for** (pick and place, pen uncap, put egg in box). The four extra bimanual configs keep their short folder-style names. |
 | D5 | Publish as a new HF repo? | **Yes**, e.g. `vo2yager/aloha_contextflow`. Leave `aloha_data_unique` untouched as the raw archive. |
+| D6 | Scope of the code change | **RESOLVED — minimal.** Correct the task names and the dataset paths only; re-point the existing configs in place. No new modules, no parallel configs, no validation or refactoring. See Phase 4b. |
+| D7 | Demo caches for the new dataset | **RESOLVED — none needed.** The cache-free merge (`9658ef7`) removed the JSON state/action caches. Only the 14 KB `task_to_episode.json` is regenerated. |
 
 ### Instruction templates (D1 + D4)
 
@@ -227,7 +248,10 @@ files are copied or hardlinked unchanged.
 4. Write `meta/episodes.jsonl` (new episode index, remapped task index, preserved length).
 5. Write `meta/info.json` (`total_episodes`, `total_frames`, `total_tasks`, unchanged fps / features / camera specs).
 6. Recompute `meta/stats.json` over the new subset.
-7. Emit `train_episodes.json` / `test_episodes.json` index lists for the 25/6 split.
+7. Derive `metadata/aloha_contextflow/task_to_episode.json` from the new `meta/episodes.jsonl` (Phase 4b edit 5).
+
+No train/test index lists are emitted: the split is expressed only as the 6 names in
+`remove_task_list`, so an episode-index list would be an unused second source of truth.
 
 Cost: a copy of ~215 GB (the 1,349 kept episodes), no video re-encoding.
 
@@ -238,27 +262,10 @@ Cost: a copy of ~215 GB (the 1,349 kept episodes), no video re-encoding.
 4. Spot-check a merged config (e.g. gray pen) — confirm both source batches present and frame counts preserved.
 5. Checksum a sample of copied episodes against the source to prove the copy is faithful.
 
-### Phase 4a — Task-name migration in code
+### Phase 4a — The 31 output task names
 
-**Single source of truth.** Add `src/openpi/training/aloha_paper_tasks.py` holding the 31
-configurations as data — output name, source task name(s), split:
-
-```python
-@dataclasses.dataclass(frozen=True)
-class PaperTask:
-    name: str                  # string written into the new meta/tasks.jsonl
-    sources: tuple[str, ...]   # source task names in aloha_data_unique
-    split: str                 # "train" | "test"
-
-ALOHA_PAPER_TASKS: tuple[PaperTask, ...] = (...)
-ALOHA_PAPER_TEST_TASKS = [t.name for t in ALOHA_PAPER_TASKS if t.split == "test"]
-```
-
-`remove_task_list=ALOHA_PAPER_TEST_TASKS` is then **derived, never hand-written**, and the
-same table drives Phase 2 dataset construction. The dataset and the code cannot drift,
-which is the failure mode behind both defects in Section 0.
-
-**The 31 names.**
+These strings are written into the new `meta/tasks.jsonl` in Phase 2. The six test names
+are the ones that must appear verbatim in `ALOHA_DATA_UNIQUE_TEST_TASK` (Phase 4b, edit 1).
 
 *Pick and place (18).* Hand convention unchanged — paper and dataset agree here.
 `Pick up the {object} and place it in the basket with the {left|right} hand.`
@@ -287,32 +294,65 @@ the corrected picking-hand convention.
 natural-language string (D4).
 
 **Open naming question:** how "blue pen v2" should read inside an instruction sentence
-(`the blue pen v2` vs `the second blue pen`). Needs a call before Phase 2.
+(`the blue pen v2` vs `the second blue pen`). Needs a call before Phase 2. It affects two
+*training* names only — none of the six test names — so it does not block Phase 4b.
 
-### Phase 4b — Code edits
+#### The six test names, verbatim
 
-All additive. Existing configs keep pointing at `aloha_data_unique` with the old names, so
-published results stay reproducible; the new names exist only on the new configs.
+This is the exact replacement content for `ALOHA_DATA_UNIQUE_TEST_TASK` (Phase 4b, edit 1).
+Each must match its `meta/tasks.jsonl` string byte-for-byte, since exclusion is exact string
+membership (`config.py:351`).
 
-| Target | Change |
-| --- | --- |
-| `src/openpi/training/aloha_paper_tasks.py` *(new)* | the 31-entry table and derived test list |
-| `src/openpi/training/config_aloha.py` | new config entries with `repo_id="vo2yager/aloha_contextflow"` and `remove_task_list=ALOHA_PAPER_TEST_TASKS`. Leave `ALOHA_DATA_UNIQUE_TEST_TASK` and all existing configs untouched |
-| `src/openpi/training/config.py` | make `get_kept_episode_indices` raise when a `remove_task_list` entry matches no task in `episodes.jsonl` — the defect class in 0.1 |
-| `metadata/aloha_contextflow/*.json` | regenerate demo caches into a **new** directory. These are keyed by `task_index` and `episode_index`, both of which change under merging and dropping, so regeneration is mandatory independent of naming. Do not overwrite `metadata/aloha_pen_uncap/` |
-| `examples/aloha_mobile_real/main_incontext.py` | the `--prompt` default (`pick_up_the_cucumber_and_place_it_in_the_basket`) and `--task_json` path select the in-context demo at eval time; both need new-dataset equivalents |
+```python
+ALOHA_DATA_UNIQUE_TEST_TASK = [
+    "Pick up the pear and place it in the basket with the left hand.",
+    "Pick up the orange juice and place it in the basket with the left hand.",
+    "Pick up the kiwi and place it in the basket with the right hand.",
+    "Pick up the banana and place it in the basket with the right hand.",
+    # Source task is `pen_uncap_red_right_b5`: <left> here is the PICKING hand
+    # (paper convention), which is the opposite of the source folder's name.
+    "Pick up the red pen with the left hand, grasp the cap with the other hand and uncap it.",
+    "Pick up the red egg with the right hand, place it in the box, and close the box.",
+]
+```
 
-Note: `metadata/aloha_pen_uncap/` is not checked into the repo (only `libero*` metadata is),
-so these caches are produced out-of-tree. Confirm whether the in-context path still requires
-them at all before regenerating — the cache-free work may have removed the need.
+The 16 current entries collapse to 6 because the 10 dropped pick-and-place single-demo
+tasks no longer exist in the dataset at all — they are excluded by omission from
+`meta/tasks.jsonl`, not by exclusion at load time. Keeping them listed would be harmless
+today but would silently rot, and (absent the rejected validation) nothing would report it.
 
-### Phase 4c — Remaining code revision
-1. New config entries with `repo_id="vo2yager/aloha_contextflow"`.
-2. Replace `ALOHA_DATA_UNIQUE_TEST_TASK` with the 6-entry paper test list in the new naming; delete the malformed entry.
-3. **Add validation to `get_kept_episode_indices`**: raise if any string in `remove_task_list` matches no task in `episodes.jsonl`. This would have caught 0.1 and is the highest-value code change here.
-4. Regenerate `metadata/aloha_pen_uncap/*.json` (`task_to_episode`, `episode_to_indexes`, state/action caches) against the new dataset — all are keyed by task name and episode index, both of which change.
-5. Recompute norm stats: `uv run scripts/compute_norm_stats.py --config-name <new_config>`.
-6. Update `ALOHA_DATASET_NAMING.md` to cover the new dataset alongside the raw release.
+### Phase 4b — Code edits (task names and dataset paths only)
+
+Five edits, all string swaps, all in `src/openpi/training/config_aloha.py` except the last.
+Existing configs are re-pointed in place — no parallel config entries.
+
+| # | Target | Change |
+| --- | --- | --- |
+| 1 | `config_aloha.py:33` `ALOHA_DATA_UNIQUE_TEST_TASK` | replace the 16 source-name entries with the **6 paper test names** from Phase 4a |
+| 2 | `config_aloha.py:1372,1417,1455,1505,1543` | `repo_id` -> `"vo2yager/aloha_contextflow"` (5 sites) |
+| 3 | `config_aloha.py:1385,1480,1518` | `episode_json_path` -> `.../aloha_contextflow/meta/episodes.jsonl` (3 sites) |
+| 4 | `config_aloha.py:300` | `task_to_episode_path` -> `"metadata/aloha_contextflow/task_to_episode.json"` |
+| 5 | `metadata/aloha_contextflow/task_to_episode.json` *(new, ~14 KB)* | derive from the new `meta/episodes.jsonl` and commit, mirroring the existing `metadata/aloha_data_unique/` file |
+
+Edits 2 and 3 both target the four configs `ContextFlow_Aloha`, `ContextFlow_Aloha_Inference`,
+`ContextAR_Aloha`, `ContextAR_Aloha_Inference` plus the `pi0` aloha baseline.
+
+**Explicitly out of scope** (would be extra modifications):
+
+- no `aloha_paper_tasks.py` or any new module
+- no `get_kept_episode_indices` validation change in `config.py` — the 0.1 defect class stays
+  unguarded; noted as a separate follow-up, not part of this change
+- no renaming of the config names themselves (`ContextFlow_Aloha` etc. keep their names)
+- no changes to `ALOHA_OBJECT_TEST_TASK`, the `objects_pickup_place` / `object_task_suite`
+  configs, or `metadata/aloha_pen_uncap/` — a different dataset family, untouched by this reorg
+- no change to `examples/aloha_mobile_real/main_incontext.py`; its `--prompt` / `--task_json`
+  defaults point at the separate `objects_pickup_place_right_hand` metadata, and the new task
+  string is passed on the command line at eval time
+
+### Phase 4c — After the edits
+1. Recompute norm stats: `uv run scripts/compute_norm_stats.py --config-name ContextFlow_Aloha` (and the other three).
+2. Confirm the exclusion actually bites: load each config's data config and assert the kept-episode count is **1,318**, not 1,349. This is the manual stand-in for the validation rejected above — without it, a typo in edit 1 silently trains on 1,349 episodes.
+3. Update `ALOHA_DATASET_NAMING.md` to cover the new dataset alongside the raw release.
 
 ### Phase 5 — Retrain and re-evaluate
 1. Retrain ContextFlow (and the baselines used in the real-robot table) on the new split.
@@ -325,10 +365,11 @@ them at all before regenerating — the cache-free work may have removed the nee
 
 | Risk | Mitigation |
 | --- | --- |
-| Published checkpoints are invalidated (norm stats + training distribution both change) | Keep `aloha_data_unique` and existing configs intact so old results stay reproducible; the new dataset is additive |
+| Published checkpoints are invalidated (norm stats + training distribution both change) | `vo2yager/aloha_data_unique` stays published and untouched, so old results remain reproducible by checking out the pre-change commit. Note the configs themselves are re-pointed in place (minimal-change scope), so reproducing old results requires git history, not a config switch |
 | Reported numbers shift after retraining | Expected, not a defect — the current numbers reflect a training set the paper does not describe |
 | Merged `handover` may combine two distinct tasks | D2 — confirm before building |
-| Metadata regeneration desyncs from the new episode indices | Phase 3 assertions run before any training |
+| A typo in the 6 test names silently disables exclusion (defect 0.1 recurring) | Validation was deliberately left out of scope; Phase 4c step 2 asserts the kept-episode count is 1,318 instead |
+| `task_to_episode.json` desyncs from the new episode indices | Regenerated in Phase 4b edit 5 from the new `episodes.jsonl`; Phase 3 assertions run before any training |
 | ~215 GB copy | Hardlink where source and destination share a filesystem |
 
 ---
