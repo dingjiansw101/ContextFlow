@@ -10,8 +10,9 @@ class DatasetSpec:
     Each spec is loaded as its own CustomLeRobotDataset; the factory carrying
     ``dataset_specs`` concatenates them at training time (see
     ``data_loader.create_custom_dataset``). Demo retrieval is within-dataset
-    only, so each spec must point at its own task_to_episode.json keyed by that
-    dataset's task indices.
+    only, and each sub-dataset derives its own task-to-episode table from
+    ``repo_id``'s metadata, so the table is always keyed by that dataset's task
+    indices (task 0 in libero != task 0 in libero_90).
 
     Defined in a leaf module (no openpi imports) so config fragments can bind it
     at module scope, letting tyro resolve the forward reference
