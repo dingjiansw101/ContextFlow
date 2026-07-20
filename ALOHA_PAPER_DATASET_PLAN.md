@@ -14,6 +14,31 @@ image is re-encoded, but the parquet index columns are rewritten (see Phase 2).
 > Every task in the dataset is classified exactly once, no classified name is missing from
 > the dataset, and train + test + drop = 1,487. See Section 5.
 
+### Execution status (2026-07-20)
+
+| Phase | Status |
+| --- | --- |
+| 1 — Manifest | **DONE.** All plan targets reconcile: train 25/1,318/582,800, test 6/31/13,100, drop 138, total 1,349/31/595,900 |
+| 2 — Build | **DONE.** All 1,349 episodes rewritten. Smoke test proved only `episode_index`/`task_index`/`index` change and images stay byte-identical |
+| 2b — Publish | **DONE.** [`vo2yager/aloha_incontext`](https://huggingface.co/datasets/vo2yager/aloha_incontext) — 1,349/1,349 parquet + 4 meta files + dataset card, **public** |
+| 3 — Verify | **DONE — all checks pass**, including round-trip of 5 sampled episodes from HF against source |
+| 4b — Code edits | **DONE** (`caad505`) |
+| 4c — Post-edit | Exclusion verified: **1,318 kept of 1,349**, 31 held out, all 6 test names match a real task. Norm stats **pending** |
+| 5 — Retrain | **NOT STARTED** — needs GPU allocation and an explicit go-ahead |
+
+**Deviation from plan — the repo is public, not private-until-verified.** Phase 2b staged the
+upload as private, then public after Phase 3. At episode 750 of 1,349 the upload hit HF's
+free-tier private storage limit (`403 Private repository storage limit reached`). On the
+user's instruction the repo was made public and the upload resumed from the checkpoint, so
+Phase 3 verification ran against an already-public repo. The batch/resume design worked as
+intended: no episode was re-uploaded and no work was lost.
+
+**Two verification bugs were found and fixed — both in the checks, not the data.** (1) The
+smoke test asserted all three index columns change, but the identity-mapped episode (source 0
+-> new 0, offset 0) legitimately changes only `task_index`. (2) Phase 3 asserted no output
+name reuses a source folder name, contradicting D4: `cup_stack`, `stir` and `water_wipe`
+deliberately pass through unchanged.
+
 ### Scope of the code change
 
 **Minimal: correct the task names and the paths that point at the dataset. Nothing else.**
@@ -353,9 +378,11 @@ the corrected picking-hand convention.
 *Extra bimanual (4).* `handover`, `cup_stack`, `stir`, `water_wipe` — folder-style, no
 natural-language string (D4).
 
-**Open naming question:** how "blue pen v2" should read inside an instruction sentence
-(`the blue pen v2` vs `the second blue pen`). Needs a call before Phase 2. It affects two
-*training* names only — none of the six test names — so it does not block Phase 4b.
+**Naming question — RESOLVED as `the second blue pen`.** These strings are consumed by the
+model as language, so `Pick up the second blue pen with the right hand, ...` reads as an
+instruction while `the blue pen v2` reads as a folder label. Affects two *training* names
+only, and the string lives solely in `meta/tasks.jsonl` (the parquets carry `task_index`, not
+the text), so revising it later is a one-line metadata edit, not a rebuild.
 
 #### The six test names, verbatim
 
