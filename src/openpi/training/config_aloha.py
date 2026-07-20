@@ -25,30 +25,25 @@ ALOHA_OBJECT_TEST_TASK = [
     "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_right_hand",
 ]
 
-# Pen task names below use the collected-data convention, where <left>/<right> names the
-# hand that UNCAPS the pen. The ContextFlow paper uses the mirror convention, where
-# <left>/<right> names the hand that PICKS UP the pen. These names are exact keys into the
-# released dataset's meta/tasks.jsonl, so they are intentionally not renamed to match the
-# paper. See ALOHA_DATASET_NAMING.md for the full mapping and corrected statistics table.
+# Task names below are the paper-consistent strings in vo2yager/aloha_incontext, and use the
+# ContextFlow paper's convention: for pen tasks, <left>/<right> names the hand that PICKS UP
+# the pen (the released aloha_data_unique folder names use the mirror convention, naming the
+# UNCAPPING hand). These are exact keys into that dataset's meta/tasks.jsonl -- exclusion is
+# exact string membership, so they must match byte-for-byte.
+# See ALOHA_DATASET_NAMING.md and ALOHA_PAPER_DATASET_PLAN.md.
+#
+# The 6 unseen configurations of the paper. The tasks absent from the paper entirely
+# (separate cups, blue pen /<right>, the single-demo pick-and-place tasks) are not listed
+# here because they no longer exist in the dataset -- they are excluded by omission from
+# meta/tasks.jsonl rather than filtered out at load time.
 ALOHA_DATA_UNIQUE_TEST_TASK = [
-    # Explicitly selected test tasks
-    "pen_uncap_red_right_b5",  # paper: red pen / <left> (the unseen eval configuration)
-    "pen_uncap_blue_left_b5",  # paper: blue pen / <right>
-    "put_red_egg_close_box",
-    "separate_cups_big_right",
-    # All pick-up-and-place tasks with 1 demonstration
-    "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_orange_juice_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_cucumber_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_kiwi_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_gluten_flour_and_place_it_in_the_basket_with_right_hand",
-    "pick_up_the_pear_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_apple_and_place_it_in_the_basket_with_right_hand",
-    "pick_up_the_onion_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_bottle_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_blue_milk_and_place_it_in_the_basket_with_left_hand",
-    "pick_up_the_banana_and_place_it_in_the_basket_with_right_hand",
-    "pick_up_the_kiwi_and_place_it_in_the_basket_with_right_hand"
+    "Pick up the pear and place it in the basket with the left hand.",
+    "Pick up the orange juice and place it in the basket with the left hand.",
+    "Pick up the kiwi and place it in the basket with the right hand.",
+    "Pick up the banana and place it in the basket with the right hand.",
+    # source task is `pen_uncap_red_right_b5`: <left> here is the PICKING hand
+    "Pick up the red pen with the left hand, grasp the cap with the other hand and uncap it.",
+    "Pick up the red egg with the right hand, place it in the box, and close the box.",
 ]
 
 def build(api) -> list["api.TrainConfig"]:
@@ -297,7 +292,7 @@ def build(api) -> list["api.TrainConfig"]:
         # model config (create_custom_dataset reads them from this factory, not the model).
         sample_frames: int = 8
         sample_actions: int = 128
-        task_to_episode_path: str = "metadata/aloha_data_unique/task_to_episode.json"
+        task_to_episode_path: str = "metadata/aloha_incontext/task_to_episode.json"
         random_select: bool = True
         policy_local_files_only: bool = True
 
@@ -1369,7 +1364,7 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
         ),
         data=CustomLeRobotAlohaMobileIncontextDataConfig(
-            repo_id="vo2yager/aloha_data_unique",
+            repo_id="vo2yager/aloha_incontext",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
                 asset_id="trossen_mobile",
@@ -1382,7 +1377,7 @@ def build(api) -> list["api.TrainConfig"]:
             use_delta_joint_actions=True,
             sample_frames=8,
             sample_actions=128,
-            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_incontext/meta/episodes.jsonl",
             remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext("s3://openpi-assets/checkpoints/pi0_base/params"),
@@ -1414,7 +1409,7 @@ def build(api) -> list["api.TrainConfig"]:
             random_select=True,
         ),
         data=CustomLeRobotAlohaMobileIncontextDataConfig(
-            repo_id="vo2yager/aloha_data_unique",
+            repo_id="vo2yager/aloha_incontext",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
                 asset_id="trossen_mobile",
@@ -1452,7 +1447,7 @@ def build(api) -> list["api.TrainConfig"]:
         name="Pi0_Aloha",
         model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
         data=LeRobotAlohaMobileDataConfig(
-            repo_id="vo2yager/aloha_data_unique",
+            repo_id="vo2yager/aloha_incontext",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
                 asset_id="trossen_mobile",
@@ -1477,7 +1472,7 @@ def build(api) -> list["api.TrainConfig"]:
                 local_files_only=True,
                 prompt_from_task=True,
             ),
-            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_incontext/meta/episodes.jsonl",
             remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
         ),
         weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
@@ -1502,7 +1497,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=4, random_select=True,
         ),
         data=CustomLeRobotAlohaMobileIncontextDataConfig(
-            repo_id="vo2yager/aloha_data_unique",
+            repo_id="vo2yager/aloha_incontext",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
                 asset_id="trossen_mobile",
@@ -1515,7 +1510,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2,
             sample_actions=4,
             remove_task_list=ALOHA_DATA_UNIQUE_TEST_TASK,
-            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_data_unique/meta/episodes.jsonl",
+            episode_json_path="/home/dingj0b/.cache/huggingface/lerobot/vo2yager/aloha_incontext/meta/episodes.jsonl",
             # Demo states/actions use this config's own pi0_fast_base trossen_mobile stats
             # (factory default aliases dem_prompt_all_* -> state/actions), i.e. demos are
             # normalized identically to the current frame.
@@ -1540,7 +1535,7 @@ def build(api) -> list["api.TrainConfig"]:
             sample_frames=2, sample_actions=4, random_select=True,
         ),
         data=CustomLeRobotAlohaMobileIncontextDataConfig(
-            repo_id="vo2yager/aloha_data_unique",
+            repo_id="vo2yager/aloha_incontext",
             assets=api.AssetsConfig(
                 assets_dir="s3://openpi-assets/checkpoints/pi0_fast_base/assets",
                 asset_id="trossen_mobile",

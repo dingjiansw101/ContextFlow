@@ -13,6 +13,9 @@ metadata/libero_90/*
 !metadata/aloha_data_unique
 metadata/aloha_data_unique/*
 !metadata/aloha_data_unique/task_to_episode.json
+!metadata/aloha_incontext
+metadata/aloha_incontext/*
+!metadata/aloha_incontext/task_to_episode.json
 checkpoints/
 checkpoints
 nohup.out
