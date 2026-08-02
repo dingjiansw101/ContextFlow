@@ -183,34 +183,19 @@ def create_trained_policy_incontext(
         if train_config.model.use_action_state_prompts:
             print("Inference: Adding action state prompts")
             demo_state_dim = getattr(train_config.data, "demo_state_dim", None)
-            episode_to_indexes_file = getattr(train_config.data, "episode_to_indexes_file", None)
             padding_mode = getattr(train_config.data, "padding_mode", "keep_all")
             mask_padding_as_valid = getattr(train_config.data, "mask_padding_as_valid", False)
-            if episode_to_indexes_file is not None:
-                input_transforms.append(
-                    transforms.AddStatesActionsPromptTransform(
-                        dataset=dataset,
-                        max_len=train_config.model.sample_actions,
-                        states_cache_path=train_config.data.states_cache_path,
-                        actions_cache_path=train_config.data.actions_cache_path,
-                        episode_to_indexes_file=episode_to_indexes_file,
-                        padding_mode=padding_mode,
-                        mask_padding_as_valid=mask_padding_as_valid,
-                        demo_state_dim=demo_state_dim,
-                    )
+            input_transforms.append(
+                transforms.AddStatesActionsPromptTransform(
+                    dataset=dataset,
+                    max_len=train_config.model.sample_actions,
+                    states_cache_path=train_config.data.states_cache_path,
+                    actions_cache_path=train_config.data.actions_cache_path,
+                    padding_mode=padding_mode,
+                    mask_padding_as_valid=mask_padding_as_valid,
+                    demo_state_dim=demo_state_dim,
                 )
-            else:
-                input_transforms.append(
-                    transforms.AddStatesActionsPromptTransform(
-                        dataset=dataset,
-                        max_len=train_config.model.sample_actions,
-                        states_cache_path=train_config.data.states_cache_path,
-                        actions_cache_path=train_config.data.actions_cache_path,
-                        padding_mode=padding_mode,
-                        mask_padding_as_valid=mask_padding_as_valid,
-                        demo_state_dim=demo_state_dim,
-                    )
-                )
+            )
 
     if isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         return create_trained_policy_fast_incontext(

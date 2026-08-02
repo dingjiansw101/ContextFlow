@@ -68,6 +68,7 @@ from tqdm import tqdm
 
 import openpi.training.config as _config
 import openpi.training.data_loader as data_loader
+from openpi.training import lookup_tables
 
 
 def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
@@ -86,13 +87,7 @@ def build_cache(config: _config.TrainConfig):
 
     # base_dataset = dataset._dataset if hasattr(dataset, "_dataset") else dataset
 
-    episode_to_indexes_file = Path(config.data.episode_to_indexes_file)
-    if not episode_to_indexes_file.exists():
-        raise FileNotFoundError(f"Episode indexes file not found: {episode_to_indexes_file}")
-
-    with episode_to_indexes_file.open("r") as f:
-        raw = json.load(f)
-    idx_map = {int(k): v for k, v in raw.items()}
+    idx_map = lookup_tables.episode_to_indexes_for_dataset(dataset)
 
     states, actions = {}, {}
     for ep, idxs in tqdm(idx_map.items(), desc="Building episode caches", total=len(idx_map)):

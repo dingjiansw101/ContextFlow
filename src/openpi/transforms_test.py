@@ -3,10 +3,11 @@ import random
 
 import numpy as np
 import pytest
+from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 
 import openpi.models.tokenizer as _tokenizer
+from openpi.training import lookup_tables
 import openpi.transforms as _transforms
-import jax
 
 def test_repack_transform():
     transform = _transforms.RepackTransform(
@@ -124,24 +125,72 @@ def test_extract_prompt_from_task():
         transform({"task_index": 2})
 
 
-def test_inject_demo_indexes_seed_base_is_deterministic(tmp_path):
-    task_to_episode_path = tmp_path / "task_to_episode.json"
-    episode_to_indexes_path = tmp_path / "episode_to_indexes.json"
-    task_to_episode_path.write_text(json.dumps({"0": [0, 1, 2, 3]}))
-    episode_to_indexes_path.write_text(
+def _write_fake_meta(tmp_path, *, num_episodes=4, episode_length=3, task="do the thing"):
+    """Write a minimal LeRobot meta/ tree and return its root.
+
+    Yields task_to_episode {0: [0,1,2,3]} and episode_to_indexes
+    {0: [0,1,2], 1: [3,4,5], 2: [6,7,8], 3: [9,10,11]} for the defaults.
+    """
+    meta = tmp_path / "meta"
+    meta.mkdir(parents=True, exist_ok=True)
+    (meta / "info.json").write_text(
         json.dumps(
             {
-                "0": [0, 1, 2],
-                "1": [3, 4, 5],
-                "2": [6, 7, 8],
-                "3": [9, 10, 11],
+                "codebase_version": "v2.0",
+                "total_episodes": num_episodes,
+                "total_frames": num_episodes * episode_length,
+                "total_tasks": 1,
+                "fps": 10,
+                "features": {},
             }
         )
     )
+    (meta / "stats.json").write_text(json.dumps({}))
+    (meta / "tasks.jsonl").write_text(json.dumps({"task_index": 0, "task": task}) + "\n")
+    (meta / "episodes.jsonl").write_text(
+        "".join(
+            json.dumps({"episode_index": i, "tasks": [task], "length": episode_length}) + "\n"
+            for i in range(num_episodes)
+        )
+    )
+    return tmp_path
 
+
+def test_lookup_tables_from_metadata(tmp_path):
+    root = _write_fake_meta(tmp_path)
+    meta = LeRobotDatasetMetadata("fake/repo", root=root, local_files_only=True)
+
+    assert lookup_tables.build_task_to_episode(meta) == {0: [0, 1, 2, 3]}
+    assert lookup_tables.build_episode_to_indexes(meta) == {
+        0: [0, 1, 2],
+        1: [3, 4, 5],
+        2: [6, 7, 8],
+        3: [9, 10, 11],
+    }
+
+    # A split drops its episodes and reindexes the survivors contiguously.
+    assert lookup_tables.build_task_to_episode(meta, [0, 2]) == {0: [0, 2]}
+    assert lookup_tables.build_episode_to_indexes(meta, [0, 2]) == {0: [0, 1, 2], 2: [3, 4, 5]}
+
+
+@pytest.fixture
+def _fake_repo(tmp_path, monkeypatch):
+    """Point lookup_tables at a fake on-disk dataset instead of the hub."""
+    root = _write_fake_meta(tmp_path)
+    monkeypatch.setattr(
+        lookup_tables,
+        "_load_metadata",
+        lambda repo_id, _root, local_files_only: LeRobotDatasetMetadata(
+            repo_id, root=root, local_files_only=True
+        ),
+    )
+    return root
+
+
+def test_inject_demo_indexes_seed_base_is_deterministic(_fake_repo):
     transform = _transforms.InjectDemoIndexes(
-        task_to_episode=str(task_to_episode_path),
-        episode_to_indexes=str(episode_to_indexes_path),
+        repo_id="fake/repo",
+        local_files_only=True,
         sample_frames=2,
         sample_episodes=2,
         random_select=True,
@@ -163,24 +212,10 @@ def test_inject_demo_indexes_seed_base_is_deterministic(tmp_path):
     assert first["dem_prompt_indexes"] == second["dem_prompt_indexes"]
 
 
-def test_inject_demo_indexes_without_seed_base_uses_global_random(tmp_path):
-    task_to_episode_path = tmp_path / "task_to_episode.json"
-    episode_to_indexes_path = tmp_path / "episode_to_indexes.json"
-    task_to_episode_path.write_text(json.dumps({"0": [0, 1, 2, 3]}))
-    episode_to_indexes_path.write_text(
-        json.dumps(
-            {
-                "0": [0, 1, 2],
-                "1": [3, 4, 5],
-                "2": [6, 7, 8],
-                "3": [9, 10, 11],
-            }
-        )
-    )
-
+def test_inject_demo_indexes_without_seed_base_uses_global_random(_fake_repo):
     transform = _transforms.InjectDemoIndexes(
-        task_to_episode=str(task_to_episode_path),
-        episode_to_indexes=str(episode_to_indexes_path),
+        repo_id="fake/repo",
+        local_files_only=True,
         sample_frames=2,
         sample_episodes=2,
         random_select=True,

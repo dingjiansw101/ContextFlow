@@ -40,18 +40,22 @@ def build(api) -> list[api.TrainConfig]:
         model_config,
         *,
         train_episode: list[int] | None,
-        task_to_episode_path: str,
-        episode_to_indexes_file: str,
         local_files_only: bool | None = None,
     ):
+        # Resolved first so InjectDemoIndexes can derive its lookup tables from the
+        # same repo (and local_files_only) the dataset itself will be built from.
+        base_config = factory.create_base_config(assets_dirs)
+        if local_files_only is not None:
+            base_config = dataclasses.replace(base_config, local_files_only=local_files_only)
+
         data_transforms = api._transforms.Group(
             inputs=[
                 api._transforms.InjectDemoIndexes(
                     sample_frames=model_config.sample_frames,
                     random_select=model_config.random_select,
                     sample_episodes=model_config.sample_episodes,
-                    task_to_episode=task_to_episode_path,
-                    episode_to_indexes=episode_to_indexes_file,
+                    repo_id=base_config.repo_id,
+                    local_files_only=base_config.local_files_only,
                     train_episode_index_list=train_episode,
                     seed_base=factory.seed_base,
                 )
@@ -74,10 +78,6 @@ def build(api) -> list[api.TrainConfig]:
                 inputs=[api._transforms.DeltaActions(delta_action_mask)],
                 outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
             )
-
-        base_config = factory.create_base_config(assets_dirs)
-        if local_files_only is not None:
-            base_config = dataclasses.replace(base_config, local_files_only=local_files_only)
 
         return dataclasses.replace(
             base_config,
@@ -140,8 +140,6 @@ def build(api) -> list[api.TrainConfig]:
         use_delta_joint_actions: bool = True
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-        task_to_episode: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
         # Padding strategy for AddStatesActionsPromptTransform
         # "keep_all": Keep all frames when L < max_len, then pad (default, current behavior)
@@ -160,8 +158,6 @@ def build(api) -> list[api.TrainConfig]:
                 assets_dirs,
                 model_config,
                 train_episode=train_epi,
-                task_to_episode_path=self.task_to_episode,
-                episode_to_indexes_file=self.episode_to_indexes_file,
             )
 
         @override
@@ -171,8 +167,6 @@ def build(api) -> list[api.TrainConfig]:
                 assets_dirs,
                 model_config,
                 train_episode=None,
-                task_to_episode_path=self.task_to_episode,
-                episode_to_indexes_file=self.episode_to_indexes_file,
             )
 
     @dataclasses.dataclass(frozen=True)
@@ -190,8 +184,6 @@ def build(api) -> list[api.TrainConfig]:
         custom_dataloader_version: str = "v1"  # Version of custom dataloader to use
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
-        task_to_episode_path: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
         states_cache_path: str = "metadata/libero/episode_states_without_delta_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_without_delta_cache.json"
         padding_mode: str = "linspace_repeat"
@@ -302,7 +294,6 @@ def build(api) -> list[api.TrainConfig]:
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=self.task_to_episode_path,
                 random_select=self.random_select,
             )
 
@@ -466,7 +457,6 @@ def build(api) -> list[api.TrainConfig]:
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=demo_spec.task_to_episode_path,
                 random_select=self.random_select,
             )
 
@@ -519,8 +509,6 @@ def build(api) -> list[api.TrainConfig]:
         use_delta_joint_actions: bool = True
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-        task_to_episode: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: BaseModelConfig) -> DataConfig:
@@ -563,8 +551,8 @@ def build(api) -> list[api.TrainConfig]:
                         sample_frames=model_config.sample_frames,
                         random_select=model_config.random_select,
                         sample_episodes=model_config.sample_episodes,
-                        task_to_episode=self.task_to_episode,
-                        episode_to_indexes=self.episode_to_indexes_file,
+                        repo_id=self.repo_id,
+                        local_files_only=self.local_files_only,
                         train_episode_index_list=train_epi,
                         seed_base=self.seed_base,
                     )
@@ -675,7 +663,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -718,7 +705,6 @@ def build(api) -> list[api.TrainConfig]:
                     use_delta_joint_actions=False,
                     sample_frames=2,
                     sample_actions=32,
-                    task_to_episode_path="metadata/libero/task_to_episode.json",
                     remove_task_list=_split_test_tasks,
                     episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                     random_select=True,
@@ -763,7 +749,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -806,7 +791,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -847,7 +831,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -888,7 +871,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -928,7 +910,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -970,7 +951,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=64,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1012,7 +992,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=4,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1055,7 +1034,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=4,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1098,7 +1076,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1141,7 +1118,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1181,7 +1157,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1221,7 +1196,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1253,7 +1227,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1285,7 +1258,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1317,7 +1289,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1349,7 +1320,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1381,7 +1351,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1423,7 +1392,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1465,7 +1433,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1508,7 +1475,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1552,7 +1518,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1595,7 +1560,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=64,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1637,7 +1601,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=256,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1679,7 +1642,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1722,7 +1684,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1766,7 +1727,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1810,7 +1770,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1853,7 +1812,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=64,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1896,7 +1854,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2425,7 +2382,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2466,7 +2422,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2510,7 +2465,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2552,7 +2506,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2596,7 +2549,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2637,7 +2589,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2681,7 +2632,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                         local_files_only=False,
                     ),
@@ -2692,7 +2642,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2744,7 +2693,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                         local_files_only=False,
                     ),
@@ -2755,7 +2703,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2807,7 +2754,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                         local_files_only=False,
                     ),
@@ -2818,7 +2764,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2870,7 +2815,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                         local_files_only=False,
                     ),
@@ -2881,7 +2825,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2933,7 +2876,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                         local_files_only=False,
                     ),
@@ -2944,7 +2886,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2996,7 +2937,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                         local_files_only=False,
                     ),
@@ -3007,7 +2947,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -3059,7 +2998,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                         local_files_only=False,
                     ),
@@ -3070,7 +3008,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -3122,7 +3059,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                         local_files_only=False,
                     ),
@@ -3133,7 +3069,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
