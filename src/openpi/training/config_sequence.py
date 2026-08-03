@@ -498,17 +498,6 @@ def build(api):
             use_custom_dataloader=True,
         )
 
-    split_variants = [
-        ("", api.DEFAULT_LIBERO_TEST_TASK),
-        ("2", api.DEFAULT_LIBERO_TEST_TASK_V2),
-        ("3", api.DEFAULT_LIBERO_TEST_TASK_V3),
-        ("4", api.DEFAULT_LIBERO_TEST_TASK_V4),
-        ("5", api.DEFAULT_LIBERO_TEST_TASK_V5),
-        ("6", api.DEFAULT_LIBERO_TEST_TASK_V6),
-        ("7", api.DEFAULT_LIBERO_TEST_TASK_V7),
-        ("8", api.DEFAULT_LIBERO_TEST_TASK_V8),
-    ]
-
     configs = [
         make_config(
             name="pi0_fast_incontext_prompt_action_7_state_8_inference",
@@ -520,32 +509,23 @@ def build(api):
         ),
     ]
 
-    for suffix, remove_task_list in split_variants:
-        # The bare/empty-suffix variant is renamed to the paper name "ContextAR";
-        # the numbered siblings (train_split2..8) keep their original names.
-        cfg_name = "ContextAR" if suffix == "" else f"pi0_fast_incontext_prompt_action_7_state_8_train_split{suffix}"
-        configs.append(
-            make_config(
-                name=cfg_name,
-                remove_task_list=remove_task_list,
-                save_interval=1000,
-            )
+    configs.append(
+        make_config(
+            name="ContextAR",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            save_interval=1000,
         )
+    )
 
-    for suffix, remove_task_list in split_variants:
-        name_suffix = f"{suffix}_900m" if suffix else "_900m"
-        # The bare/empty-suffix 900m variant is renamed to the paper name "ContextAR_900m";
-        # the numbered siblings (train_split2_900m..8_900m) keep their original names.
-        cfg_name = "ContextAR_900m" if suffix == "" else f"pi0_fast_incontext_prompt_action_7_state_8_train_split{name_suffix}"
-        configs.append(
-            make_config(
-                name=cfg_name,
-                remove_task_list=remove_task_list,
-                paligemma_variant="gemma_900m",
-                shape_flexible_loader=True,
-                save_interval=1000,
-            )
+    configs.append(
+        make_config(
+            name="ContextAR_900m",
+            remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+            paligemma_variant="gemma_900m",
+            shape_flexible_loader=True,
+            save_interval=1000,
         )
+    )
 
     # Multi-dataset (libero train split + libero_90) FAST in-context configs with
     # averaged in-context image tokens, 900M PaliGemma, fixed 70k LR schedule.
@@ -559,29 +539,8 @@ def build(api):
                 api.DEFAULT_LIBERO_TEST_TASK,
             ),  # split0 / Task 1
             _fast_split_plus_libero90_config(
-                "ContextAR_plus_libero90_split1",
-                api.DEFAULT_LIBERO_TEST_TASK_V2,
-            ),  # eval --task_split split1 (sheet v1)
-            _fast_split_plus_libero90_config(
-                "ContextAR_plus_libero90_split2",
-                api.DEFAULT_LIBERO_TEST_TASK_V3,
-            ),  # eval --task_split split2 (sheet v2)
-            _fast_split_plus_libero90_config(
-                "ContextAR_plus_libero90_split3",
-                api.DEFAULT_LIBERO_TEST_TASK_V4,
-            ),  # eval --task_split split3 (sheet v3)
-            _fast_split_plus_libero90_config(
                 "pi0_fast_incontext_prompt_action_7_state_8_train_split_900m_avg_demo_img_plus_libero90",
                 api.DEFAULT_LIBERO_TEST_TASK,
-                paligemma_variant="gemma_900m",
-                shape_flexible_loader=True,
-                avg_incontext_image_tokens=True,
-            ),
-            # NOTE: the "split2" plus_libero90 family uses TEST_TASK_V3, matching the
-            # refactor_fast_incontext branch (verified — not a typo).
-            _fast_split_plus_libero90_config(
-                "pi0_fast_incontext_prompt_action_7_state_8_train_split2_900m_avg_demo_img_plus_libero90",
-                api.DEFAULT_LIBERO_TEST_TASK_V3,
                 paligemma_variant="gemma_900m",
                 shape_flexible_loader=True,
                 avg_incontext_image_tokens=True,
