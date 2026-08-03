@@ -4,7 +4,7 @@ import pytest
 
 from openpi.models import model as _model
 from openpi.models import pi0
-from openpi.models import pi0_incontextv12
+from openpi.models import contextflow_plain
 from openpi.models import pi0_fast
 from openpi.shared import download
 from openpi.shared import nnx_utils
@@ -174,7 +174,7 @@ def test_pi0_lora_model_params():
     assert actions.shape == (batch_size, model.action_horizon, model.action_dim)
 
 def test_pi0_lora_model_v12_num_params():
-    def list_trainable_paths(cfg: pi0_incontextv12.Pi0IncontextConfigv12):
+    def list_trainable_paths(cfg: contextflow_plain.ContextFlowPlainConfig):
         model = cfg.create(jax.random.key(0))
 
         freeze_filter    = cfg.get_freeze_filter()
@@ -205,7 +205,7 @@ def test_pi0_lora_model_v12_num_params():
     # 2.  Run each case and print results
     # -------------------------------------------------------------
     for title, variants in cases.items():
-        cfg = pi0_incontextv12.Pi0IncontextConfigv12(
+        cfg = contextflow_plain.ContextFlowPlainConfig(
             **variants,
             sample_frames   = 2,
             sample_actions  = 32,

@@ -24,9 +24,9 @@ import openpi.models.model as _model
 import openpi.models.pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
-import openpi.models.pi0_incontextv12 as pi0_incontextv12
-import openpi.models.pi0_incontextv18 as pi0_incontextv18
-import openpi.models.pi0_fast_incontext as pi0_fast_incontext
+import openpi.models.contextflow_plain as contextflow_plain
+import openpi.models.contextflow as contextflow
+import openpi.models.contextar as contextar
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.droid_policy as droid_policy
 import openpi.shared.download as _download
@@ -564,8 +564,6 @@ class DataConfigFactory(abc.ABC):
     remove_task_list: tyro.conf.Suppress[list[str] | None] = None
     # episode_json_path: a json that contains the episode index and task name
     episode_json_path: tyro.conf.Suppress[str | None] = None
-    task_to_episode: tyro.conf.Suppress[str | None] = None
-    episode_to_indexes_file: tyro.conf.Suppress[str | None] = None
     # white list: a josn path that contains all training episodes
     keep_episode_filename_list: tyro.conf.Suppress[str | Path | list[str] | None] = None
     # Base seed used by data factories that need deterministic per-sample random selection.

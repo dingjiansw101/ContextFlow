@@ -9,7 +9,7 @@ import jax.numpy as jnp
 from openpi.models import pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
-from openpi.models.pi0_fast_incontext import Pi0FASTIncontextConfig
+from openpi.models.contextar import ContextARConfig
 import openpi.policies.policy as _policy
 import openpi.policies.policy_incontext as _policy_incontext
 from openpi.policies.policy_incontext import PolicyFASTIncontext
@@ -183,36 +183,21 @@ def create_trained_policy_incontext(
         if train_config.model.use_action_state_prompts:
             print("Inference: Adding action state prompts")
             demo_state_dim = getattr(train_config.data, "demo_state_dim", None)
-            episode_to_indexes_file = getattr(train_config.data, "episode_to_indexes_file", None)
             padding_mode = getattr(train_config.data, "padding_mode", "keep_all")
             mask_padding_as_valid = getattr(train_config.data, "mask_padding_as_valid", False)
-            if episode_to_indexes_file is not None:
-                input_transforms.append(
-                    transforms.AddStatesActionsPromptTransform(
-                        dataset=dataset,
-                        max_len=train_config.model.sample_actions,
-                        states_cache_path=train_config.data.states_cache_path,
-                        actions_cache_path=train_config.data.actions_cache_path,
-                        episode_to_indexes_file=episode_to_indexes_file,
-                        padding_mode=padding_mode,
-                        mask_padding_as_valid=mask_padding_as_valid,
-                        demo_state_dim=demo_state_dim,
-                    )
+            input_transforms.append(
+                transforms.AddStatesActionsPromptTransform(
+                    dataset=dataset,
+                    max_len=train_config.model.sample_actions,
+                    states_cache_path=train_config.data.states_cache_path,
+                    actions_cache_path=train_config.data.actions_cache_path,
+                    padding_mode=padding_mode,
+                    mask_padding_as_valid=mask_padding_as_valid,
+                    demo_state_dim=demo_state_dim,
                 )
-            else:
-                input_transforms.append(
-                    transforms.AddStatesActionsPromptTransform(
-                        dataset=dataset,
-                        max_len=train_config.model.sample_actions,
-                        states_cache_path=train_config.data.states_cache_path,
-                        actions_cache_path=train_config.data.actions_cache_path,
-                        padding_mode=padding_mode,
-                        mask_padding_as_valid=mask_padding_as_valid,
-                        demo_state_dim=demo_state_dim,
-                    )
-                )
+            )
 
-    if isinstance(train_config.model, Pi0FASTIncontextConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+    if isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         return create_trained_policy_fast_incontext(
             train_config,
             checkpoint_dir,
@@ -303,7 +288,7 @@ def _build_fast_incontext_transforms(
     # data_config.model_transforms.inputs (see ModelTransformFactory in
     # training/config.py) and has already run above, so we must not append a
     # second copy (it would find `prompt` already popped and raise).
-    # For the tokenized Pi0FASTIncontextConfig variant, the model transforms
+    # For the tokenized ContextARConfig variant, the model transforms
     # don't include an incontext tokenizer, so add it here.
     if not isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         fast_tokenizer = _tokenizer.FASTTokenizer(
@@ -336,9 +321,9 @@ def create_trained_policy_fast_incontext(
     default_prompt: str | None = None,
     norm_stats: dict[str, transforms.NormStats] | None = None,
 ) -> PolicyFASTIncontext:
-    if not isinstance(train_config.model, Pi0FASTIncontextConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
+    if not isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
         raise TypeError(
-            "create_trained_policy_fast_incontext requires a Pi0FASTIncontextConfig or Pi0FASTIncontextSeqConfig model."
+            "create_trained_policy_fast_incontext requires a ContextARConfig or Pi0FASTIncontextSeqConfig model."
         )
 
     repack_transforms = repack_transforms or transforms.Group()

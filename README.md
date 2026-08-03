@@ -1,40 +1,45 @@
-# openpi
+# ContextFlow & ContextAR: In-Context Vision-Language-Action Models
 
-openpi holds open-source models and packages for robotics, published by the [Physical Intelligence team](https://www.physicalintelligence.company/).
+This repository contains the models and training/evaluation code for **ContextFlow**, **ContextFlow-Plain**, and **ContextAR** — vision-language-action (VLA) models that condition on **in-context demonstrations** (demo images, states, and actions of a related task) to generalize to unseen tasks without fine-tuning.
 
-Currently, this repo contains two types of models:
-- the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion vision-language-action model (VLA)
-- the [π₀-FAST model](https://www.physicalintelligence.company/research/fast), an autoregressive VLA, based on the FAST action tokenizer.
+It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their two base models:
 
-For both models, we provide _base model_ checkpoints, pre-trained on 10k+ hours of robot data, and examples for using them out of the box or fine-tuning them to your own datasets.
+- the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion VLA
+- the [π₀-FAST model](https://www.physicalintelligence.company/research/fast), an autoregressive VLA based on the FAST action tokenizer
 
-This is an experiment: $\pi_0$ was developed for our own robots, which differ from the widely used platforms such as [ALOHA](https://tonyzhaozh.github.io/aloha/) and [DROID](https://droid-dataset.github.io/), and though we are optimistic that researchers and practitioners will be able to run creative new experiments adapting $\pi_0$ to their own platforms, we do not expect every such attempt to be successful. All this is to say: $\pi_0$ may or may not work for you, but you are welcome to try it and see!
+On top of these we provide three in-context methods:
 
+| Method | Base | In-context conditioning | Model config class |
+| --- | --- | --- | --- |
+| **ContextFlow** | π₀ (flow) | 8 demo frames + 128 demo state/action steps | `ContextFlowConfig` (`src/openpi/models/contextflow.py`) |
+| **ContextFlow-Plain** | π₀ (flow) | 2 demo frames + 32 demo state/action steps | `ContextFlowPlainConfig` (`src/openpi/models/contextflow_plain.py`) |
+| **ContextAR** | π₀-FAST (autoregressive) | demo states/actions tokenized into the prompt | `src/openpi/models/contextar.py`, `src/openpi/models/pi0_fast_incontext_seq.py` |
+
+All three are trained and evaluated on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO) with a seen/unseen task split, and have ALOHA real-robot variants (`ContextFlow_Aloha`, `ContextAR_Aloha`, `Pi0_Aloha`).
 
 ## Requirements
 
-To run the models in this repository, you will need an NVIDIA GPU with at least the following specifications. These estimations assume a single GPU, but you can also use multiple GPUs with model parallelism to reduce per-GPU memory requirements by configuring `fsdp_devices` in the training config. Please also note that the current training script does not yet support multi-node training.
+To run the models in this repository, you will need an NVIDIA GPU with at least the following specifications. These estimations assume a single GPU, but you can also use multiple GPUs with model parallelism to reduce per-GPU memory requirements by configuring `fsdp_devices` in the training config. The current training script does not support multi-node training.
 
-| Mode               | Memory Required | Example GPU        |
-| ------------------ | --------------- | ------------------ |
-| Inference          | > 8 GB          | RTX 4090           |
-| Fine-Tuning (LoRA) | > 22.5 GB       | RTX 4090           |
-| Fine-Tuning (Full) | > 70 GB         | A100 (80GB) / H100 |
+| Mode                    | Memory Required | Example GPU        |
+| ----------------------- | --------------- | ------------------ |
+| Inference               | > 16 GB         | RTX 4090           |
+| Fine-Tuning (LoRA)      | > 40 GB         | A100 (80GB) / H100 |
 
-The repo has been tested with Ubuntu 22.04, we do not currently support other operating systems.
+The LIBERO ContextFlow / ContextAR runs reported in the paper were trained on 2–4× H100/A100-80GB with `batch_size=32`. The repo has been tested on Ubuntu 22.04.
 
 ## Installation
 
-When cloning this repo, make sure to update submodules:
+Clone the repo with submodules (the LIBERO simulator and the ALOHA client are submodules; LeRobot itself is pulled by `uv sync`):
 
 ```bash
-git clone --recurse-submodules git@github.com:Physical-Intelligence/openpi.git
+git clone --recurse-submodules <this-repo-url>
 
 # Or if you already cloned the repo:
 git submodule update --init --recursive
 ```
 
-We use [uv](https://docs.astral.sh/uv/) to manage Python dependencies. See the [uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/) to set it up. Once uv is installed, run the following to set up the environment:
+We use [uv](https://docs.astral.sh/uv/) to manage Python dependencies. Once uv is installed, run:
 
 ```bash
 GIT_LFS_SKIP_SMUDGE=1 uv sync
@@ -42,139 +47,121 @@ GIT_LFS_SKIP_SMUDGE=1 uv sync
 
 NOTE: `GIT_LFS_SKIP_SMUDGE=1` is needed to pull LeRobot as a dependency.
 
-
 ## Model Checkpoints
 
-### Base Models
-We provide multiple base VLA model checkpoints. These checkpoints have been pre-trained on 10k+ hours of robot data, and can be used for fine-tuning.
+### Base models (initialization for training)
 
-| Model        | Use Case    | Description                                                                                                 | Checkpoint Path                                |
-| ------------ | ----------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| $\pi_0$      | Fine-Tuning | Base diffusion [π₀ model](https://www.physicalintelligence.company/blog/pi0) for fine-tuning                | `s3://openpi-assets/checkpoints/pi0_base`      |
-| $\pi_0$-FAST | Fine-Tuning | Base autoregressive [π₀-FAST model](https://www.physicalintelligence.company/research/fast) for fine-tuning | `s3://openpi-assets/checkpoints/pi0_fast_base` |
+Training the in-context models starts from the pre-trained π₀ / π₀-FAST base checkpoints, which are downloaded automatically from Physical Intelligence's S3 bucket on first use (cached in `~/.cache/openpi`; override with `OPENPI_DATA_HOME`):
 
-### Fine-Tuned Models
-We also provide "expert" checkpoints for various robot platforms and tasks. These models are fine-tuned from the base models above and intended to run directly on the target robot. These may or may not work on your particular robot. Since these checkpoints were fine-tuned on relatively small datasets collected with more widely available robots, such as ALOHA and the DROID Franka setup, they might not generalize to your particular setup, though we found some of these, especially the DROID checkpoint, to generalize quite broadly in practice.
+| Model        | Checkpoint Path                                |
+| ------------ | ---------------------------------------------- |
+| π₀ base      | `s3://openpi-assets/checkpoints/pi0_base`      |
+| π₀-FAST base | `s3://openpi-assets/checkpoints/pi0_fast_base` |
 
-| Model                    | Use Case  | Description                                                                                                                                                                                              | Checkpoint Path                                       |
-| ------------------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| $\pi_0$-FAST-DROID       | Inference | $\pi_0$-FAST model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/), can perform a wide range of simple table-top manipulation tasks 0-shot in new scenes on the DROID robot platform | `s3://openpi-assets/checkpoints/pi0_fast_droid`       |
-| $\pi_0$-DROID            | Fine-Tuning | $\pi_0$ model fine-tuned on the [DROID dataset](https://droid-dataset.github.io/), faster inference than $\pi_0$-FAST-DROID, but may not follow language commands as well | `s3://openpi-assets/checkpoints/pi0_droid` |
-| $\pi_0$-ALOHA-towel      | Inference | $\pi_0$ model fine-tuned on internal ALOHA data, can fold diverse towels 0-shot on [ALOHA](https://tonyzhaozh.github.io/aloha/) robot platforms                                                          | `s3://openpi-assets/checkpoints/pi0_aloha_towel`      |
-| $\pi_0$-ALOHA-tupperware | Inference | $\pi_0$ model fine-tuned on internal ALOHA data, can unpack food from a tupperware container                                                                                                             | `s3://openpi-assets/checkpoints/pi0_aloha_tupperware` |
-| $\pi_0$-ALOHA-pen-uncap  | Inference | $\pi_0$ model fine-tuned on [public ALOHA data](https://dit-policy.github.io/), can uncap a pen                                                                                                                                    | `s3://openpi-assets/checkpoints/pi0_aloha_pen_uncap`  |
+### In-context model checkpoints (Google Drive)
 
+Our trained checkpoints, norm stats, and dataset metadata are hosted in the public Google Drive folder [`ContextFlow_Data`](https://drive.google.com/drive/folders/1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ?usp=sharing). Each checkpoint directory contains `params/` and `assets/` (the norm stats it was trained with), so a downloaded checkpoint is self-sufficient for inference. `MANIFEST.json` in the same folder documents every checkpoint's provenance (original training name, step, source machine).
 
-By default, checkpoints are automatically downloaded from `s3://openpi-assets` and are cached in `~/.cache/openpi` when needed. You can overwrite the download path by setting the `OPENPI_DATA_HOME` environment variable.
+| Model | Config name | Recommended checkpoint (path inside `ContextFlow_Data`) |
+| --- | --- | --- |
+| ContextFlow | `ContextFlow` | `ContextFlow/ContextFlow_4gpu/19999` |
+| ContextFlow-Plain | `ContextFlow_Plain` | `ContextFlow_Plain/ContextFlow_Plain_refactor_merge/19999` |
+| ContextAR | `ContextAR` | `ContextAR/ContextAR_base/19999` |
+| ContextAR (900M LLM) | `ContextAR_900m` | `ContextAR_900m/ContextAR_900m_orix/19999` |
+| + LIBERO-90 co-training | `<base>_plus_libero90[_split1/2/3]` | see `MANIFEST.json` (one folder per config) |
+| ALOHA (real robot) | `ContextFlow_Aloha`, `ContextAR_Aloha`, `Pi0_Aloha` | see `MANIFEST.json` |
 
+Download via the browser link above, or with [rclone](https://rclone.org/drive/) (using your own configured Google Drive remote, here called `gdrive:`):
 
+```bash
+FOLDER=1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ
+# Checkpoint → local layout expected by the eval commands (checkpoints/<config>/<exp>/<step>)
+rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/19999 \
+    checkpoints/ContextFlow/ContextFlow_4gpu/19999
+# Norm stats (needed for training only — inference reads them from the checkpoint)
+rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
+# LIBERO metadata (task→episode maps; see the LIBERO README)
+rclone copy --drive-root-folder-id $FOLDER gdrive:metadata/libero ./metadata/libero
+```
 
+> **⚠ Norm stats: download, do not recompute.** The released norm stats (`assets/ContextFlow_Plain`, shared by both ContextFlow configs via `assets_repo_override`) were computed by an earlier generation of the configs that used `use_delta_joint_actions=True`, over the full dataset (provenance verified: re-running the computation with that setting reproduces the released file byte-for-byte). The current configs set `use_delta_joint_actions=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
 
-## Running Inference for a Pre-Trained Model
+## Running Inference
 
-Our pre-trained model checkpoints can be run with a few lines of code (here our $\pi_0$-FAST-DROID model):
+Trained in-context policies are created with `create_trained_policy_incontext`, which automatically attaches the demo-fetching pipeline (demos are pulled from the LIBERO dataset at inference time using the `metadata/libero/task_to_episode.json` map — no separate demo files needed):
+
 ```python
-from openpi.training import config
+from openpi.training import config as _config
 from openpi.policies import policy_config
-from openpi.shared import download
 
-config = config.get_config("pi0_fast_droid")
-checkpoint_dir = download.maybe_download("s3://openpi-assets/checkpoints/pi0_fast_droid")
-
-# Create a trained policy.
-policy = policy_config.create_trained_policy(config, checkpoint_dir)
-
-# Run inference on a dummy example.
-example = {
-    "observation/exterior_image_1_left": ...,
-    "observation/wrist_image_left": ...,
-    ...
-    "prompt": "pick up the fork"
-}
+config = _config.get_config("ContextFlow")
+policy = policy_config.create_trained_policy_incontext(
+    config, "checkpoints/ContextFlow/ContextFlow_4gpu/19999"
+)
 action_chunk = policy.infer(example)["actions"]
 ```
-You can also test this out in the [example notebook](examples/inference.ipynb).
 
-We provide detailed step-by-step examples for running inference of our pre-trained checkpoints on [DROID](examples/droid/README.md) and [ALOHA](examples/aloha_real/README.md) robots.
-
-**Remote Inference**: The model can run on a different server and stream actions to the robot via a websocket connection (see `src/openpi/serving/websocket_policy_server.py` and `packages/openpi-client/`). This makes it easy to use more powerful GPUs off-robot and keep robot and policy environments separate.
-
-**Test inference without a robot**: We provide a [script](examples/simple_client/README.md) for testing inference without a robot. This script will generate a random observation and run inference with the model. See [here](examples/simple_client/README.md) for more details.
-
-
-
-
-
-## Fine-Tuning Base Models on Your Own Data
-
-We will fine-tune the $\pi_0$-FAST model on the [Libero dataset](https://libero-project.github.io/datasets) as a running example for how to fine-tune a base model on your own data. We will explain three steps:
-1. Convert your data to a LeRobot dataset (which we use for training)
-2. Defining training configs and running training
-3. Spinning up a policy server and running inference
-
-### 1. Convert your data to a LeRobot dataset
-
-We provide a minimal example script for converting Libero data to a LeRobot dataset in [`examples/libero/convert_libero_data_to_lerobot.py`](examples/libero/convert_libero_data_to_lerobot.py). You can easily modify it to convert your own data! You can download the raw Libero dataset from [here](https://huggingface.co/datasets/openvla/modified_libero_rlds), and run the script with:
+In practice you will usually run inference through the policy server. For in-context models we recommend float32 matmul precision for stable results:
 
 ```bash
-uv run examples/libero/convert_libero_data_to_lerobot.py --data_dir /path/to/your/libero/data
+export JAX_DEFAULT_MATMUL_PRECISION=float32
+uv run scripts/serve_policy.py policy:checkpoint \
+  --policy.inference_dtype=float32 \
+  --policy.config=ContextFlow \
+  --policy.dir=checkpoints/ContextFlow/ContextFlow_4gpu/19999
 ```
 
-### 2. Defining training configs and running training
+`serve_policy.py` auto-detects in-context configs (`--loader=AUTO` is the default; pass `--loader=INCONTEXT` to force). The server listens on port 8000 by default.
 
-To fine-tune a base model on your own data, you need to define configs for data processing and training. We provide example configs with detailed comments for Libero below, which you can modify for your own dataset:
+## Remote Inference
 
-- [`LiberoInputs` and `LiberoOutputs`](src/openpi/policies/libero_policy.py): Defines the data mapping from the Libero environment to the model and vice versa. Will be used for both, training and inference.
-- [`LeRobotLiberoDataConfig`](src/openpi/training/config.py): Defines how to process raw Libero data from LeRobot dataset for training.
-- [`TrainConfig`](src/openpi/training/config.py): Defines fine-tuning hyperparameters, data config, and weight loader.
+The model can run on a different server and stream actions to the robot via a websocket connection (see `src/openpi/serving/websocket_policy_server.py` and `packages/openpi-client/`). This makes it easy to use more powerful GPUs off-robot and keep robot and policy environments separate. You can test inference without a robot using the [simple client](examples/simple_client/README.md), which sends random observations to the server.
 
-We provide example fine-tuning configs for both, [π₀](src/openpi/training/config.py) and [π₀-FAST](src/openpi/training/config.py) on Libero data.
+## Training and Evaluating on LIBERO
 
-Before we can run training, we need to compute the normalization statistics for the training data. Run the script below with the name of your training config:
+The full walkthrough — dataset and metadata preparation, training, serving, and seen/unseen evaluation — lives in **[examples/libero/LIBERO_README.md](examples/libero/LIBERO_README.md)**. The short version:
 
 ```bash
-uv run scripts/compute_norm_stats.py --config-name pi0_fast_libero
+# 1. Get metadata + norm stats (download from Google Drive, or generate — see the LIBERO README)
+rclone copy --drive-root-folder-id 1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ gdrive:metadata/libero ./metadata/libero
+rclone copy --drive-root-folder-id 1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ gdrive:assets ./assets
+
+# 2. Train (the LIBERO dataset physical-intelligence/libero auto-downloads from HuggingFace)
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow --exp-name=my_run --overwrite
+
+# 3. Serve the trained checkpoint (terminal 1)
+export JAX_DEFAULT_MATMUL_PRECISION=float32
+uv run scripts/serve_policy.py policy:checkpoint --policy.inference_dtype=float32 \
+  --policy.config=ContextFlow --policy.dir=checkpoints/ContextFlow/my_run/19999
+
+# 4. Evaluate on unseen tasks (terminal 2, inside the LIBERO client venv)
+python examples/libero/main_incontext_unseen.py --task-suite-name libero_spatial --task-split split0
 ```
 
-Now we can kick off training with the following command (the `--overwrite` flag is used to overwrite existing checkpoints if you rerun fine-tuning with the same config):
+Task splits (which LIBERO tasks are seen during training vs held out) are committed in [`libero_task_splits/`](libero_task_splits) (`split0` … `split7`, each with `seen_tasks.json` / `unseen_tasks.json`).
 
-```bash
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_libero --exp-name=my_experiment --overwrite
-```
+## Repository Structure
 
-The command will log training progress to the console and save checkpoints to the `checkpoints` directory. You can also monitor training progress on the Weights & Biases dashboard. For maximally using the GPU memory, set `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` before running training -- this enables JAX to use up to 90% of the GPU memory (vs. the default of 75%).
-
-### 3. Spinning up a policy server and running inference
-
-Once training is complete, we can run inference by spinning up a policy server and then querying it from a Libero evaluation script. Launching a model server is easy (we use the checkpoint for iteration 20,000 for this example, modify as needed):
-
-```bash
-uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi0_fast_libero --policy.dir=checkpoints/pi0_fast_libero/my_experiment/20000
-```
-
-This will spin up a server that listens on port 8000 and waits for observations to be sent to it. We can then run the Libero evaluation script to query the server. For instructions how to install Libero and run the evaluation script, see the [Libero README](examples/libero/README.md).
-
-
-### More Examples
-
-We provide more examples for how to fine-tune and run inference with our models on the ALOHA platform in the following READMEs:
-- [ALOHA Simulator](examples/aloha_sim)
-- [ALOHA Real](examples/aloha_real)
-
-
+- `src/openpi/models/` — model implementations: `contextflow.py`, `contextflow_plain.py`, `contextar.py` (+ the upstream `pi0.py`, `pi0_fast.py`)
+- `src/openpi/training/` — configs (`config_libero.py`, `config_sequence.py`, `config_aloha.py`), the in-context dataset (`custom_dataset.py`), metadata generation (`generate_task_to_index.py`)
+- `src/openpi/policies/` — policy wrappers, `policy_config.py` (checkpoint → policy, in-context demo pipeline)
+- `scripts/` — `train.py`, `serve_policy.py`, `compute_norm_stats.py`
+- `examples/libero/` — LIBERO evaluation clients and the [LIBERO guide](examples/libero/LIBERO_README.md)
+- `jobs/` — batch eval/training wrappers for local and SLURM machines
+- `libero_task_splits/` — seen/unseen task split definitions
 
 ## Troubleshooting
 
-We will collect common issues and their solutions here. If you encounter an issue, please check here first. If you can't find a solution, please file an issue on the repo (see [here](CONTRIBUTING.md) for guidelines).
-
 | Issue                                     | Resolution                                                                                                                                                                                   |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uv sync` fails with dependency conflicts | Try removing the virtual environment directory (`rm -rf .venv`) and running `uv sync` again. If issues persist, check that you have the latest version of `uv` installed (`uv self update`). |
-| Training runs out of GPU memory           | Make sure you set `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` before running training to allow JAX to use more GPU memory. You can also try reducing the batch size in your training config.        |
-| Policy server connection errors           | Check that the server is running and listening on the expected port. Verify network connectivity and firewall settings between client and server.                                            |
-| Missing norm stats error when training    | Run `scripts/compute_norm_stats.py` with your config name before starting training.                                                                                                          |
-| Dataset download fails                    | Check your internet connection. If using `local_files_only=True`, verify the dataset exists locally. For HuggingFace datasets, ensure you're logged in (`huggingface-cli login`).            |
-| CUDA/GPU errors                           | Verify NVIDIA drivers and CUDA toolkit are installed correctly. For Docker, ensure nvidia-container-toolkit is installed. Check GPU compatibility.                                           |
-| Import errors when running examples       | Make sure you've installed all dependencies with `uv sync` and activated the virtual environment. Some examples may have additional requirements listed in their READMEs.                    |
-| Action dimensions mismatch                | Verify your data processing transforms match the expected input/output dimensions of your robot. Check the action space definitions in your policy classes.                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uv sync` fails with dependency conflicts | Try removing the virtual environment directory (`rm -rf .venv`) and running `uv sync` again. Check that you have the latest version of `uv` installed (`uv self update`). |
+| Training logs `Norm stats not found ... skipping` | This is a **silent** failure mode: the run continues with no normalization. Make sure `./assets/ContextFlow_Plain/` exists (downloaded from Google Drive) before starting training. |
+| In-context inference results are unstable / degraded | Export `JAX_DEFAULT_MATMUL_PRECISION=float32` and pass `--policy.inference_dtype=float32` to `serve_policy.py`. |
+| Training runs out of GPU memory           | Set `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` before training so JAX can use 90% of GPU memory. You can also reduce the batch size, or shard with `fsdp_devices` in the training config. |
+| Simulator renders black images / EGL errors during LIBERO eval | Export `MUJOCO_GL=egl` and make sure an NVIDIA EGL vendor library is installed (see `jobs/local/eval_incontext_unseen_local.sh` for a working environment setup). |
+| Dataset download fails                    | Check your internet connection. If using `local_files_only=True`, verify the dataset exists locally. For HuggingFace datasets, ensure you're logged in (`huggingface-cli login`). |
+| Policy server connection errors           | Check that the server is running and listening on the expected port. Verify network connectivity and firewall settings between client and server. |
 
+## Acknowledgements
+
+This repository is a fork of [openpi](https://github.com/Physical-Intelligence/openpi). We thank the Physical Intelligence team for open-sourcing the π₀ / π₀-FAST models, and the [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) team for the benchmark.

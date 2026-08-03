@@ -5,9 +5,7 @@ lerobot.common.datasets.lerobot_dataset.LeRobotDataset and add or modify
 functionality for specific use cases.
 """
 
-import json
 import random
-from pathlib import Path
 from typing import Any, Callable, Dict, SupportsIndex
 
 import numpy as np
@@ -15,6 +13,7 @@ import torch
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 
 import openpi.transforms as _transforms
+from openpi.training import lookup_tables
 
 
 def _identity_hf_transform(items_dict):
@@ -82,9 +81,12 @@ class CustomLeRobotDataset(LeRobotDataset):
         num_current_frames: int = 1,
         num_sample_frames: int = 2,
         num_sample_actions: int = 32,
-        task_to_episode_path: str | None = "metadata/libero/task_to_episode.json",
         random_select: bool = True,
         seed_base: int | None = None,
+        state_key: str = "state",
+        actions_key: str = "actions",
+        demo_image_keys: dict[str, str] | None = None,
+        demo_selection_seed_compat: bool = False,
     ):
         """
         CustomLeRobotDataset extends LeRobotDataset to load both sequences and in-context demonstrations.
@@ -95,9 +97,19 @@ class CustomLeRobotDataset(LeRobotDataset):
             num_current_frames (int): Number of consecutive frames for current frames sequence.
             num_sample_frames (int): Number of frames for in-context demonstration.
             num_sample_actions (int): Number of actions for in-context demonstration.
-            task_to_episode_path (str): Path to task_to_episode.json mapping file.
             random_select (bool): If True, randomly select demo episodes; if False, use deterministic selection (first episode).
             seed_base (int | None): Optional base seed for deterministic random demo selection.
+            state_key (str): Dataset column holding the proprioceptive state ("state" for LIBERO,
+                "observation.state" for ALOHA-style LeRobot datasets).
+            actions_key (str): Dataset column holding raw actions ("actions" for LIBERO, "action" for ALOHA).
+            demo_image_keys (dict[str, str] | None): Mapping from output name in dem_prompt_images to the
+                dataset image column. Defaults to the LIBERO layout
+                {"image": "image", "wrist_image": "wrist_image"}.
+            demo_selection_seed_compat (bool): When True and seed_base is set, reproduce the exact seeded
+                episode selection of the legacy InjectDemoIndexes transform (same stable_sample_seed
+                component stream and the same rng.sample draw). Lets deterministic consistency checks
+                compare this loader against the legacy cache-based loader batch-for-batch. Has no effect
+                when seed_base is None.
         """
 
         # Initialize parent - all LeRobotDataset code, including file loading and indexing
@@ -115,24 +127,32 @@ class CustomLeRobotDataset(LeRobotDataset):
         self.num_current_frames = num_current_frames
         self.num_sample_frames = num_sample_frames
         self.num_sample_actions = num_sample_actions
-        self.action_horizon = len(delta_timestamps["actions"])
+        self.state_key = state_key
+        self.actions_key = actions_key
+        self.demo_image_keys = demo_image_keys or {"image": "image", "wrist_image": "wrist_image"}
+        self.demo_selection_seed_compat = demo_selection_seed_compat
+        self.action_horizon = len(delta_timestamps[actions_key])
         self.random_select = random_select
         self.seed_base = seed_base
 
-        # Load task-to-episode mapping. Stored as a tuple of ints per task so
-        # random.choice / [0] indexing avoid rebuilding lists on every call.
-        assert task_to_episode_path is not None, "task_to_episode_path is not set"
-        with Path(task_to_episode_path).open("r") as f:
-            task_to_episode_str = json.load(f)
+        # Derive the task-to-episode mapping from the dataset metadata that
+        # super().__init__ already loaded, rather than a precomputed JSON that could
+        # go stale against it. Restricted to self.episodes so demo candidates always
+        # resolve through self._episode_id_to_idx below; for the task-level splits the
+        # configs actually use, every episode of a kept task is kept, so this drops
+        # only tasks that have no frames in the dataset and is otherwise a no-op.
+        # Stored as a tuple of ints per task so random.choice / [0] indexing avoid
+        # rebuilding lists on every call.
         self.task_to_episode = {
-            int(k): tuple(int(e) for e in v) for k, v in task_to_episode_str.items()
+            task: tuple(eps)
+            for task, eps in lookup_tables.build_task_to_episode(self.meta, self.episodes).items()
         }
 
         # Pre-cache small numeric columns so demo-state/action sampling does not
         # pay the per-row PIL decode cost from hf_transform_to_torch.
         # state/raw-actions are O(state_dim) per frame — tiny in aggregate.
-        self._states_np = _list_column_to_numpy(self.hf_dataset.data["state"], dtype=np.float32)
-        self._raw_actions_np = _list_column_to_numpy(self.hf_dataset.data["actions"], dtype=np.float32)
+        self._states_np = _list_column_to_numpy(self.hf_dataset.data[self.state_key], dtype=np.float32)
+        self._raw_actions_np = _list_column_to_numpy(self.hf_dataset.data[self.actions_key], dtype=np.float32)
         # Raw image view for prompt frames. LeRobot's default transform converts
         # PIL images to float32 torch tensors, then the LIBERO transform converts
         # them back to uint8; this view avoids that round-trip for demo images.
@@ -163,11 +183,11 @@ class CustomLeRobotDataset(LeRobotDataset):
         for key, q_idx in query_indices.items():
             if key in self.meta.video_keys:
                 continue
-            if key == "actions" and self._raw_actions_np is not None:
+            if key == self.actions_key and self._raw_actions_np is not None:
                 out[key] = torch.from_numpy(
                     self._raw_actions_np[np.asarray(q_idx, dtype=np.int64)]
                 )
-            elif key == "state" and self._states_np is not None:
+            elif key == self.state_key and self._states_np is not None:
                 out[key] = torch.from_numpy(
                     self._states_np[np.asarray(q_idx, dtype=np.int64)]
                 )
@@ -195,7 +215,12 @@ class CustomLeRobotDataset(LeRobotDataset):
 
         # Load in-context demonstration from another episode with the same task
         task_index = int(item["task_index"])
-        incontext_demo = self.load_incontext_demonstration(current_ep_idx, task_index, sample_index=idx)
+        # Seed components mirroring what the legacy repack forwarded to InjectDemoIndexes
+        # (the aloha in-context repack maps "index" and "episode_index" but not "frame_index").
+        legacy_seed_components = (item.get("index"), None, item.get("episode_index"))
+        incontext_demo = self.load_incontext_demonstration(
+            current_ep_idx, task_index, sample_index=idx, legacy_seed_components=legacy_seed_components
+        )
         item.update(incontext_demo)
 
         return item
@@ -207,11 +232,31 @@ class CustomLeRobotDataset(LeRobotDataset):
         current_ep_idx: int,
         task_index: int,
         sample_index: SupportsIndex | None,
+        legacy_seed_components: tuple | None = None,
     ) -> int:
         if not self.random_select:
             return other_episodes[0]
         if self.seed_base is None:
             return random.choice(other_episodes)
+
+        if self.demo_selection_seed_compat and legacy_seed_components is not None:
+            # Reproduce InjectDemoIndexes' seeded draw exactly: same component stream
+            # (task_index, index, frame_index, episode_index) and the same
+            # rng.sample(candidates, 1) call, so a deterministic consistency check can
+            # compare this loader against the legacy cache-based loader batch-for-batch.
+            index_val, frame_index_val, episode_index_val = legacy_seed_components
+            rng = random.Random(
+                _transforms.stable_sample_seed(
+                    self.seed_base,
+                    "InjectDemoIndexes",
+                    task_index,
+                    index_val,
+                    frame_index_val,
+                    episode_index_val,
+                )
+            )
+            candidates = [int(ep) for ep in other_episodes]
+            return rng.sample(candidates, 1)[0]
 
         rng = random.Random(
             _transforms.stable_sample_seed(
@@ -229,6 +274,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         current_ep_idx: int,
         task_index: int,
         sample_index: SupportsIndex | None = None,
+        legacy_seed_components: tuple | None = None,
     ) -> Dict[str, Any]:
         """Load in-context demonstration from another episode with the same task.
 
@@ -251,6 +297,7 @@ class CustomLeRobotDataset(LeRobotDataset):
             current_ep_idx=current_ep_idx,
             task_index=task_index,
             sample_index=sample_index,
+            legacy_seed_components=legacy_seed_components,
         )
 
         if self._episode_id_to_idx is not None:
@@ -274,8 +321,8 @@ class CustomLeRobotDataset(LeRobotDataset):
 
         data = {
             "dem_prompt_images": {
-                "image": np.asarray(sampled_frames["image"], dtype=np.uint8),
-                "wrist_image": np.asarray(sampled_frames["wrist_image"], dtype=np.uint8),
+                out_name: np.asarray(sampled_frames[column], dtype=np.uint8)
+                for out_name, column in self.demo_image_keys.items()
             }
         }
 

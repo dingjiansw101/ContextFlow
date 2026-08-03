@@ -11,7 +11,7 @@
 set -euo pipefail
 
 export CONFIG="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor"
-export POLICY_CONFIG="$CONFIG"
+export POLICY_CONFIG="ContextFlow_Plain"  # served config (renamed); CONFIG stays old for the on-disk ckpt path
 export JOB_TAG="v12"
 export ASSETS_BASE_DIR="/mnt/data/u/dingj0b/code/openpi_libero/openpi/assets"
 

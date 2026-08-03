@@ -14,7 +14,7 @@ set -euo pipefail
 
 REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi-refactor_refactor_merge}"
 CONFIG="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor"
-POLICY_CONFIG="$CONFIG"
+POLICY_CONFIG="ContextFlow_Plain"  # served config (renamed); CONFIG stays old for the on-disk ckpt path
 EXP_NAME="${CONFIG}_refactor_merge"
 ITER="${ITER:-19999}"
 CHECKPOINT_DIR="checkpoints/${CONFIG}/${EXP_NAME}/${ITER}"

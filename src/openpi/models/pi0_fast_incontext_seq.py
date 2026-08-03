@@ -11,7 +11,7 @@ from typing_extensions import override
 from openpi.models import model as _model
 import openpi.models.gemma_fast as _gemma
 import openpi.models.siglip as _siglip
-from openpi.models.pi0_fast_incontext import (
+from openpi.models.contextar import (
     PALIGEMMA_EOS_TOKEN,
     make_attn_mask,
     left_to_right_align,

@@ -40,18 +40,22 @@ def build(api) -> list[api.TrainConfig]:
         model_config,
         *,
         train_episode: list[int] | None,
-        task_to_episode_path: str,
-        episode_to_indexes_file: str,
         local_files_only: bool | None = None,
     ):
+        # Resolved first so InjectDemoIndexes can derive its lookup tables from the
+        # same repo (and local_files_only) the dataset itself will be built from.
+        base_config = factory.create_base_config(assets_dirs)
+        if local_files_only is not None:
+            base_config = dataclasses.replace(base_config, local_files_only=local_files_only)
+
         data_transforms = api._transforms.Group(
             inputs=[
                 api._transforms.InjectDemoIndexes(
                     sample_frames=model_config.sample_frames,
                     random_select=model_config.random_select,
                     sample_episodes=model_config.sample_episodes,
-                    task_to_episode=task_to_episode_path,
-                    episode_to_indexes=episode_to_indexes_file,
+                    repo_id=base_config.repo_id,
+                    local_files_only=base_config.local_files_only,
                     train_episode_index_list=train_episode,
                     seed_base=factory.seed_base,
                 )
@@ -74,10 +78,6 @@ def build(api) -> list[api.TrainConfig]:
                 inputs=[api._transforms.DeltaActions(delta_action_mask)],
                 outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
             )
-
-        base_config = factory.create_base_config(assets_dirs)
-        if local_files_only is not None:
-            base_config = dataclasses.replace(base_config, local_files_only=local_files_only)
 
         return dataclasses.replace(
             base_config,
@@ -140,8 +140,6 @@ def build(api) -> list[api.TrainConfig]:
         use_delta_joint_actions: bool = True
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-        task_to_episode: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
         # Padding strategy for AddStatesActionsPromptTransform
         # "keep_all": Keep all frames when L < max_len, then pad (default, current behavior)
@@ -160,8 +158,6 @@ def build(api) -> list[api.TrainConfig]:
                 assets_dirs,
                 model_config,
                 train_episode=train_epi,
-                task_to_episode_path=self.task_to_episode,
-                episode_to_indexes_file=self.episode_to_indexes_file,
             )
 
         @override
@@ -171,8 +167,6 @@ def build(api) -> list[api.TrainConfig]:
                 assets_dirs,
                 model_config,
                 train_episode=None,
-                task_to_episode_path=self.task_to_episode,
-                episode_to_indexes_file=self.episode_to_indexes_file,
             )
 
     @dataclasses.dataclass(frozen=True)
@@ -190,8 +184,6 @@ def build(api) -> list[api.TrainConfig]:
         custom_dataloader_version: str = "v1"  # Version of custom dataloader to use
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
-        task_to_episode_path: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
         states_cache_path: str = "metadata/libero/episode_states_without_delta_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_without_delta_cache.json"
         padding_mode: str = "linspace_repeat"
@@ -302,7 +294,6 @@ def build(api) -> list[api.TrainConfig]:
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=self.task_to_episode_path,
                 random_select=self.random_select,
             )
 
@@ -466,7 +457,6 @@ def build(api) -> list[api.TrainConfig]:
                 local_files_only=base_config.local_files_only,
                 num_sample_frames=self.sample_frames,
                 num_sample_actions=self.sample_actions,
-                task_to_episode_path=demo_spec.task_to_episode_path,
                 random_select=self.random_select,
             )
 
@@ -519,8 +509,6 @@ def build(api) -> list[api.TrainConfig]:
         use_delta_joint_actions: bool = True
         states_cache_path: str = "metadata/libero/episode_states_cache.json"
         actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-        task_to_episode: str = "metadata/libero/task_to_episode.json"
-        episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
         @override
         def create(self, assets_dirs: pathlib.Path, model_config: BaseModelConfig) -> DataConfig:
@@ -563,8 +551,8 @@ def build(api) -> list[api.TrainConfig]:
                         sample_frames=model_config.sample_frames,
                         random_select=model_config.random_select,
                         sample_episodes=model_config.sample_episodes,
-                        task_to_episode=self.task_to_episode,
-                        episode_to_indexes=self.episode_to_indexes_file,
+                        repo_id=self.repo_id,
+                        local_files_only=self.local_files_only,
                         train_episode_index_list=train_epi,
                         seed_base=self.seed_base,
                     )
@@ -616,7 +604,7 @@ def build(api) -> list[api.TrainConfig]:
         # Xianjie: pi0_libero_incontextv2_low_mem_finetune_sample2_actionssample32 with train_test_split
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -639,7 +627,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -653,8 +641,13 @@ def build(api) -> list[api.TrainConfig]:
             # wandb_enabled=False,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            name="ContextFlow_Plain",
+            # Renamed from pi0_libero_refactor_incontextv12_..._dataset_refactor.
+            # Keep the original name as the assets key so the 44 configs whose
+            # assets_repo_override points at it (and the on-disk ./assets/<old name>
+            # norm stats) still resolve. See CONFIG_NAME_MAPPING.md.
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -670,7 +663,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -679,7 +671,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -696,8 +688,8 @@ def build(api) -> list[api.TrainConfig]:
         *[
             api.TrainConfig(
                 name=f"pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_gemma2b_split{_split_idx}",
-                assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-                model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+                assets_repo_override="ContextFlow_Plain",
+                model=api.contextflow.ContextFlowConfig(
                     paligemma_variant="gemma_2b",
                     action_expert_variant="gemma_300m",
                     sample_frames=2,
@@ -713,7 +705,6 @@ def build(api) -> list[api.TrainConfig]:
                     use_delta_joint_actions=False,
                     sample_frames=2,
                     sample_actions=32,
-                    task_to_episode_path="metadata/libero/task_to_episode.json",
                     remove_task_list=_split_test_tasks,
                     episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                     random_select=True,
@@ -741,8 +732,8 @@ def build(api) -> list[api.TrainConfig]:
         ],
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v5",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -758,7 +749,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -767,7 +757,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -784,8 +774,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- Split V1 (train_split_v2) ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v2",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -801,7 +791,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -810,7 +799,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -825,8 +814,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- Split V2 (train_split_v3) ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -842,7 +831,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -851,7 +839,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -866,8 +854,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- Split V3 (train_split_v4) ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v4",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -883,7 +871,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -892,7 +879,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -906,8 +893,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample128_random_select_without_delta_train_split_dataset_refactor",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -923,7 +910,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -932,7 +918,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -948,8 +934,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample64_random_select_without_delta_train_split_dataset_refactor",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -965,7 +951,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=64,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -974,7 +959,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -990,8 +975,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=4,
@@ -1007,7 +992,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=4,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1016,7 +1000,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=4,
@@ -1032,8 +1016,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_without_img",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=1,
@@ -1050,7 +1034,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=4,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1059,7 +1042,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=1,
@@ -1075,9 +1058,9 @@ def build(api) -> list[api.TrainConfig]:
             # wandb_enabled=False,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            name="ContextFlow",
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1093,7 +1076,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1102,7 +1084,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1119,8 +1101,8 @@ def build(api) -> list[api.TrainConfig]:
         # v2 defined here, corresponds to split1 in eval.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v2",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1136,7 +1118,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1145,7 +1126,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1159,8 +1140,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_low_mem_finetune_sample_frames8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1176,7 +1157,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1185,7 +1165,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=30_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1199,8 +1179,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split0",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1216,7 +1196,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1231,8 +1210,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split1",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1248,7 +1227,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1263,8 +1241,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split2",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1280,7 +1258,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1295,8 +1272,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1312,7 +1289,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1327,8 +1303,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_gemma2b_finetune_sample_frames8_split4",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 paligemma_variant="gemma_2b",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1344,7 +1320,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1359,8 +1334,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_train_split_v5",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1376,7 +1351,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V5,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1385,7 +1359,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1401,8 +1375,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_paligemma_init",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1418,7 +1392,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1427,7 +1400,7 @@ def build(api) -> list[api.TrainConfig]:
             # weight_loader=api.weight_loaders.PaliGemmaWeightLoader(),  # This causes shape mismatch with gemma_300m
             weight_loader=api.weight_loaders.VisionEncoderOnlyLoader(verbose=True, include_embedder=True),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1443,8 +1416,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_selective_init",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1460,7 +1433,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1469,7 +1441,7 @@ def build(api) -> list[api.TrainConfig]:
                 params_path="s3://openpi-assets/checkpoints/pi0_base/params", verbose=True
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m",
                 sample_frames=8,
@@ -1485,8 +1457,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_avg_current_img",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1503,7 +1475,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1512,7 +1483,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1529,8 +1500,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_wo_compress_state",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1547,7 +1518,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1556,7 +1526,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1573,8 +1543,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions64",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1590,7 +1560,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=64,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1599,7 +1568,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1615,8 +1584,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions256",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1632,7 +1601,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=256,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1641,7 +1609,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1657,8 +1625,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions32",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1674,7 +1642,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1683,7 +1650,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1699,8 +1666,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_without_text",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1717,7 +1684,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1726,7 +1692,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1743,8 +1709,8 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_without_state_action",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1761,7 +1727,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1770,7 +1735,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1788,8 +1753,8 @@ def build(api) -> list[api.TrainConfig]:
         # v3 defined here, corresponds to v2 in google sheet.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1805,7 +1770,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1814,7 +1778,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1831,8 +1795,8 @@ def build(api) -> list[api.TrainConfig]:
         # v3 defined here, corresponds to v2 in google sheet.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_sample_actions64_split_v3",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1848,7 +1812,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=64,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1857,7 +1820,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1874,8 +1837,8 @@ def build(api) -> list[api.TrainConfig]:
         # v4 defined here, corresponds to v3 in google sheet.
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v4",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -1891,7 +1854,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -1900,7 +1862,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2403,8 +2365,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v12 train split_v6 ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v6",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2420,7 +2382,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2429,7 +2390,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2444,8 +2405,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v18 split_v6 ---
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v6",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2461,7 +2422,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V6,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2470,7 +2430,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2488,8 +2448,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v12 train split_v7 ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v7",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2505,7 +2465,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2514,7 +2473,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2530,8 +2489,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v18 split_v7 ---
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v7",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2547,7 +2506,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V7,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2556,7 +2514,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2574,8 +2532,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v12 train split_v8 ---
         api.TrainConfig(
             name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_train_split_v8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2591,7 +2549,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=2,
                 sample_actions=32,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2600,7 +2557,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2615,8 +2572,8 @@ def build(api) -> list[api.TrainConfig]:
         # --- v18 split_v8 ---
         api.TrainConfig(
             name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_split_v8",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2632,7 +2589,6 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                task_to_episode_path="metadata/libero/task_to_episode.json",
                 remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V8,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
@@ -2641,7 +2597,7 @@ def build(api) -> list[api.TrainConfig]:
                 "s3://openpi-assets/checkpoints/pi0_base/params"
             ),
             num_train_steps=20_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2657,9 +2613,9 @@ def build(api) -> list[api.TrainConfig]:
         # Ported from feature/multi-dataset with the fixed 70k LR schedule
         # (warmup 1k + decay 69k), matching ECCV rebuttal rows 71-72.
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            name="ContextFlow_Plain_plus_libero90",
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2676,7 +2632,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                         local_files_only=False,
                     ),
@@ -2687,7 +2642,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2707,7 +2661,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2720,9 +2674,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90",
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            name="ContextFlow_plus_libero90",
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2739,7 +2693,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
                         local_files_only=False,
                     ),
@@ -2750,7 +2703,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2770,7 +2722,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2783,9 +2735,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            name="ContextFlow_Plain_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2802,7 +2754,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                         local_files_only=False,
                     ),
@@ -2813,7 +2764,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2833,7 +2783,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2846,9 +2796,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            name="ContextFlow_Plain_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2865,7 +2815,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                         local_files_only=False,
                     ),
@@ -2876,7 +2825,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2896,7 +2844,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2909,9 +2857,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            name="ContextFlow_Plain_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2928,7 +2876,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                         local_files_only=False,
                     ),
@@ -2939,7 +2886,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -2959,7 +2905,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv12.Pi0IncontextConfigv12(
+            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=2,
@@ -2972,9 +2918,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            name="ContextFlow_plus_libero90_split1",  # eval --task_split split1 (holds out _V2)
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -2991,7 +2937,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V2,
                         local_files_only=False,
                     ),
@@ -3002,7 +2947,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -3022,7 +2966,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3035,9 +2979,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            name="ContextFlow_plus_libero90_split2",  # eval --task_split split2 (holds out _V3)
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3054,7 +2998,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V3,
                         local_files_only=False,
                     ),
@@ -3065,7 +3008,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -3085,7 +3027,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3098,9 +3040,9 @@ def build(api) -> list[api.TrainConfig]:
             use_custom_dataloader=True,
         ),
         api.TrainConfig(
-            name="pi0_libero_incontextv18_low_mem_finetune_sample_frames8_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
-            assets_repo_override="pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor",
-            model=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            name="ContextFlow_plus_libero90_split3",  # eval --task_split split3 (holds out _V4)
+            assets_repo_override="ContextFlow_Plain",
+            model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,
@@ -3117,7 +3059,6 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        task_to_episode_path="metadata/libero/task_to_episode.json",
                         remove_task_list=api.DEFAULT_LIBERO_TEST_TASK_V4,
                         local_files_only=False,
                     ),
@@ -3128,7 +3069,6 @@ def build(api) -> list[api.TrainConfig]:
                                 "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
                             ).expanduser()
                         ),
-                        task_to_episode_path="metadata/libero_90/task_to_episode.json",
                         remove_task_list=None,
                         local_files_only=True,
                     ),
@@ -3148,7 +3088,7 @@ def build(api) -> list[api.TrainConfig]:
                 decay_lr=2.5e-6,
             ),
             num_train_steps=70_000,
-            freeze_filter=api.pi0_incontextv18.Pi0IncontextConfigv18(
+            freeze_filter=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
                 sample_frames=8,

@@ -260,7 +260,7 @@ class VisionEncoderOnlyLoader(WeightLoader):
 class SelectiveVisionAndProjectionsLoader(WeightLoader):
     """Loads vision encoder, embedder, and basic projection layers from pi0_base checkpoint.
 
-    This loader is designed for in-context learning models (like pi0_incontextv18) where you want to:
+    This loader is designed for in-context learning models (like contextflow) where you want to:
     - Load pre-trained vision encoder from pi0_base
     - Load pre-trained embedder from pi0_base
     - Load pre-trained basic projection layers (state_proj, action_*) from pi0_base

@@ -1,0 +1,143 @@
+# Aloha cache-free port: consistency verification vs `aloha-dev`
+
+Branch `feat/aloha-cache-free` (cut from `feat/rename-configs-contextflow` @ `e63059d`)
+ports the four aloha in-context configs — `ContextFlow_Aloha(_Inference)` and
+`ContextAR_Aloha(_Inference)` — from the legacy JSON state/action cache pipeline
+(`InjectDemoIndexes` + `AddImagePromptTransform` + `AddStatesActionsPromptTransform`
+reading `metadata/aloha_data_unique/episode_{states,actions}_cache.json`, ~510 MB) to the
+cache-free `CustomLeRobotDataset` path (`use_custom_dataloader=True`; serving via
+`InjectDemoFromCustomDataset` + `provides_incontext_demos=True`). The only metadata the
+new path needs is `metadata/aloha_data_unique/task_to_episode.json` (14 KB, now in-repo).
+
+All checks ran on kw61077 (the aloha training box: `vo2yager/aloha_data_unique` local,
+legacy caches present, all venvs jax 0.5.0 / torch 2.6.0 / PIL 11.0.0, RTX A6000).
+Three code states were compared:
+
+- **aloha-dev**: `~/code/openpi` @ `origin/aloha-dev` (reference; legacy loader, old config names)
+- **legacy**: worktree @ `e63059d` (rename-branch tip; legacy cache loader)
+- **cache-free**: worktree @ this branch
+
+Artifacts: `kw61077:~/aloha_consistency/20260719a/` (harness JSONs, per-leaf hashes,
+action tensors). Harness: in-tree `scripts/consistency_check.py`, seeded via `seed_base`
+(set by `--deterministic-data`) on the real `random_select=True` selection path. `aloha-dev`
+lacks `seed_base`, so it is given the same **dormant, behavior-preserving** `seed_base`
+plumbing (patch `~/aloha_consistency/20260719a/aloha_dev_seedbase.patch`: `seed_base=None`
+is byte-identical to its original unseeded `random.sample`; only when set does it seed).
+With that, all three branches reproduce `InjectDemoIndexes`' seeded draw identically
+(`CustomLeRobotDataset.demo_selection_seed_compat` mirrors it on the cache-free side). This
+replaces the earlier `--no-random-select` first-candidate workaround (now removed from the
+harness).
+
+## Training batch (seed 12345, batch_size 1, num_workers 0, `--deterministic-data`, `random_select=True`)
+
+SHA-256 over every tensor (values + shapes + dtypes) of the first batch, on the seeded
+production selection path (all three seeded with `seed_base=12345`):
+
+| Check | aloha-dev (+ dormant seed_base patch) | legacy @ e63059d | cache-free |
+|---|---|---|---|
+| ContextFlow, seeded `random_select=True` | `69e7dcf8…` | `69e7dcf8…` | `69e7dcf8…` ✅ |
+
+**Bitwise identical, all three.** aloha-dev's `InjectDemoIndexes` candidate logic is
+byte-identical to the rename branch (verified by diff; the only substantive difference in the
+data config was the `seed_base` threading), and a unit-level check confirmed the seeded
+episode pick matches across branches for multiple `(task_index, index, episode_index)` tuples
+before the batch run. This supersedes the earlier `--no-random-select` first-candidate
+comparison (`7775e190…`, since removed from the harness): the match now holds on the same
+`random_select=True` path used in real training.
+
+**ContextAR is intentionally excluded from this 3-way batch match.** Its demos now use
+pi0_fast_base stats (see **ContextAR demo normalization** below), so its cache-free batch
+deliberately differs from aloha-dev/legacy. The ContextAR *loader mechanism* (cache vs
+`CustomLeRobotDataset`) was separately shown equivalent earlier: with demos pinned to pi0_base
+(as the legacy cache stored them) the ContextAR batch matched aloha-dev bitwise (`f6c78ad9…`)
+— that pinning was then deliberately replaced.
+
+## One-step train (ContextFlow, same batch, pi0_base weights)
+
+| Metric | aloha-dev | legacy @ e63059d | cache-free |
+|---|---|---|---|
+| loss | 4.00637149810791 | 4.001909255981445 | **4.001909255981445** ✅ |
+| grad_norm | 118.43104553222656 | 118.4654312133789 | **118.4654312133789** ✅ |
+| param_norm | 947.1429443359375 | 947.1429443359375 | 947.1429443359375 ✅ |
+
+cache-free == legacy **bitwise**. The ~0.1% loss delta vs aloha-dev is a pre-existing
+cross-branch model-code difference, **not** data or randomness (identical batch, identical
+initial `param_norm`, each side self-deterministic under
+`XLA_FLAGS=--xla_gpu_deterministic_ops=true`).
+
+**Root cause of the aloha-dev vs rename-branch delta (found by full model-module diff):**
+the rename branch wraps every SigLIP image-encode in a `jax.lax.cond` short-circuit
+(`contextflow.py:406-417` `_encode_image_tokens` = `lax.cond(any(mask), encode, zeros)`,
+call sites `:428/:465/:476`), which aloha-dev's `pi0_incontextv18.py` does not have
+(it always calls `PaliGemma.img(...)` inline at `:412/:448/:459`). With `dtype="bfloat16"`,
+wrapping the encode in `lax.cond` changes XLA's op-fusion / reduction ordering, shifting the
+bf16 low-order bits deterministically → the ~1e-3 relative loss delta. Everything else in the
+two modules is byte-identical on the numeric path: matmul precision (both
+`jax.lax.Precision.HIGHEST`, attention `preferred_element_type=float32`), compute dtype
+(both bf16), SigLIP/LoRA (0-line diff), and the loss / noise / time-sampling / attention tail
+(empty diff). Matmul-precision and dtype were explicitly ruled out. **Confirmed by a toggle experiment**
+(seeded `69e7dcf8` batch, deterministic XLA ops): bypassing the cond — reverting to aloha-dev's
+inline `PaliGemma.img(...)[0]`, the sole edit — reproduces aloha-dev's one-step
+loss / grad_norm / param_norm **bit-for-bit** (`4.018293380737305` / `117.21666717529297` /
+`947.1428833007812`), versus cond-ON `4.01575231552124` (a +0.063% loss shift). All six image
+masks were all-True on this batch, so the cond takes the `encode` branch either way — the delta
+is purely `lax.cond`-induced bf16 fusion/reduction reordering, not mask-driven token zeroing.
+This delta is a property of the rename branch itself (present before the cache drop); the cache
+drop contributes exactly zero (cache-free == legacy bitwise).
+
+## Inference (shared checkpoints, fixed synthetic observation, `split="test"`, task 5, float32 matmul + deterministic XLA ops)
+
+Fixture hash `79c51f17…` identical on all sides. Direct `create_trained_policy_incontext`
+call, no server.
+
+| Check | aloha-dev | legacy @ e63059d | cache-free |
+|---|---|---|---|
+| ContextFlow actions [50,16] | `7ddc3bd7…` (norm 16.905480) | `6a4c72bf…` (norm 16.910723) | `6a4c72bf…` ✅ bitwise == legacy |
+| ContextAR actions [10,16] (†) | `0660745f…` (norm 7.818520) | — | `0660745f…` (pi0_base-pinned variant) |
+
+ContextFlow cache-free serving is bitwise-identical to legacy cache-based serving on the
+same branch; the ≤2.3e-4/element residual vs aloha-dev is the same rename-branch numeric
+difference as in training. The (†) ContextAR inference match to aloha-dev was, again, the
+pi0_base-pinned variant; the current port uses pi0_fast_base demo stats and so differs by
+design (see below).
+
+## ContextAR demo normalization: legacy quirk, and the corrected port
+
+**The legacy inconsistency.** In-context demos contribute demo states/actions to the model.
+The legacy shared cache (`episode_{states,actions}_cache.json`) was built once under the
+v18/pi0 pipeline, so its rows are normalized with the **pi0_base** `trossen_mobile` stats.
+`ContextFlow` (pi0 diffusion) uses pi0_base stats for its current frame too, so for it the
+cache is native and consistent. `ContextAR` (pi0_fast) uses **pi0_fast_base** stats for its
+current frame, whose **action** mean/std differ from pi0_base (std ~25–30% larger on the 12
+arm-joint dims; state stats are bitwise identical between the two asset bundles). Because the
+legacy loader consumed the cached demo values as-is, ContextAR's *demo* actions were
+normalized in pi0_base space while its *current-frame* actions were normalized in
+pi0_fast_base space — an internal normalization mismatch baked into the legacy pipeline (and
+into any ContextAR checkpoints trained on it).
+
+**Decision: the cache-free port uses the correct pi0_fast stats for ContextAR demos.**
+Rather than reproduce the legacy mismatch, the port normalizes ContextAR demo states/actions
+with the config's **own pi0_fast_base** `trossen_mobile` stats — identical to how the current
+frame is normalized. This is the default factory behavior (`norm_stats_aliases`
+`dem_prompt_all_* → state/actions`); no per-config override, no injected `demo_ref_*` keys.
+Consequence: ContextAR cache-free batches/inference **deliberately differ** from the legacy
+cache / aloha-dev, by exactly the demo-action normalization (the ~25–30% arm-joint scale
+difference above). `ContextFlow` is unaffected — its own stats already are the cache-builder
+stats, so it stays consistent with the legacy pipeline.
+
+⚠️ **Existing ContextAR checkpoints:** the released ContextAR checkpoint
+(`pi0_fast_aloha_data_unique_incontext_train_split_v1`) was trained with the legacy
+pi0_base-normalized demos. Serving it under this corrected config feeds pi0_fast-normalized
+demos (a train/inference distribution shift), so ContextAR should be **retrained** from the
+base checkpoint under the corrected normalization for a self-consistent pipeline. New runs
+are correct by construction.
+
+## Verdict
+
+Dropping the JSON state/action caches is behavior-preserving for the loading mechanics:
+`ContextFlow` training batches, a full optimizer step, and checkpoint inference are **bitwise
+identical** to the legacy cache pipeline on the rename branch, and identical to `aloha-dev`
+up to the pre-existing, root-caused cross-branch `lax.cond` float difference. For
+`ContextAR`, the port additionally **corrects** the legacy demo-normalization mismatch: demos
+now use the same pi0_fast_base stats as the current frame, a deliberate, documented divergence
+from aloha-dev that calls for retraining the ContextAR checkpoint.

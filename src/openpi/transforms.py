@@ -17,6 +17,7 @@ from tqdm import tqdm
 from openpi.models import tokenizer as _tokenizer
 from openpi.shared import array_typing as at
 from openpi.shared import normalize as _normalize
+from openpi.training import lookup_tables
 
 # from openpi.training.data_loader import Dataset
 
@@ -188,8 +189,11 @@ class InjectDemoIndexes(DataTransformFn):
     ``dem_prompt_indexes`` : List[List[int]]  (parallel to selected_episode)
     """
 
-    task_to_episode: str = "metadata/libero/task_to_episode.json"
-    episode_to_indexes: str = "metadata/libero/episode_to_indexes.json"
+    repo_id: str = ""
+    local_files_only: bool = False
+
+    task_to_episode: dict[int, list[int]] = dataclasses.field(init=False)
+    episode_to_indexes: dict[int, list[int]] = dataclasses.field(init=False)
 
     sample_frames: int = 2
     random_select: bool = True
@@ -198,30 +202,19 @@ class InjectDemoIndexes(DataTransformFn):
     seed_base: int | None = None
 
     def __post_init__(self):
-        task_to_episode_path = Path(self.task_to_episode)
-        episode_to_indexes_path = Path(self.episode_to_indexes)
-        # Load JSON files using Path.open()
-        with task_to_episode_path.open("r") as f:
-            task_to_episode_str = json.load(f)
-        with episode_to_indexes_path.open("r") as f:
-            episode_to_indexes_str = json.load(f)
+        if not self.repo_id:
+            raise ValueError("InjectDemoIndexes requires repo_id to build its lookup tables")
 
-        # Convert dictionary keys from strings to integers
-        task_to_episode = {int(k): v for k, v in task_to_episode_str.items()}
-        if self.train_episode_index_list is None:
-            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
-        else:
-            episode_to_indexes = {
-                int(k): v for k, v in episode_to_indexes_str.items() if int(k) in self.train_episode_index_list
-            }
-
-            # XIANJIE: if train-test split, test episodes are removed and the corresponding frames are removed
-            # which leads to non-continuous frame index
-            # the frame index could exceed the length of LeRobot dataset (number of frames of all the parquet files)
-            # therefore, the frame index must be reindexed, in the continuous manner.
-            # LeRobot dataset follows the order of "train_episode_index_list"
-            # so we can simple reindex the frame index in the following way:
-            episode_to_indexes = reindex_filtered_dict(episode_to_indexes)  # , self.train_episode_index_list)
+        # Both tables are derived from the LeRobot metadata rather than read from
+        # precomputed JSON. When a train/test split is active, build_episode_to_indexes
+        # reindexes through LeRobot's own get_episode_data_index, which is how the
+        # dataset itself lays out frames — the previous hand-rolled reindex assumed the
+        # kept-episode list was sorted and silently produced wrong offsets otherwise.
+        task_to_episode, episode_to_indexes = lookup_tables.lookup_tables_for_repo(
+            self.repo_id,
+            episodes=self.train_episode_index_list,
+            local_files_only=self.local_files_only,
+        )
 
         # Store these dictionaries on the frozen dataclass
         object.__setattr__(self, "task_to_episode", task_to_episode)
@@ -736,7 +729,6 @@ class AddStatesActionsPromptTransform(DataTransformFn):
 
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-    episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
     # Padding mode: how to sample/pad when episode length differs from max_len
     # "keep_all": Keep all L frames when L < max_len, then pad with last frame (current behavior)
@@ -761,9 +753,7 @@ class AddStatesActionsPromptTransform(DataTransformFn):
             states = load_episode_states_from_json(self.states_cache_path)
             actions = load_episode_states_from_json(self.actions_cache_path)
         except FileNotFoundError:
-            with Path(self.episode_to_indexes_file).open("r") as f:
-                raw = json.load(f)
-            idx_map = {int(k): v for k, v in raw.items()}
+            idx_map = lookup_tables.episode_to_indexes_for_dataset(self.dataset)
             expected_idx_map = expected_idx_map or idx_map
             states, actions = {}, {}
             for ep, idxs in tqdm(idx_map.items(), desc="Building caches", total=len(idx_map)):
@@ -978,7 +968,6 @@ class AddDemoPromptTransform(DataTransformFn):
 
     states_cache_path: str = "metadata/libero/episode_states_cache.json"
     actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-    episode_to_indexes_file: str = "metadata/libero/episode_to_indexes.json"
 
     def __post_init__(self):
         # TODO: consider delta actions here
@@ -990,10 +979,7 @@ class AddDemoPromptTransform(DataTransformFn):
             print("Loaded states/actions from JSON cache.")
         except FileNotFoundError:
             # --- Option B: Build from scratch, then save ---
-            episode_to_indexes_path = Path(self.episode_to_indexes_file)
-            with episode_to_indexes_path.open("r") as f:
-                episode_to_indexes_str = json.load(f)
-            episode_to_indexes = {int(k): v for k, v in episode_to_indexes_str.items()}
+            episode_to_indexes = lookup_tables.episode_to_indexes_for_dataset(self.dataset)
 
             states = {}
             actions = {}

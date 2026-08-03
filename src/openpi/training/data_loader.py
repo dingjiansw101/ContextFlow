@@ -12,7 +12,7 @@ import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
 
-from openpi.models import pi0_fast_incontext as _pi0_fast_incontext
+from openpi.models import contextar as _contextar
 from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
 import openpi.training.config as _config
@@ -210,7 +210,6 @@ def create_custom_dataset(
                 local_files_only=spec.local_files_only,
                 num_sample_frames=num_sample_frames,
                 num_sample_actions=num_sample_actions,
-                task_to_episode_path=spec.task_to_episode_path,
                 random_select=random_select,
                 seed_base=seed_base,
             )
@@ -225,18 +224,24 @@ def create_custom_dataset(
     if data_config_factory is not None:
         num_sample_frames = getattr(data_config_factory, "sample_frames", 2)
         num_sample_actions = getattr(data_config_factory, "sample_actions", 32)
-        task_to_episode_path = getattr(
-            data_config_factory, "task_to_episode_path", "metadata/libero/task_to_episode.json"
-        )
         random_select = getattr(data_config_factory, "random_select", True)
         seed_base = getattr(data_config_factory, "seed_base", None)
+        # Dataset column layout + demo selection compat (defaults preserve the LIBERO layout;
+        # the aloha factories override these — see CustomLeRobotAlohaMobileIncontextDataConfig).
+        state_key = getattr(data_config_factory, "state_key", "state")
+        actions_key = getattr(data_config_factory, "actions_key", "actions")
+        demo_image_keys = getattr(data_config_factory, "demo_image_keys", None)
+        demo_selection_seed_compat = getattr(data_config_factory, "demo_selection_seed_compat", False)
     else:
         # Fallback to defaults if no factory provided
         num_sample_frames = 2
         num_sample_actions = 32
-        task_to_episode_path = "metadata/libero/task_to_episode.json"
         random_select = True
         seed_base = None
+        state_key = "state"
+        actions_key = "actions"
+        demo_image_keys = None
+        demo_selection_seed_compat = False
 
     # Build delta_timestamps for each action sequence key (for compatibility)
     dataset = CustomLeRobotDataset(
@@ -250,9 +255,12 @@ def create_custom_dataset(
         # Pass CustomLeRobotDataset specific parameters from factory
         num_sample_frames=num_sample_frames,
         num_sample_actions=num_sample_actions,
-        task_to_episode_path=task_to_episode_path,
         random_select=random_select,
         seed_base=seed_base,
+        state_key=state_key,
+        actions_key=actions_key,
+        demo_image_keys=demo_image_keys,
+        demo_selection_seed_compat=demo_selection_seed_compat,
     )
     # Optionally: Prompt transform for task if needed (as in regular dataset)
     if data_config.prompt_from_task:
@@ -404,30 +412,18 @@ def create_incontext_data_loader(
         demo_state_dim = getattr(config.data, "demo_state_dim", None)
         padding_mode = getattr(config.data, "padding_mode", "keep_all")
         mask_padding_as_valid = getattr(config.data, "mask_padding_as_valid", False)
-        if config.data.episode_to_indexes_file is not None:
-            add_demo_transform = _transforms.AddStatesActionsPromptTransform(
-                dataset=dataset,
-                max_len=config.model.sample_actions,
-                states_cache_path=config.data.states_cache_path,
-                actions_cache_path=config.data.actions_cache_path,
-                episode_to_indexes_file=config.data.episode_to_indexes_file,
-                padding_mode=padding_mode,
-                mask_padding_as_valid=mask_padding_as_valid,
-                demo_state_dim=demo_state_dim,
-            )
-        else:
-            add_demo_transform = _transforms.AddStatesActionsPromptTransform(
-                dataset=dataset,
-                max_len=config.model.sample_actions,
-                states_cache_path=config.data.states_cache_path,
-                actions_cache_path=config.data.actions_cache_path,
-                padding_mode=padding_mode,
-                mask_padding_as_valid=mask_padding_as_valid,
-                demo_state_dim=demo_state_dim,
-            )
+        add_demo_transform = _transforms.AddStatesActionsPromptTransform(
+            dataset=dataset,
+            max_len=config.model.sample_actions,
+            states_cache_path=config.data.states_cache_path,
+            actions_cache_path=config.data.actions_cache_path,
+            padding_mode=padding_mode,
+            mask_padding_as_valid=mask_padding_as_valid,
+            demo_state_dim=demo_state_dim,
+        )
         dataset = TransformedDataset(dataset, [add_demo_transform])
 
-    if isinstance(config.model, _pi0_fast_incontext.Pi0FASTIncontextConfig):
+    if isinstance(config.model, _contextar.ContextARConfig):
         fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
         dataset = TransformedDataset(
             dataset,
@@ -508,6 +504,20 @@ def create_custom_incontext_data_loader(
         norm_stats_aliases=config.data.norm_stats_aliases,
         norm_stats_alias_pad_dims=getattr(config.data, "norm_stats_alias_pad_dims", None),
     )
+
+    # Mirror create_incontext_data_loader: ContextAR tokenizes the (normalized) demo
+    # state/action sequences into the FAST prompt after all other transforms ran.
+    if isinstance(config.model, _contextar.ContextARConfig):
+        fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
+        dataset = TransformedDataset(
+            dataset,
+            [
+                _transforms.TokenizeFASTIncontextInputs(
+                    tokenizer=fast_tokenizer,
+                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
+                )
+            ],
+        )
 
     data_loader = TorchDataLoader(
         dataset,

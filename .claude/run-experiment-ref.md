@@ -72,7 +72,7 @@ ls <checkpoint_dir>/<exp_name>/<step> 2>/dev/null \
 
 ## Episode Caches
 
-In-context configs precompute per-episode state/action arrays so training doesn't re-decode the dataset every step. The data config sets three paths under `metadata/<dataset>/`; if any are missing, dataset construction raises `FileNotFoundError`. Configs that need these are typically `*_incontext*` variants (see `config_libero.py`, `config_aloha.py`, `config_sequence_debug.py`).
+In-context configs precompute per-episode state/action arrays so training doesn't re-decode the dataset every step. The data config sets three paths under `metadata/<dataset>/`; if any are missing, dataset construction raises `FileNotFoundError`. Configs that need these are typically `*_incontext*` variants (see `config_libero.py`, `config_aloha.py`, `config_sequence.py`).
 
 **Files:**
 - `episode_to_indexes.json` — episode_id → frame indices (built per-dataset, reused across configs)

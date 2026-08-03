@@ -18,7 +18,7 @@ export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 ulimit -n 65536 || true
 
 if ! find "${ASSETS_BASE_DIR}/${ASSETS_NAME}" -maxdepth 4 -type f -name 'norm_stats*' 2>/dev/null | grep -q .; then
-    echo "Missing ${ASSETS_BASE_DIR}/${ASSETS_NAME} norm stats; run scripts/compute_norm_stats.py --config-name ${CONFIG} first." >&2
+    echo "Missing ${ASSETS_BASE_DIR}/${ASSETS_NAME} norm stats; run scripts/compute_norm_stats.py --config-name ${POLICY_CONFIG:-$CONFIG} first." >&2
     exit 66
 fi
 
@@ -32,7 +32,7 @@ forward_term() {
 trap forward_term SIGTERM
 
 XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \
-    uv run scripts/train.py "$CONFIG" \
+    uv run scripts/train.py "${POLICY_CONFIG:-$CONFIG}" \
         --project-name=openpi \
         --exp-name="$EXP_NAME" \
         --assets-base-dir="$ASSETS_BASE_DIR" \

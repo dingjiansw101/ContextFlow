@@ -38,7 +38,7 @@ def test_libero_incontext_inference_configs_removed():
 
 
 def test_custom_libero_incontext_create_policy_uses_lerobot_path():
-    config = _config.get_config("pi0_libero_incontextv18_low_mem_finetune_sample_frames8")
+    config = _config.get_config("ContextFlow")
     data_config = config.data.create_policy(config.assets_dirs, config.model)
 
     input_transform_names = [type(transform).__name__ for transform in data_config.data_transforms.inputs]
@@ -239,8 +239,8 @@ def test_selective_loader_vs_paligemma_loader_difference():
     3. Both loaders randomly initialize LLM layers
     """
     # Create model
-    from openpi.models import pi0_incontextv18
-    config = pi0_incontextv18.Pi0IncontextConfigv18(
+    from openpi.models import contextflow
+    config = contextflow.ContextFlowConfig(
         prompt_expert_variant="gemma_300m_v2",
         action_expert_variant="gemma_300m_lora",
         sample_frames=8,
