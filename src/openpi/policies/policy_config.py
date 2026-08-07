@@ -6,13 +6,9 @@ from typing import Any
 
 import jax.numpy as jnp
 
-from openpi.models import pi0_fast_incontext_seq as _pi0_fast_incontext_seq
-from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
-from openpi.models.contextar import ContextARConfig
 import openpi.policies.policy as _policy
 import openpi.policies.policy_incontext as _policy_incontext
-from openpi.policies.policy_incontext import PolicyFASTIncontext
 import openpi.shared.download as download
 from openpi.training import checkpoints as _checkpoints
 from openpi.training import config as _config
@@ -197,16 +193,6 @@ def create_trained_policy_incontext(
                 )
             )
 
-    if isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
-        return create_trained_policy_fast_incontext(
-            train_config,
-            checkpoint_dir,
-            repack_transforms=repack_transforms,
-            sample_kwargs=sample_kwargs,
-            default_prompt=default_prompt,
-            norm_stats=norm_stats,
-        )
-
     return _policy_incontext.PolicyIncontext(
         model,
         # TODO: check the transforms here, if it is the same as the one in the training
@@ -217,139 +203,6 @@ def create_trained_policy_incontext(
             *data_config.data_transforms.outputs,
             *repack_transforms.outputs,
         ],
-        sample_kwargs=sample_kwargs,
-        metadata=train_config.policy_metadata,
-    )
-
-
-def _maybe_fast_tokenizer_path(model_config: _model.BaseModelConfig) -> str:
-    return getattr(model_config, "fast_tokenizer_path", "physical-intelligence/fast")
-
-
-def _build_fast_incontext_transforms(
-    train_config: _config.TrainConfig,
-    *,
-    repack_transforms: transforms.Group,
-    default_prompt: str | None,
-    norm_stats: dict[str, transforms.NormStats],
-) -> tuple[list[transforms.DataTransformFn], list[transforms.DataTransformFn]]:
-    data_config = train_config.data.create_policy(train_config.assets_dirs, train_config.model)
-    provides_incontext_demos = getattr(data_config, "provides_incontext_demos", False)
-
-    if not provides_incontext_demos:
-        dataset_data_config = dataclasses.replace(data_config, norm_stats=norm_stats)
-        dataset = create_dataset(data_config, train_config.model)
-        dataset = transform_dataset(dataset, dataset_data_config)
-    else:
-        dataset = None
-
-    # Mirror training: forward norm_stats_aliases so dem_prompt_all_states / actions
-    # are normalized using "state" / "actions" norm stats, matching training.
-    norm_stats_aliases = getattr(train_config.data, "norm_stats_aliases", None)
-    norm_stats_alias_pad_dims = getattr(train_config.data, "norm_stats_alias_pad_dims", None)
-
-    inputs_layers: list[transforms.DataTransformFn] = [
-        *repack_transforms.inputs,
-        transforms.InjectDefaultPrompt(default_prompt),
-        *data_config.data_transforms.inputs,
-        transforms.Normalize(
-            norm_stats,
-            use_quantiles=data_config.use_quantile_norm,
-            norm_stats_aliases=norm_stats_aliases,
-            norm_stats_alias_pad_dims=norm_stats_alias_pad_dims,
-        ),
-        *data_config.model_transforms.inputs,
-    ]
-
-    model_config = train_config.model
-
-    if not provides_incontext_demos:
-        if getattr(model_config, "use_image_prompts", False):
-            logging.info("Inference: Adding image prompts")
-            inputs_layers.append(transforms.AddImagePromptTransform(dataset))
-
-        if getattr(model_config, "use_action_state_prompts", False):
-            logging.info("Inference: Adding action state prompts")
-            transform_kwargs: dict[str, Any] = {
-                "dataset": dataset,
-                "max_len": getattr(model_config, "sample_actions", 0),
-                "states_cache_path": getattr(train_config.data, "states_cache_path", None),
-                "actions_cache_path": getattr(train_config.data, "actions_cache_path", None),
-                "padding_mode": getattr(train_config.data, "padding_mode", "keep_all"),
-                "mask_padding_as_valid": getattr(train_config.data, "mask_padding_as_valid", False),
-                "demo_state_dim": getattr(train_config.data, "demo_state_dim", None),
-            }
-            episode_map = getattr(train_config.data, "episode_to_indexes_file", None)
-            if episode_map is not None:
-                transform_kwargs["episode_to_indexes_file"] = episode_map
-            inputs_layers.append(transforms.AddStatesActionsPromptTransform(**transform_kwargs))
-
-    # For Pi0FASTIncontextSeqConfig, TokenizeFASTInputs is already in
-    # data_config.model_transforms.inputs (see ModelTransformFactory in
-    # training/config.py) and has already run above, so we must not append a
-    # second copy (it would find `prompt` already popped and raise).
-    # For the tokenized ContextARConfig variant, the model transforms
-    # don't include an incontext tokenizer, so add it here.
-    if not isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
-        fast_tokenizer = _tokenizer.FASTTokenizer(
-            max_len=getattr(model_config, "max_token_len", 256),
-            fast_tokenizer_path=_maybe_fast_tokenizer_path(model_config),
-        )
-        inputs_layers.append(
-            transforms.TokenizeFASTIncontextInputs(
-                tokenizer=fast_tokenizer,
-                max_incontext_steps=getattr(model_config, "sample_actions", 4),
-            )
-        )
-
-    outputs_layers = [
-        *data_config.model_transforms.outputs,
-        transforms.Unnormalize(norm_stats, use_quantiles=data_config.use_quantile_norm),
-        *data_config.data_transforms.outputs,
-        *repack_transforms.outputs,
-    ]
-
-    return inputs_layers, outputs_layers
-
-
-def create_trained_policy_fast_incontext(
-    train_config: _config.TrainConfig,
-    checkpoint_dir: pathlib.Path | str,
-    *,
-    repack_transforms: transforms.Group | None = None,
-    sample_kwargs: dict[str, Any] | None = None,
-    default_prompt: str | None = None,
-    norm_stats: dict[str, transforms.NormStats] | None = None,
-) -> PolicyFASTIncontext:
-    if not isinstance(train_config.model, ContextARConfig | _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
-        raise TypeError(
-            "create_trained_policy_fast_incontext requires a ContextARConfig or Pi0FASTIncontextSeqConfig model."
-        )
-
-    repack_transforms = repack_transforms or transforms.Group()
-    checkpoint_dir = download.maybe_download(str(checkpoint_dir))
-
-    logging.info("Loading model...")
-    params = _model.restore_params(checkpoint_dir / "params", dtype=jnp.bfloat16)
-    model = train_config.model.load(params)
-
-    if norm_stats is None:
-        data_config = train_config.data.create_policy(train_config.assets_dirs, train_config.model)
-        if data_config.asset_id is None:
-            raise ValueError("Asset id is required to load norm stats.")
-        norm_stats = _checkpoints.load_norm_stats(checkpoint_dir / "assets", data_config.asset_id)
-
-    input_layers, output_layers = _build_fast_incontext_transforms(
-        train_config,
-        repack_transforms=repack_transforms,
-        default_prompt=default_prompt,
-        norm_stats=norm_stats,
-    )
-
-    return PolicyFASTIncontext(
-        model,
-        transforms=input_layers,
-        output_transforms=output_layers,
         sample_kwargs=sample_kwargs,
         metadata=train_config.policy_metadata,
     )

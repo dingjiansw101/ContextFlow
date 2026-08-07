@@ -21,12 +21,9 @@ from typing_extensions import override
 import tyro
 
 import openpi.models.model as _model
-import openpi.models.pi0_fast_incontext_seq as _pi0_fast_incontext_seq
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
-import openpi.models.contextflow_plain as contextflow_plain
 import openpi.models.contextflow as contextflow
-import openpi.models.contextar as contextar
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.droid_policy as droid_policy
 import openpi.shared.download as _download
@@ -67,157 +64,6 @@ DEFAULT_LIBERO_TEST_TASK = [
     # spatial
     "pick up the black bowl on the cookie box and place it on the plate",
     "pick up the black bowl next to the plate and place it on the plate",
-]
-DEFAULT_LIBERO_TEST_TASK_V2 = [
-    # 10
-    "put the white mug on the left plate and put the yellow and white mug on the right plate",
-    "pick up the book and place it in the back compartment of the caddy",
-    # goal
-    "turn on the stove",
-    "open the middle drawer of the cabinet",
-    # object
-    "pick up the milk and place it in the basket",
-    "pick up the tomato sauce and place it in the basket",
-    # spatial
-    "pick up the black bowl on the cookie box and place it on the plate",
-    "pick up the black bowl next to the plate and place it on the plate",
-]
-
-DEFAULT_LIBERO_TEST_TASK_V3 = [
-    # 10
-    "turn on the stove and put the moka pot on it",
-    "put both the cream cheese box and the butter in the basket",
-    # goal
-    "put the wine bottle on the rack",
-    "put the cream cheese in the bowl",
-    # object
-    "pick up the ketchup and place it in the basket",
-    "pick up the bbq sauce and place it in the basket",
-    # spatial
-    "pick up the black bowl on the stove and place it on the plate",
-    "pick up the black bowl next to the ramekin and place it on the plate",
-]
-DEFAULT_LIBERO_TEST_TASK_V4 = [
-    # 10
-    "put both the alphabet soup and the cream cheese box in the basket",
-    "put both moka pots on the stove",
-    # goal
-    "open the top drawer and put the bowl inside",
-    "put the wine bottle on top of the cabinet",
-    # object
-    "pick up the butter and place it in the basket",
-    "pick up the salad dressing and place it in the basket",
-    # spatial
-    "pick up the black bowl on the wooden cabinet and place it on the plate",
-    "pick up the black bowl from table center and place it on the plate",
-]
-
-
-# correspond to v4 in google sheet
-DEFAULT_LIBERO_TEST_TASK_V5 = [
-    "pick up the black bowl in the top drawer of the wooden cabinet and place it on the plate",
-    "pick up the black bowl on the ramekin and place it on the plate",
-    "pick up the chocolate pudding and place it in the basket",
-    "pick up the orange juice and place it in the basket",
-    "put the wine bottle on the rack",
-    "put the bowl on top of the cabinet",
-    "put the yellow and white mug in the microwave and close it",
-    "put the black bowl in the bottom drawer of the cabinet and close it",
-]
-
-# correspond to v5 in google sheet
-DEFAULT_LIBERO_TEST_TASK_V6 = [
-    # 10
-    "put both the alphabet soup and the cream cheese box in the basket",
-    "put the yellow and white mug in the microwave and close it",
-    # goal
-    "push the plate to the front of the stove",
-    "put the bowl on the stove",
-    # object
-    "pick up the alphabet soup and place it in the basket",
-    "pick up the cream cheese and place it in the basket",
-    # spatial
-    "pick up the black bowl between the plate and the ramekin and place it on the plate",
-    "pick up the black bowl next to the cookie box and place it on the plate",
-]
-
-# correspond to v6 in google sheet
-DEFAULT_LIBERO_TEST_TASK_V7 = [
-    # 10
-    "pick up the book and place it in the back compartment of the caddy",
-    "put both the cream cheese box and the butter in the basket",
-    # goal
-    "open the middle drawer of the cabinet",
-    "put the cream cheese in the bowl",
-    # object
-    "pick up the milk and place it in the basket",
-    "pick up the bbq sauce and place it in the basket",
-    # spatial
-    "pick up the black bowl on the stove and place it on the plate",
-    "pick up the black bowl from table center and place it on the plate",
-]
-
-# correspond to v7 in google sheet
-DEFAULT_LIBERO_TEST_TASK_V8 = [
-    # 10
-    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-    "put both moka pots on the stove",
-    # goal
-    "put the wine bottle on top of the cabinet",
-    "turn on the stove",
-    # object
-    "pick up the tomato sauce and place it in the basket",
-    "pick up the ketchup and place it in the basket",
-    # spatial
-    "pick up the black bowl on the wooden cabinet and place it on the plate",
-    "pick up the black bowl on the ramekin and place it on the plate",
-]
-
-DEFAULT_LIBERO_TEST_TASK_V6 = [
-    # 10
-    "put both the alphabet soup and the cream cheese box in the basket",
-    "put the yellow and white mug in the microwave and close it",
-    # goal
-    "push the plate to the front of the stove",
-    "put the bowl on the stove",
-    # object
-    "pick up the alphabet soup and place it in the basket",
-    "pick up the cream cheese and place it in the basket",
-    # spatial
-    "pick up the black bowl between the plate and the ramekin and place it on the plate",
-    "pick up the black bowl next to the cookie box and place it on the plate",
-]
-
-# correspond to v6 in google sheet
-DEFAULT_LIBERO_TEST_TASK_V7 = [
-    # 10
-    "pick up the book and place it in the back compartment of the caddy",
-    "put both the cream cheese box and the butter in the basket",
-    # goal
-    "open the middle drawer of the cabinet",
-    "put the cream cheese in the bowl",
-    # object
-    "pick up the milk and place it in the basket",
-    "pick up the bbq sauce and place it in the basket",
-    # spatial
-    "pick up the black bowl on the stove and place it on the plate",
-    "pick up the black bowl from table center and place it on the plate",
-]
-
-# correspond to v7 in google sheet
-DEFAULT_LIBERO_TEST_TASK_V8 = [
-    # 10
-    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-    "put both moka pots on the stove",
-    # goal
-    "put the wine bottle on top of the cabinet",
-    "turn on the stove",
-    # object
-    "pick up the tomato sauce and place it in the basket",
-    "pick up the ketchup and place it in the basket",
-    # spatial
-    "pick up the black bowl on the wooden cabinet and place it on the plate",
-    "pick up the black bowl on the ramekin and place it on the plate",
 ]
 
 
@@ -525,24 +371,6 @@ class ModelTransformFactory(GroupFactory):
                     outputs=[
                         _transforms.ExtractFASTActions(
                             _tokenizer.FASTTokenizer(model_config.max_token_len),
-                            action_horizon=model_config.action_horizon,
-                            action_dim=model_config.action_dim,
-                        )
-                    ],
-                )
-            case _model.ModelType.PI0_FAST_INCONTEXT:
-                fast_tokenizer = _tokenizer.FASTTokenizer(model_config.max_token_len)
-                input_transforms = [
-                    _transforms.InjectDefaultPrompt(self.default_prompt),
-                    _transforms.ResizeImages(224, 224),
-                ]
-                if isinstance(model_config, _pi0_fast_incontext_seq.Pi0FASTIncontextSeqConfig):
-                    input_transforms.append(_transforms.TokenizeFASTInputs(fast_tokenizer))
-                return _transforms.Group(
-                    inputs=input_transforms,
-                    outputs=[
-                        _transforms.ExtractFASTActions(
-                            fast_tokenizer,
                             action_horizon=model_config.action_horizon,
                             action_dim=model_config.action_dim,
                         )

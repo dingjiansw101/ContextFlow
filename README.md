@@ -1,21 +1,19 @@
-# ContextFlow & ContextAR: In-Context Vision-Language-Action Models
+# ContextFlow: In-Context Vision-Language-Action Models
 
-This repository contains the models and training/evaluation code for **ContextFlow**, **ContextFlow-Plain**, and **ContextAR** — vision-language-action (VLA) models that condition on **in-context demonstrations** (demo images, states, and actions of a related task) to generalize to unseen tasks without fine-tuning.
+This repository contains the model and training/evaluation code for **ContextFlow** — a vision-language-action (VLA) model that conditions on **in-context demonstrations** (demo images, states, and actions of a related task) to generalize to unseen tasks without fine-tuning.
 
 It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their two base models:
 
 - the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion VLA
 - the [π₀-FAST model](https://www.physicalintelligence.company/research/fast), an autoregressive VLA based on the FAST action tokenizer
 
-On top of these we provide three in-context methods:
+On top of these we provide the in-context method:
 
 | Method | Base | In-context conditioning | Model config class |
 | --- | --- | --- | --- |
 | **ContextFlow** | π₀ (flow) | 8 demo frames + 128 demo state/action steps | `ContextFlowConfig` (`src/openpi/models/contextflow.py`) |
-| **ContextFlow-Plain** | π₀ (flow) | 2 demo frames + 32 demo state/action steps | `ContextFlowPlainConfig` (`src/openpi/models/contextflow_plain.py`) |
-| **ContextAR** | π₀-FAST (autoregressive) | demo states/actions tokenized into the prompt | `src/openpi/models/contextar.py`, `src/openpi/models/pi0_fast_incontext_seq.py` |
 
-All three are trained and evaluated on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO) with a seen/unseen task split, and have ALOHA real-robot variants (`ContextFlow_Aloha`, `ContextAR_Aloha`, `Pi0_Aloha`).
+It is trained and evaluated on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO) with a seen/unseen task split, and has ALOHA real-robot variants (`ContextFlow_Aloha`, `Pi0_Aloha`).
 
 ## Requirements
 
@@ -26,7 +24,7 @@ To run the models in this repository, you will need an NVIDIA GPU with at least 
 | Inference               | > 16 GB         | RTX 4090           |
 | Fine-Tuning (LoRA)      | > 40 GB         | A100 (80GB) / H100 |
 
-The LIBERO ContextFlow / ContextAR runs reported in the paper were trained on 2–4× H100/A100-80GB with `batch_size=32`. The repo has been tested on Ubuntu 22.04.
+The LIBERO ContextFlow runs reported in the paper were trained on 2–4× H100/A100-80GB with `batch_size=32`. The repo has been tested on Ubuntu 22.04.
 
 ## Installation
 
@@ -65,11 +63,10 @@ Our trained checkpoints, norm stats, and dataset metadata are hosted in the publ
 | Model | Config name | Recommended checkpoint (path inside `ContextFlow_Data`) |
 | --- | --- | --- |
 | ContextFlow | `ContextFlow` | `ContextFlow/ContextFlow_4gpu/19999` |
-| ContextFlow-Plain | `ContextFlow_Plain` | `ContextFlow_Plain/ContextFlow_Plain_refactor_merge/19999` |
-| ContextAR | `ContextAR` | `ContextAR/ContextAR_base/19999` |
-| ContextAR (900M LLM) | `ContextAR_900m` | `ContextAR_900m/ContextAR_900m_orix/19999` |
-| + LIBERO-90 co-training | `<base>_plus_libero90[_split1/2/3]` | see `MANIFEST.json` (one folder per config) |
-| ALOHA (real robot) | `ContextFlow_Aloha`, `ContextAR_Aloha`, `Pi0_Aloha` | see `MANIFEST.json` |
+| + LIBERO-90 co-training | `ContextFlow_plus_libero90` | see `MANIFEST.json` (one folder per config) |
+| ALOHA (real robot) | `ContextFlow_Aloha`, `Pi0_Aloha` | see `MANIFEST.json` |
+
+The Drive folder also holds checkpoints for methods this repo no longer ships configs for (ContextFlow-Plain, ContextAR and their variants); see `MANIFEST.json`. To run those, check out a commit before the configs were pruned.
 
 Download via the browser link above, or with [rclone](https://rclone.org/drive/) (using your own configured Google Drive remote, here called `gdrive:`):
 
@@ -84,7 +81,7 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
 rclone copy --drive-root-folder-id $FOLDER gdrive:metadata/libero ./metadata/libero
 ```
 
-> **⚠ Norm stats: download, do not recompute.** The released norm stats (`assets/ContextFlow_Plain`, shared by both ContextFlow configs via `assets_repo_override`) were computed by an earlier generation of the configs that used `use_delta_joint_actions=True`, over the full dataset (provenance verified: re-running the computation with that setting reproduces the released file byte-for-byte). The current configs set `use_delta_joint_actions=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
+> **⚠ Norm stats: download, do not recompute.** The released norm stats live in `assets/ContextFlow_Plain`, which both remaining ContextFlow configs point at via `assets_repo_override`. (That is a *directory* name kept for continuity with the released checkpoints — there is no longer a config called `ContextFlow_Plain`, but the directory must still be present under that name.) They were computed by an earlier generation of the configs that used `use_delta_joint_actions=True`, over the full dataset (provenance verified: re-running the computation with that setting reproduces the released file byte-for-byte). The current configs set `use_delta_joint_actions=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
 
 ## Running Inference
 
@@ -138,12 +135,12 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.inference_dtype=float3
 python examples/libero/main_incontext_unseen.py --task-suite-name libero_spatial --task-split split0
 ```
 
-Task splits (which LIBERO tasks are seen during training vs held out) are committed in [`libero_task_splits/`](libero_task_splits) (`split0` … `split7`, each with `seen_tasks.json` / `unseen_tasks.json`).
+Task splits (which LIBERO tasks are seen during training vs held out) are committed in [`libero_task_splits/`](libero_task_splits) (`split0`, with `seen_tasks.json` / `unseen_tasks.json`).
 
 ## Repository Structure
 
-- `src/openpi/models/` — model implementations: `contextflow.py`, `contextflow_plain.py`, `contextar.py` (+ the upstream `pi0.py`, `pi0_fast.py`)
-- `src/openpi/training/` — configs (`config_libero.py`, `config_sequence.py`, `config_aloha.py`), the in-context dataset (`custom_dataset.py`), metadata generation (`generate_task_to_index.py`)
+- `src/openpi/models/` — model implementations: `contextflow.py` (+ the upstream `pi0.py`, `pi0_fast.py`)
+- `src/openpi/training/` — configs (`config_libero.py`, `config_aloha.py`), the in-context dataset (`custom_dataset.py`), metadata generation (`generate_task_to_index.py`)
 - `src/openpi/policies/` — policy wrappers, `policy_config.py` (checkpoint → policy, in-context demo pipeline)
 - `scripts/` — `train.py`, `serve_policy.py`, `compute_norm_stats.py`
 - `examples/libero/` — LIBERO evaluation clients and the [LIBERO guide](examples/libero/LIBERO_README.md)

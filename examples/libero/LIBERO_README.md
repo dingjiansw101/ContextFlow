@@ -1,6 +1,6 @@
 # LIBERO: Training and Evaluating the In-Context Models
 
-This is the complete guide for running **ContextFlow**, **ContextFlow-Plain**, and **ContextAR** on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO): preparing the dataset and metadata, training, serving a policy, and evaluating on seen/unseen task splits. See the [root README](../../README.md) for an overview of the methods and the checkpoint inventory.
+This is the complete guide for running **ContextFlow** on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO): preparing the dataset and metadata, training, serving a policy, and evaluating on seen/unseen task splits. See the [root README](../../README.md) for an overview of the method and the checkpoint inventory.
 
 This example requires git submodules to be initialized:
 
@@ -46,8 +46,8 @@ Note: when updating `requirements.txt` in this directory, the flag `--extra-inde
 | LIBERO dataset (`physical-intelligence/libero`) | auto-downloaded from HuggingFace on first use | training and eval (in-context demos are drawn from it) |
 | `metadata/libero/task_to_episode.json` | committed in git; also on [Google Drive](https://drive.google.com/drive/folders/1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ?usp=sharing); or [generate it](#3-generating-the-metadata-from-scratch) | training and eval — maps each task to its demo episodes |
 | `metadata/libero/tasks.jsonl` | committed in git (verbatim copy of the dataset's `meta/tasks.jsonl`) | eval clients (task names/order) |
-| `libero_task_splits/` (`split0`…`split7`) | committed in git | seen/unseen evaluation |
-| `assets/ContextFlow_Plain/` (norm stats) | Google Drive `assets/` | **training only** — inference loads norm stats from the checkpoint |
+| `libero_task_splits/` (`split0`) | committed in git | seen/unseen evaluation |
+| `assets/ContextFlow_Plain/` (norm stats) | Google Drive `assets/` | **training only** — inference loads norm stats from the checkpoint. The directory name is historical; the ContextFlow configs point at it via `assets_repo_override`, so keep the name as-is |
 | Checkpoints | Google Drive (see [root README](../../README.md#in-context-model-checkpoints-google-drive)) | evaluation |
 
 Download the Drive artifacts (browser, or rclone with your own Google Drive remote):
@@ -60,7 +60,7 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/1
     checkpoints/ContextFlow/ContextFlow_4gpu/19999
 ```
 
-**What about the big cache files?** The Drive `metadata/libero/` folder also contains `episode_states_without_delta_cache.json` / `episode_actions_without_delta_cache.json` (~150 MB). The paper configs (`ContextFlow`, `ContextFlow_Plain`, `ContextAR`) do **not** use them — they load demonstrations directly from the dataset (`CustomLeRobotDataset`) during both training and inference. The caches are only read by legacy configs that still use the old transform-based pipeline; skip them unless you run those.
+**What about the big cache files?** The Drive `metadata/libero/` folder also contains `episode_states_without_delta_cache.json` / `episode_actions_without_delta_cache.json` (~150 MB). The `ContextFlow` configs do **not** use them — they load demonstrations directly from the dataset (`CustomLeRobotDataset`) during both training and inference. The caches are only read by legacy configs that still use the old transform-based pipeline; skip them unless you run those.
 
 > **⚠ Norm stats: download, do not recompute.** The released norm stats in `assets/ContextFlow_Plain` were computed by an earlier generation of these configs that used `use_delta_joint_actions=True`, over the full dataset (no train-split filtering). The current configs set `use_delta_joint_actions=False` but deliberately continue to use the same stats — all released checkpoints were trained with them, and each checkpoint also carries its own copy in `<checkpoint>/assets/`. Recomputing with `scripts/compute_norm_stats.py` under today's configs therefore gives *different* stats (delta actions change the action distribution: e.g. the released action mean for dim 3 is −2.97 ≈ −state mean, where an absolute-action computation gives ≈0) and will not reproduce the released results. Provenance is verified: re-running the computation with the delta setting flipped back on reproduces the released `norm_stats.json` byte-for-byte. Recompute only for a new dataset of your own.
 
@@ -97,9 +97,9 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow \
     --exp-name=my_run --overwrite
 ```
 
-- Config names: `ContextFlow`, `ContextFlow_Plain`, `ContextAR` (see [CONFIG_NAME_MAPPING.md](../../CONFIG_NAME_MAPPING.md) for the mapping from the original training names).
+- Config names: `ContextFlow`, `ContextFlow_plus_libero90` (see [CONFIG_NAME_MAPPING.md](../../CONFIG_NAME_MAPPING.md) for the mapping from the original training names).
 - All three train for 20k steps with `batch_size=32`, starting from the π₀ / π₀-FAST base checkpoints (auto-downloaded from S3).
-- The training split excludes the unseen tasks of `split0` (`remove_task_list` in the config); the `*_plus_libero90_split1/2/3` variants exclude the corresponding split's unseen tasks instead.
+- The training split excludes the unseen tasks of `split0` (`remove_task_list` in the config).
 - Set a seed with `--seed=<n>` for repeated runs; use a fresh `--exp-name` per run.
 - `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` lets JAX use 90% of GPU memory (default 75%). Multi-GPU: run under `CUDA_VISIBLE_DEVICES=0,1` (data-parallel sharding is automatic across visible devices).
 - If training logs `Norm stats not found ... skipping`, stop — the norm stats are missing (Section 2) and the run would silently train unnormalized.
@@ -137,18 +137,18 @@ python examples/libero/main.py --task-suite-name libero_spatial
 Key client arguments:
 
 - `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`, `libero_90`
-- `--task-split`: `split0` … `split7` (default `split0`)
+- `--task-split`: `split0` (the only split shipped; default `split0`)
 - `--task-splits-dir`: directory with the split definitions (default: `libero_task_splits` at the repo root, committed in git; each split has `seen_tasks.json` / `unseen_tasks.json`)
 - `--num-trials-per-task`: rollouts per task (default 50)
 - `--host` / `--port`: policy server address (default `0.0.0.0:8000`)
 
 Results are written as JSON to `logs/eval_results/` (override with `--results-out-path`).
 
-**Batch evaluation.** `jobs/local/eval_incontext_unseen_local.sh <run-name> <policy-config> <checkpoint-dir> [run-id]` runs all four suites in parallel across GPUs (one server per suite; env `SUITE_LIST`, `GPUS`, `TASK_SPLIT` to customize). SLURM wrappers: `jobs/orix/refactor_merge/eval_contextflow{,_plain}_unseen.sh`, `eval_contextar_unseen.sh`, and `jobs/ibex/eval_incontext_unseen_ibex.sh`.
+**Batch evaluation.** `jobs/local/eval_incontext_unseen_local.sh <run-name> <policy-config> <checkpoint-dir> [run-id]` runs all four suites in parallel across GPUs (one server per suite; env `SUITE_LIST`, `GPUS`, `TASK_SPLIT` to customize). SLURM wrappers: `jobs/orix/refactor_merge/eval_contextflow_unseen.sh` and `jobs/ibex/eval_incontext_unseen_ibex.sh`.
 
 ## 6. LIBERO-90 Co-Training
 
-The `*_plus_libero90` configs co-train on LIBERO-90 in addition to the standard suites (`ContextFlow_plus_libero90`, `ContextFlow_Plain_plus_libero90`, `ContextAR_plus_libero90`, each also with `_split1/2/3` variants that hold out the matching split — evaluate those with the matching `--task-split`).
+The `ContextFlow_plus_libero90` config co-trains on LIBERO-90 in addition to the standard suites.
 
 They need two extra artifacts:
 

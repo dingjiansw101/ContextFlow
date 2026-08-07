@@ -64,28 +64,6 @@ class PolicyIncontext(BasePolicy):
         return self._metadata
 
 
-class PolicyFASTIncontext(PolicyIncontext):
-    """Variant that constructs ObservationFASTIncontext for FAST models."""
-
-    @override
-    def infer(self, obs: dict) -> dict:  # type: ignore[misc]
-        inputs = jax.tree.map(lambda x: x, obs)
-        inputs = self._input_transform(inputs)
-
-        inputs = jax.tree.map(lambda x: jnp.asarray(x)[np.newaxis, ...], inputs)
-
-        self._rng, sample_rng = jax.random.split(self._rng)
-        observation = _model.ObservationFASTIncontext.from_dict(inputs)
-        actions = self._sample_actions(sample_rng, observation, **self._sample_kwargs)
-
-        outputs = {
-            "state": inputs["state"],
-            "actions": actions,
-        }
-        outputs = jax.tree.map(lambda x: np.asarray(x[0, ...]), outputs)
-        return self._output_transform(outputs)
-
-
 class PolicyRecorder(_base_policy.BasePolicy):
     """Records the policy's behavior to disk."""
 

@@ -29,7 +29,6 @@ class ModelType(enum.Enum):
     PI0 = "pi0"
     PI0_FAST = "pi0_fast"
     PI0_INCONTEXT = "pi0_incontext"
-    PI0_FAST_INCONTEXT = "pi0_fast_incontext"
 
 
 # The model always expects these images

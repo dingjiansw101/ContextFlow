@@ -594,51 +594,6 @@ def build(api) -> list[api.TrainConfig]:
     # 2) Return this child's TrainConfig entries directly (can be multiple)
     return [
         api.TrainConfig(
-            name="ContextFlow_Plain",
-            # Renamed from pi0_libero_refactor_incontextv12_..._dataset_refactor.
-            # Keep the original name as the assets key so the 44 configs whose
-            # assets_repo_override points at it (and the on-disk ./assets/<old name>
-            # norm stats) still resolve. See CONFIG_NAME_MAPPING.md.
-            assets_repo_override="ContextFlow_Plain",
-            model=api.contextflow_plain.ContextFlowPlainConfig(
-                prompt_expert_variant="gemma_300m_v2",
-                action_expert_variant="gemma_300m_lora",
-                sample_frames=2,
-                sample_actions=32,
-                random_select=True,
-            ),
-            data=CustomLeRobotLiberoIncontextDataConfig(
-                repo_id="physical-intelligence/libero",
-                base_config=api.DataConfig(
-                    local_files_only=False,  # Set to True for local-only datasets.
-                    prompt_from_task=True,
-                ),
-                use_delta_joint_actions=False,
-                sample_frames=2,
-                sample_actions=32,
-                remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-                episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                random_select=True,
-            ),
-            weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext(
-                "s3://openpi-assets/checkpoints/pi0_base/params"
-            ),
-            num_train_steps=20_000,
-            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
-                prompt_expert_variant="gemma_300m_v2",
-                action_expert_variant="gemma_300m_lora",
-                sample_frames=2,
-                sample_actions=32,
-                random_select=True,
-            ).get_freeze_filter(),
-            ema_decay=None,
-            num_workers=8,
-            # num_workers=1,
-            batch_size=32,
-            use_custom_dataloader=True,
-            # wandb_enabled=False,
-        ),
-        api.TrainConfig(
             name="ContextFlow",
             assets_repo_override="ContextFlow_Plain",
             model=api.contextflow.ContextFlowConfig(
@@ -917,70 +872,6 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=32,
-        ),
-        # Multi-dataset (libero train split + libero_90) in-context configs.
-        # Ported from feature/multi-dataset with the fixed 70k LR schedule
-        # (warmup 1k + decay 69k), matching ECCV rebuttal rows 71-72.
-        api.TrainConfig(
-            name="ContextFlow_Plain_plus_libero90",
-            assets_repo_override="ContextFlow_Plain",
-            model=api.contextflow_plain.ContextFlowPlainConfig(
-                prompt_expert_variant="gemma_300m_v2",
-                action_expert_variant="gemma_300m_lora",
-                sample_frames=2,
-                sample_actions=32,
-                random_select=True,
-            ),
-            data=MultiCustomLeRobotLiberoIncontextDataConfig(
-                repo_id="physical-intelligence/libero",
-                base_config=api.DataConfig(
-                    local_files_only=False,
-                    prompt_from_task=True,
-                ),
-                dataset_specs=(
-                    DatasetSpec(
-                        repo_id="physical-intelligence/libero",
-                        episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
-                        local_files_only=False,
-                    ),
-                    DatasetSpec(
-                        repo_id="vo2yager/libero_90",
-                        episode_json_path=str(
-                            pathlib.Path(
-                                "~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"
-                            ).expanduser()
-                        ),
-                        remove_task_list=None,
-                        local_files_only=True,
-                    ),
-                ),
-                use_delta_joint_actions=False,
-                sample_frames=2,
-                sample_actions=32,
-                random_select=True,
-            ),
-            weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext(
-                "s3://openpi-assets/checkpoints/pi0_base/params"
-            ),
-            lr_schedule=api._optimizer.CosineDecaySchedule(
-                warmup_steps=1_000,
-                peak_lr=2.5e-5,
-                decay_steps=69_000,
-                decay_lr=2.5e-6,
-            ),
-            num_train_steps=70_000,
-            freeze_filter=api.contextflow_plain.ContextFlowPlainConfig(
-                prompt_expert_variant="gemma_300m_v2",
-                action_expert_variant="gemma_300m_lora",
-                sample_frames=2,
-                sample_actions=32,
-                random_select=True,
-            ).get_freeze_filter(),
-            ema_decay=None,
-            num_workers=8,
-            batch_size=32,
-            use_custom_dataloader=True,
         ),
         api.TrainConfig(
             name="ContextFlow_plus_libero90",

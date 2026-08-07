@@ -4,7 +4,6 @@ import pytest
 
 from openpi.models import model as _model
 from openpi.models import pi0
-from openpi.models import contextflow_plain
 from openpi.models import pi0_fast
 from openpi.shared import download
 from openpi.shared import nnx_utils
@@ -172,54 +171,6 @@ def test_pi0_lora_model_params():
 
     actions = nnx_utils.module_jit(model.sample_actions)(key, obs, num_steps=10)
     assert actions.shape == (batch_size, model.action_horizon, model.action_dim)
-
-def test_pi0_lora_model_v12_num_params():
-    def list_trainable_paths(cfg: contextflow_plain.ContextFlowPlainConfig):
-        model = cfg.create(jax.random.key(0))
-
-        freeze_filter    = cfg.get_freeze_filter()
-        trainable_filter = nnx.Not(freeze_filter)
-
-        return [
-            "/".join(map(str, path))
-            for path, node in nnx.iter_graph(model)
-            if isinstance(node, nnx.Param) and trainable_filter(path, node)
-        ]
-
-    # -------------------------------------------------------------
-    # 1.  Enumerate the four (action_has_lora, prompt_has_lora) cases
-    # -------------------------------------------------------------
-    cases = {
-        "(0, 0)  no-LoRA": dict(
-            prompt_expert_variant  ="gemma_300m_v2",
-            action_expert_variant  ="gemma_300m",
-        ), # number of keys: 54, with input_embedding
-        "(1, 0)  action-LoRA only": dict(
-            prompt_expert_variant  ="gemma_300m_v2",
-            action_expert_variant  ="gemma_300m_lora",
-        ), # number of keys: 56, with input_embedding
-
-    }
-
-    # -------------------------------------------------------------
-    # 2.  Run each case and print results
-    # -------------------------------------------------------------
-    for title, variants in cases.items():
-        cfg = contextflow_plain.ContextFlowPlainConfig(
-            **variants,
-            sample_frames   = 2,
-            sample_actions  = 32,
-            random_select   = True,
-            use_image_prompts = False,
-        )
-
-        trainable_paths = list_trainable_paths(cfg)
-
-        print(f"\n=== {title} ===")
-        print(f"Trainable parameter keys: {len(trainable_paths)}")
-        for p in trainable_paths:
-            print("  ", p)
-
 
 import collections
 

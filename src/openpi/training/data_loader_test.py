@@ -8,11 +8,9 @@ from openpi.models import pi0
 import openpi.models.model as _model
 from openpi.training import config as _config
 from openpi.training import data_loader as _data_loader
-from openpi.training.data_loader import TransformedDataset
 from openpi.training.data_loader import create_custom_dataset
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
-import openpi.transforms as _transforms
 
 
 def test_torch_data_loader():
@@ -115,15 +113,6 @@ def test_custom_lerobot_dataset():
         print(dataset[i].keys())
 
 
-def test_libero_incontext_data_loader():
-    # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
-    # config = _config.get_config("pi0_libero_incontext_low_mem_finetune_sample2")
-    config = _config.get_config("ContextAR")
-    data_loader = _data_loader.create_incontext_data_loader(config, skip_norm_stats=False, num_batches=2)
-    data_iter = iter(data_loader)
-    next(data_iter)
-
-
 def test_create_custom_incontext_data_loader():
     """Test create_custom_incontext_data_loader with CustomLeRobotDataset."""
     # Setup: Get config using CustomLeRobotLiberoIncontextDataConfig
@@ -193,28 +182,8 @@ def test_create_custom_incontext_data_loader():
         assert np.all(img >= -1.0) and np.all(img <= 1.0), f"Incontext image {key} should be in [-1, 1] range"
 
 
-def test_AddImagePromptTransform():
-    # config = _config.get_config("pi0_libero_incontext_low_mem_finetune")
-    config = _config.get_config("ContextAR")
-    # TODO: add assets_dirs to the config in the future
-    data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_dataset(data_config, config.model)
-
-    # dataset = transform_dataset(dataset, data_config, skip_norm_stats=False)
-    dataset = transform_dataset(dataset, data_config, skip_norm_stats=True)
-    add_image_transform = _transforms.AddImagePromptTransform(dataset=dataset)
-    dataset = TransformedDataset(dataset, [add_image_transform])
-
-    for i in range(len(dataset)):
-        print(dataset[i].keys())
-        # dict_keys(['state', 'image', 'image_mask', 'actions',
-        # 'tokenized_prompt', 'tokenized_prompt_mask'])
-
-
 if __name__ == "__main__":
     # test_libero_incontext_dataset()
-    # test_libero_incontext_data_loader()
-    # test_AddImagePromptTransform()
     # test_custom_lerobot_dataset()
     # test_create_custom_incontext_data_loader()
     pass

@@ -12,7 +12,6 @@ import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
 
-from openpi.models import contextar as _contextar
 from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
 import openpi.training.config as _config
@@ -423,17 +422,6 @@ def create_incontext_data_loader(
         )
         dataset = TransformedDataset(dataset, [add_demo_transform])
 
-    if isinstance(config.model, _contextar.ContextARConfig):
-        fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
-        dataset = TransformedDataset(
-            dataset,
-            [
-                _transforms.TokenizeFASTIncontextInputs(
-                    tokenizer=fast_tokenizer,
-                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
-                )
-            ],
-        )
     # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
     data_loader = TorchDataLoader(
         dataset,
@@ -446,8 +434,6 @@ def create_incontext_data_loader(
     )
 
     observation_cls = _model.ObservationIncontext
-    if config.model.model_type == _model.ModelType.PI0_FAST_INCONTEXT:
-        observation_cls = _model.ObservationFASTIncontext
 
     class DataLoaderImpl(DataLoader):
         def __init__(
@@ -505,20 +491,6 @@ def create_custom_incontext_data_loader(
         norm_stats_alias_pad_dims=getattr(config.data, "norm_stats_alias_pad_dims", None),
     )
 
-    # Mirror create_incontext_data_loader: ContextAR tokenizes the (normalized) demo
-    # state/action sequences into the FAST prompt after all other transforms ran.
-    if isinstance(config.model, _contextar.ContextARConfig):
-        fast_tokenizer = _tokenizer.FASTTokenizer(config.model.max_token_len)
-        dataset = TransformedDataset(
-            dataset,
-            [
-                _transforms.TokenizeFASTIncontextInputs(
-                    tokenizer=fast_tokenizer,
-                    max_incontext_steps=getattr(config.model, "sample_actions", 0),
-                )
-            ],
-        )
-
     data_loader = TorchDataLoader(
         dataset,
         local_batch_size=config.batch_size // jax.process_count(),
@@ -529,11 +501,7 @@ def create_custom_incontext_data_loader(
         seed=config.seed,
     )
 
-    # Select the observation class by model type, mirroring create_incontext_data_loader:
-    # FAST in-context models need ObservationFASTIncontext (extra tokenized demo fields).
     observation_cls = _model.ObservationIncontext
-    if config.model.model_type == _model.ModelType.PI0_FAST_INCONTEXT:
-        observation_cls = _model.ObservationFASTIncontext
 
     class DataLoaderImpl(DataLoader):
         def __init__(self, data_config: _config.DataConfig, data_loader: TorchDataLoader, obs_cls):

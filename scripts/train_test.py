@@ -98,7 +98,7 @@ def test_create_train_data_loader_routes_by_model_type(monkeypatch):
     monkeypatch.setattr(data_loader, "create_custom_incontext_data_loader", fake_custom)
 
     config = types.SimpleNamespace(
-        model=types.SimpleNamespace(model_type=_model.ModelType.PI0_FAST_INCONTEXT),
+        model=types.SimpleNamespace(model_type=_model.ModelType.PI0_INCONTEXT),
         use_custom_dataloader=False,
     )
     assert create_train_data_loader(config, sharding="sharding", num_workers=3, shuffle=True) == "incontext"
