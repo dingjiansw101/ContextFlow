@@ -25,7 +25,6 @@ import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.contextflow as contextflow
 import openpi.models.tokenizer as _tokenizer
-import openpi.policies.droid_policy as droid_policy
 import openpi.shared.download as _download
 import openpi.shared.normalize as _normalize
 import openpi.training.optimizer as _optimizer
@@ -74,15 +73,6 @@ def _basename(x: str) -> str:
 
 def _stem(x: str) -> str:
     return os.path.splitext(_basename(x))[0]
-
-
-def _normalize_episode_name(x: str) -> str:
-    """
-    Normalize to basename like 'episode_000937.parquet'.
-    Accepts full path or name. Lowercases and strips spaces.
-    """
-    base = os.path.basename(x).strip()
-    return base
 
 
 def _name_to_index(name: str) -> int | None:
@@ -200,56 +190,6 @@ def get_kept_episode_indices(
     if verbose:
         print(f"[exclude-by-task] kept {len(kept)} episodes.")
     return kept
-
-
-def deprecated_get_kept_episode_indices(
-    episodes_jsonl_path: str | Path, exclude_task_language: list[str]
-) -> list[int] | None:
-    """
-    Filters episode indices from a episodes.jsonl file by excluding those
-    whose task descriptions match any entry in the given exclude list.
-
-    Args:
-        episodes_jsonl_path (Union[str, Path]): Path to the `episodes.jsonl` file.
-        exclude_task_language (List[str]): List of task descriptions to exclude.
-
-    Returns:
-        List[int]: List of episode indices to keep (i.e., not excluded).
-
-    Raises:
-        TypeError: If argument types are incorrect.
-        FileNotFoundError: If the episodes.jsonl file does not exist.
-        ValueError: If the file content is malformed or missing required fields.
-    """
-    if episodes_jsonl_path is None or exclude_task_language is None:
-        return None
-    # Type checks
-    if not isinstance(exclude_task_language, list) or not all(isinstance(t, str) for t in exclude_task_language):
-        raise TypeError("exclude_task_language must be a list of strings.")
-
-    if not isinstance(episodes_jsonl_path, (str, Path)):
-        raise TypeError("episodes_jsonl_path must be a string or Path.")
-
-    episodes_jsonl_path = Path(episodes_jsonl_path)
-    if not episodes_jsonl_path.exists():
-        raise FileNotFoundError(f"episodes.jsonl file not found at: {episodes_jsonl_path}")
-
-    kept_indices: list[int] = []
-
-    # Read and filter
-    with jsonlines.open(episodes_jsonl_path, mode="r") as reader:
-        for entry in reader:
-            if "episode_index" not in entry or "tasks" not in entry:
-                raise ValueError(f"Invalid entry (missing 'episode_index' or 'tasks'): {entry}")
-
-            tasks = entry["tasks"]
-            if not isinstance(tasks, list):
-                raise ValueError(f"'tasks' must be a list of strings, but got: {type(tasks)}")
-
-            if not any(task in exclude_task_language for task in tasks):
-                kept_indices.append(entry["episode_index"])
-
-    return kept_indices
 
 
 @dataclasses.dataclass(frozen=True)
@@ -444,24 +384,6 @@ class FakeDataConfig(DataConfigFactory):
     @override
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         return DataConfig(repo_id=self.repo_id)
-
-
-@dataclasses.dataclass(frozen=True)
-class SimpleDataConfig(DataConfigFactory):
-    # Factory for the data transforms.
-    data_transforms: tyro.conf.Suppress[GroupFactory] = dataclasses.field(default_factory=GroupFactory)
-    # Factory for the model transforms.
-    model_transforms: tyro.conf.Suppress[GroupFactory] = dataclasses.field(default_factory=ModelTransformFactory)
-
-    @override
-    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
-        return dataclasses.replace(
-            self.create_base_config(assets_dirs),
-            data_transforms=self.data_transforms(model_config),
-            model_transforms=self.model_transforms(model_config),
-            use_quantile_norm=model_config.model_type == ModelType.PI0_FAST,
-            train_episode=get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
-        )
 
 
 @dataclasses.dataclass(frozen=True)

@@ -66,7 +66,13 @@ def main(config_name: str, sample_frames: int | None = None):
 
     norm_stats = {key: stats.get_statistics() for key, stats in stats.items()}
 
-    output_path = config.assets_dirs / data_config.repo_id
+    # Write to asset_id, not repo_id: asset_id is what DataConfigFactory._load_norm_stats
+    # and checkpoints.load_norm_stats read back. It defaults to repo_id, but configs may
+    # override it (e.g. ContextFlow uses "libero" rather than "physical-intelligence/libero").
+    asset_id = data_config.asset_id or data_config.repo_id
+    if asset_id is None:
+        raise ValueError("Data config must have an asset_id or repo_id to write norm stats")
+    output_path = config.assets_dirs / asset_id
     print(f"Writing stats to: {output_path}")
     normalize.save(output_path, norm_stats)
 

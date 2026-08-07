@@ -1,7 +1,6 @@
 import dataclasses
 from typing import Protocol, runtime_checkable
 
-import jax.numpy as jnp
 import optax
 
 import openpi.shared.array_typing as at
@@ -28,28 +27,6 @@ class CosineDecaySchedule(LRScheduleConfig):
             warmup_steps=self.warmup_steps,
             decay_steps=self.decay_steps,
             end_value=self.decay_lr,
-        )
-
-
-@dataclasses.dataclass(frozen=True)
-class RsqrtDecaySchedule(LRScheduleConfig):
-    """Inverse square root decay schedule with warmup."""
-
-    warmup_steps: int = 1_000
-    peak_lr: float = 5e-5
-    timescale: float = 10_000
-
-    def create(self) -> optax.Schedule:
-        return optax.join_schedules(
-            [
-                optax.linear_schedule(
-                    init_value=self.peak_lr / (self.warmup_steps + 1),
-                    end_value=self.peak_lr,
-                    transition_steps=self.warmup_steps,
-                ),
-                lambda step: self.peak_lr / jnp.sqrt((self.timescale + step) / self.timescale),
-            ],
-            [self.warmup_steps],
         )
 
 

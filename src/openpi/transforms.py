@@ -1,4 +1,4 @@
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 import dataclasses
 import hashlib
 import json
@@ -1288,15 +1288,6 @@ class ResizeImages(DataTransformFn):
 
 
 @dataclasses.dataclass(frozen=True)
-class SubsampleActions(DataTransformFn):
-    stride: int
-
-    def __call__(self, data: DataDict) -> DataDict:
-        data["actions"] = data["actions"][:: self.stride]
-        return data
-
-
-@dataclasses.dataclass(frozen=True)
 class DeltaActions(DataTransformFn):
     """Repacks absolute actions into delta action space."""
 
@@ -1564,25 +1555,6 @@ def transform_dict(patterns: Mapping[str, str | None], tree: at.PyTree) -> at.Py
             raise ValueError(f"Leaf '{name}' aliases a node of '{next_name}'")
 
     return unflatten_dict(output)
-
-
-def apply_tree(
-    tree: at.PyTree[T], selector: at.PyTree[S], fn: Callable[[T, S], T], *, strict: bool = False
-) -> at.PyTree[T]:
-    tree = flatten_dict(tree)
-    selector = flatten_dict(selector)
-
-    def transform(k: str, v: T) -> T:
-        if k in selector:
-            return fn(v, selector[k])
-        return v
-
-    if strict:
-        for k in selector:
-            if k not in tree:
-                raise ValueError(f"Selector key {k} not found in tree")
-
-    return unflatten_dict({k: transform(k, v) for k, v in tree.items()})
 
 
 def pad_to_dim(x: np.ndarray, target_dim: int, axis: int = -1) -> np.ndarray:

@@ -595,7 +595,7 @@ def build(api) -> list[api.TrainConfig]:
     return [
         api.TrainConfig(
             name="ContextFlow",
-            assets_repo_override="ContextFlow_Plain",
+            assets_repo_override="ContextFlow",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
@@ -605,6 +605,10 @@ def build(api) -> list[api.TrainConfig]:
             ),
             data=CustomLeRobotLiberoIncontextDataConfig(
                 repo_id="physical-intelligence/libero",
+                # asset_id decouples the on-disk norm-stats key from the LeRobot
+                # repo_id, so stats live at ./assets/ContextFlow/libero rather than
+                # ./assets/ContextFlow/physical-intelligence/libero.
+                assets=api.AssetsConfig(asset_id="libero"),
                 base_config=api.DataConfig(
                     local_files_only=False,  # Set to True for local-only datasets.
                     prompt_from_task=True,
@@ -875,7 +879,7 @@ def build(api) -> list[api.TrainConfig]:
         ),
         api.TrainConfig(
             name="ContextFlow_plus_libero90",
-            assets_repo_override="ContextFlow_Plain",
+            assets_repo_override="ContextFlow",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
                 action_expert_variant="gemma_300m_lora",
@@ -885,6 +889,9 @@ def build(api) -> list[api.TrainConfig]:
             ),
             data=MultiCustomLeRobotLiberoIncontextDataConfig(
                 repo_id="physical-intelligence/libero",
+                # See the note on ContextFlow above: keeps norm stats at
+                # ./assets/ContextFlow/libero.
+                assets=api.AssetsConfig(asset_id="libero"),
                 base_config=api.DataConfig(
                     local_files_only=False,
                     prompt_from_task=True,

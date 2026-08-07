@@ -12,7 +12,6 @@ import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
 
-from openpi.models import tokenizer as _tokenizer
 import openpi.models.model as _model
 import openpi.training.config as _config
 from openpi.training.custom_dataset import CustomLeRobotDataset

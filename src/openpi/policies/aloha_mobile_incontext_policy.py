@@ -220,21 +220,6 @@ class CustomLeRobotAlohaMobileIncontextInputs(transforms.DataTransformFn):
         return inputs
 
 
-@dataclasses.dataclass(frozen=True)
-class AlohaMobileIncontextOutputs(transforms.DataTransformFn):
-    """Outputs for the Aloha policy."""
-
-    # If true, this will convert the joint and gripper values from the standard Aloha space to
-    # the space used by the pi internal runtime which was used to train the base model.
-    # adapt_to_pi: bool = True
-    adapt_to_pi: bool = False
-
-    def __call__(self, data: dict) -> dict:
-        # Only return the first 14 dims.
-        actions = np.asarray(data["actions"][:, :16])
-        return {"actions": _encode_actions(actions, adapt_to_pi=self.adapt_to_pi)}
-
-
 def _joint_flip_mask() -> np.ndarray:
     """Used to convert between aloha and pi joint angles."""
     return np.array([1, -1, -1, 1, 1, 1, 1, 1, -1, -1, 1, 1, 1, 1, 1, 1])

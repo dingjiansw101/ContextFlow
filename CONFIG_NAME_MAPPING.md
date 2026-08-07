@@ -21,8 +21,10 @@ records the old → new mapping so existing checkpoints, job scripts, and experi
 
 Renamed to `<paper-base>_plus_libero90[_splitN]` / `ContextAR_900m`. `splitN` configs are evaluated on
 the matching `--task_split splitN`; the base `_plus_libero90` and `900m` on `split0`. **Name-only** —
-assets keys are unchanged (`ContextFlow_Plain` for v18/v12, `debug_pi0_fast_libero_incontext_inference`
-for FAST), so existing checkpoints + baked norm stats are unaffected.
+assets keys were unchanged at the time of that rename (`ContextFlow_Plain` for v18/v12,
+`debug_pi0_fast_libero_incontext_inference` for FAST), so existing checkpoints + baked norm stats
+were unaffected. The v18/v12 LIBERO key has since become `ContextFlow` with `asset_id="libero"` —
+see [Assets-key renames](#assets-key-assets_repo_override-renames) below.
 
 | New name | Old name | Defined in |
 |---|---|---|
@@ -100,21 +102,27 @@ paper names, so the assets key now matches the config name.
 
 | Old assets key | New assets key | Shared by |
 |---|---|---|
-| `pi0_libero_refactor_incontextv12_…_dataset_refactor` (the anchor) | `ContextFlow_Plain` | `ContextFlow`, `ContextFlow_Plain`, **+ 43 non-paper LIBERO split/eval configs** — all 45 `assets_repo_override=` lines repointed |
+| `pi0_libero_refactor_incontextv12_…_dataset_refactor` (the anchor) | `ContextFlow` | `ContextFlow`, `ContextFlow_plus_libero90` — both `assets_repo_override=` lines repointed |
 | `pi0_aloha_data_unique_incontextv18_…_no_test` | `ContextFlow_Aloha` | `ContextFlow_Aloha` |
 | `pi0_aloha_data_unique_incontextv18_…_inference` | `ContextFlow_Aloha_Inference` | `ContextFlow_Aloha_Inference` |
 | `pi0_fast_aloha_data_unique_incontext_train_split_v1` | `ContextAR_Aloha` | `ContextAR_Aloha` + `ContextAR_Aloha_Inference` (shared) |
 
 **⚠ Requires a one-time on-disk move per training filesystem.** `./assets/` is **gitignored**
-(not in the commit) and norm stats are read from `./assets/<assets_key>/<repo_id>/`. After
+(not in the commit) and norm stats are read from `./assets/<assets_key>/<asset_id>/` — where
+`asset_id` defaults to the dataset `repo_id` unless the config sets `AssetsConfig(asset_id=…)`. After
 pulling this change, rename the local assets dir(s) so the new keys resolve — otherwise
 `config.py` silently logs "Norm stats not found … skipping" and trains with **no** norm
 stats (no hard error):
 
 ```bash
-# Only the anchor exists locally (as a symlink); do this in each checkout's ./assets:
-mv ./assets/pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor \
-   ./assets/ContextFlow_Plain
+# Only the anchor exists locally (as a symlink); do this in each checkout's ./assets.
+# The LIBERO configs also set AssetsConfig(asset_id="libero"), so the `physical-intelligence/`
+# level of the old layout is flattened away:
+mkdir -p ./assets/ContextFlow
+mv ./assets/pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor/physical-intelligence/libero \
+   ./assets/ContextFlow/libero
+# (from an older checkout that already renamed to ContextFlow_Plain, the equivalent is:
+#  mv ./assets/ContextFlow_Plain/physical-intelligence/libero ./assets/ContextFlow/libero)
 
 # On kw61077 (ALOHA training box), if these dirs exist:
 mv ./assets/pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test  ./assets/ContextFlow_Aloha

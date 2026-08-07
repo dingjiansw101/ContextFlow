@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 import dataclasses
 import logging
 import pathlib
@@ -15,19 +14,6 @@ from openpi.training import config as _config
 from openpi.training.data_loader import create_dataset
 from openpi.training.data_loader import transform_dataset
 import openpi.transforms as transforms
-
-
-@dataclasses.dataclass
-class PolicyConfig:
-    model: _model.BaseModel
-    norm_stats: dict[str, transforms.NormStats]
-
-    input_layers: Sequence[transforms.DataTransformFn]
-    output_layers: Sequence[transforms.DataTransformFn]
-
-    model_type: _model.ModelType = _model.ModelType.PI0  # TODO: check where used the model_type
-    default_prompt: str | None = None
-    sample_kwargs: dict[str, Any] | None = None
 
 
 def create_trained_policy(
