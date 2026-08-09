@@ -44,7 +44,6 @@ Note: when updating `requirements.txt` in this directory, the flag `--extra-inde
 | Artifact | Where to get it | Needed for |
 | --- | --- | --- |
 | LIBERO dataset (`physical-intelligence/libero`) | auto-downloaded from HuggingFace on first use | training and eval (in-context demos are drawn from it) |
-| `metadata/libero/task_to_episode.json` | committed in git; also on [Google Drive](https://drive.google.com/drive/folders/1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ?usp=sharing); or [generate it](#3-generating-the-metadata-from-scratch) | training and eval — maps each task to its demo episodes |
 | `metadata/libero/tasks.jsonl` | committed in git (verbatim copy of the dataset's `meta/tasks.jsonl`) | eval clients (task names/order) |
 | `libero_task_splits/` (`split0`) | committed in git | seen/unseen evaluation |
 | `assets/ContextFlow/physical-intelligence/libero/` (norm stats) | Google Drive `assets/` (archived under `ContextFlow_Plain/`; rename the top level after download) | **training only** — inference loads norm stats from the checkpoint. The ContextFlow configs resolve this path via `assets_repo_override="ContextFlow"` |
@@ -66,7 +65,16 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/1
 
 ## 3. Generating the Metadata from Scratch
 
-`metadata/libero/task_to_episode.json` (and `episode_to_indexes.json`, produced alongside) can be regenerated from the dataset instead of downloaded:
+**Training and evaluation need no precomputed lookup tables.** The task→episode and
+episode→frame maps are derived in memory from the LeRobot dataset metadata
+(`meta/tasks.jsonl` + `meta/episodes.jsonl`) by
+[`src/openpi/training/lookup_tables.py`](../../src/openpi/training/lookup_tables.py), which costs
+~10 ms and cannot drift from the dataset it describes. The old
+`metadata/<name>/task_to_episode.json` / `episode_to_indexes.json` files have been removed.
+
+`src/openpi/training/generate_task_to_index.py` still exists and can write those JSON files, but
+only the standalone analysis tools (`scripts/visualize_lerobot.py`,
+`scripts/check_libero_prompt_coverage.py`) read them:
 
 ```bash
 uv run src/openpi/training/generate_task_to_index.py \
@@ -79,8 +87,6 @@ Two details matter here:
 
 - **Generate with the plain `pi0_libero` config, not an in-context config.** The in-context training configs (`ContextFlow`, …) filter their dataset down to the training episodes (`remove_task_list`), so generating through them would omit the unseen tasks — but evaluation needs demo episodes for unseen tasks too. `pi0_libero` sees the full dataset, and it reads no metadata itself, so there is no bootstrapping problem.
 - `--skip_norm_stats` skips the transform sanity check that runs after the files are written; metadata generation itself does not need norm stats.
-
-The output is deterministic: regenerating reproduces the committed `task_to_episode.json` byte-for-byte.
 
 `metadata/libero/tasks.jsonl` is simply a copy of the dataset's task table:
 
@@ -118,7 +124,7 @@ uv run scripts/serve_policy.py policy:checkpoint \
     --policy.dir=checkpoints/ContextFlow/ContextFlow_4gpu/19999
 ```
 
-`serve_policy.py` auto-detects in-context configs and attaches the demo-fetching pipeline (`--loader=INCONTEXT` forces it). The server needs `metadata/libero/task_to_episode.json` and the HuggingFace dataset (auto-downloaded) to fetch demos.
+`serve_policy.py` auto-detects in-context configs and attaches the demo-fetching pipeline (`--loader=INCONTEXT` forces it). The server needs the HuggingFace dataset (auto-downloaded) to fetch demos; the task→episode map is derived from its metadata at startup.
 
 **Terminal 2 — evaluation client** (activate `examples/libero/.venv` first, Section 1):
 
@@ -150,9 +156,9 @@ Results are written as JSON to `logs/eval_results/` (override with `--results-ou
 
 The `ContextFlow_plus_libero90` config co-trains on LIBERO-90 in addition to the standard suites.
 
-They need two extra artifacts:
+It needs one extra artifact:
 
-1. **The LIBERO-90 LeRobot dataset** [`vo2yager/libero_90`](https://huggingface.co/datasets/vo2yager/libero_90) — auto-downloads from HuggingFace. To rebuild it yourself from the official raw HDF5 demonstrations instead:
+1. **The LIBERO-90 LeRobot dataset** [`vo2yager/libero_90`](https://huggingface.co/datasets/vo2yager/libero_90) — auto-downloads from HuggingFace (~63 GB). To rebuild it yourself from the official raw HDF5 demonstrations instead:
 
    ```bash
    # Download the raw libero_90 HDF5 files (ships inside the libero_100 archive):
@@ -162,7 +168,12 @@ They need two extra artifacts:
    uv run examples/libero/convert_libero_raw_hdf5_to_lerobot.py --data_dir /path/to/libero_90
    ```
 
-2. **`metadata/libero_90/task_to_episode.json`** — committed in git; also on Google Drive (`metadata/libero_90/`), or regenerate with `generate_task_to_index.py --output_dir metadata/libero_90` and a libero_90 config (see the script's docstring).
+   The config's `libero_90` dataset spec sets `local_files_only=True` and points `episode_json_path`
+   at `~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl`, so that path must
+   exist before training starts. If you only need the dataset *metadata* — for the task→episode
+   tables, or to read `meta/tasks.jsonl` — copying `meta/` alone is enough (~539 KB instead of
+   63 GB); the lookup tables never touch the parquet shards. Training on LIBERO-90 frames, of
+   course, does need the full dataset.
 
 ## 7. Troubleshooting
 

@@ -35,12 +35,13 @@ if ! find "${ASSETS_BASE_DIR}/${ASSETS_NAME}" -maxdepth 4 -type f -name 'norm_st
     echo "Missing ${ASSETS_BASE_DIR}/${ASSETS_NAME} norm stats; run scripts/compute_norm_stats.py --config-name ${POLICY_CONFIG} first." >&2
     exit 66
 fi
+# The task->episode tables are derived at runtime from the LeRobot dataset
+# metadata (src/openpi/training/lookup_tables.py); only the libero_90 dataset
+# metadata itself is still a hard prerequisite.
 for required in \
-    "metadata/libero/task_to_episode.json" \
-    "metadata/libero_90/task_to_episode.json" \
     "$HOME/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl"; do
     if [ ! -e "$required" ]; then
-        echo "Missing required file: $required (copy metadata/libero_90 or run scripts/build_task_to_episode_libero90.py)" >&2
+        echo "Missing required file: $required (copy meta/ from a machine that has vo2yager/libero_90, or let LeRobot download the dataset)" >&2
         exit 66
     fi
 done

@@ -46,9 +46,9 @@ if ! find "${ASSETS_BASE_DIR}/${ASSETS_NAME}" -maxdepth 4 -type f -name 'norm_st
     echo "Missing ${ASSETS_BASE_DIR}/${ASSETS_NAME} norm stats." >&2
     exit 66
 fi
-for f in metadata/libero/task_to_episode.json metadata/libero/episode_to_indexes.json; do
-    [ -s "$f" ] || { echo "Missing regenerated metadata: $f" >&2; exit 66; }
-done
+# The task->episode / episode->indexes tables are derived at runtime from the
+# LeRobot dataset metadata (src/openpi/training/lookup_tables.py), so there is
+# no precomputed JSON left to check for here.
 
 pid=""
 forward_term() {

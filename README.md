@@ -85,7 +85,7 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:metadata/libero ./metadata/lib
 
 ## Running Inference
 
-Trained in-context policies are created with `create_trained_policy_incontext`, which automatically attaches the demo-fetching pipeline (demos are pulled from the LIBERO dataset at inference time using the `metadata/libero/task_to_episode.json` map — no separate demo files needed):
+Trained in-context policies are created with `create_trained_policy_incontext`, which automatically attaches the demo-fetching pipeline (demos are pulled from the LIBERO dataset at inference time, using a task→episode map derived from the dataset's own metadata — no separate demo or index files needed):
 
 ```python
 from openpi.training import config as _config

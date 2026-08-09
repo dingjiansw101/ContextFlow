@@ -1,21 +1,13 @@
 # Data directories.
 assets/
 # metadata is generated/downloaded (see examples/libero/LIBERO_README.md), except the
-# small task-map files whitelisted below.
+# small task table whitelisted below. The task->episode / episode->indexes lookup
+# tables are derived at runtime (src/openpi/training/lookup_tables.py), so nothing
+# else in here is committed.
 metadata/*
 !metadata/libero
 metadata/libero/*
 !metadata/libero/tasks.jsonl
-!metadata/libero/task_to_episode.json
-!metadata/libero_90
-metadata/libero_90/*
-!metadata/libero_90/task_to_episode.json
-!metadata/aloha_data_unique
-metadata/aloha_data_unique/*
-!metadata/aloha_data_unique/task_to_episode.json
-!metadata/aloha_incontext
-metadata/aloha_incontext/*
-!metadata/aloha_incontext/task_to_episode.json
 checkpoints/
 checkpoints
 nohup.out
