@@ -23,7 +23,7 @@ Renamed to `<paper-base>_plus_libero90[_splitN]` / `ContextAR_900m`. `splitN` co
 the matching `--task_split splitN`; the base `_plus_libero90` and `900m` on `split0`. **Name-only** —
 assets keys were unchanged at the time of that rename (`ContextFlow_Plain` for v18/v12,
 `debug_pi0_fast_libero_incontext_inference` for FAST), so existing checkpoints + baked norm stats
-were unaffected. The v18/v12 LIBERO key has since become `ContextFlow` with `asset_id="libero"` —
+were unaffected. The v18/v12 LIBERO key has since become `ContextFlow` —
 see [Assets-key renames](#assets-key-assets_repo_override-renames) below.
 
 | New name | Old name | Defined in |
@@ -116,13 +116,11 @@ stats (no hard error):
 
 ```bash
 # Only the anchor exists locally (as a symlink); do this in each checkout's ./assets.
-# The LIBERO configs also set AssetsConfig(asset_id="libero"), so the `physical-intelligence/`
-# level of the old layout is flattened away:
-mkdir -p ./assets/ContextFlow
-mv ./assets/pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor/physical-intelligence/libero \
-   ./assets/ContextFlow/libero
-# (from an older checkout that already renamed to ContextFlow_Plain, the equivalent is:
-#  mv ./assets/ContextFlow_Plain/physical-intelligence/libero ./assets/ContextFlow/libero)
+# Only the top-level key changes -- the `<repo_id>` level below it is unchanged:
+mv ./assets/pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssample32_random_select_without_delta_train_split_dataset_refactor \
+   ./assets/ContextFlow
+# (from an older checkout that already renamed to ContextFlow_Plain:
+#  mv ./assets/ContextFlow_Plain ./assets/ContextFlow)
 
 # On kw61077 (ALOHA training box), if these dirs exist:
 mv ./assets/pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test  ./assets/ContextFlow_Aloha
