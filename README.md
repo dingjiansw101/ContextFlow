@@ -77,8 +77,6 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/1
     checkpoints/ContextFlow/ContextFlow_4gpu/19999
 # Norm stats (needed for training only — inference reads them from the checkpoint)
 rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
-# LIBERO metadata (task→episode maps; see the LIBERO README)
-rclone copy --drive-root-folder-id $FOLDER gdrive:metadata/libero ./metadata/libero
 ```
 
 > **⚠ Norm stats: download, do not recompute.** The released norm stats live in `assets/ContextFlow/physical-intelligence/libero`, which both remaining ContextFlow configs point at via `assets_repo_override="ContextFlow"`. (Older checkouts and the Google Drive archive use `assets/ContextFlow_Plain/...` — see the migration note in [CONFIG_NAME_MAPPING.md](CONFIG_NAME_MAPPING.md).) They were computed by an earlier generation of the configs that used `use_delta_joint_actions=True`, over the full dataset (provenance verified: re-running the computation with that setting reproduces the released file byte-for-byte). The current configs set `use_delta_joint_actions=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
@@ -119,8 +117,7 @@ The model can run on a different server and stream actions to the robot via a we
 The full walkthrough — dataset and metadata preparation, training, serving, and seen/unseen evaluation — lives in **[examples/libero/LIBERO_README.md](examples/libero/LIBERO_README.md)**. The short version:
 
 ```bash
-# 1. Get metadata + norm stats (download from Google Drive, or generate — see the LIBERO README)
-rclone copy --drive-root-folder-id 1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ gdrive:metadata/libero ./metadata/libero
+# 1. Get norm stats (download from Google Drive — see the LIBERO README)
 rclone copy --drive-root-folder-id 1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ gdrive:assets ./assets
 
 # 2. Train (the LIBERO dataset physical-intelligence/libero auto-downloads from HuggingFace)

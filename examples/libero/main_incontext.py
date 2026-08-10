@@ -2,6 +2,7 @@ import collections
 import dataclasses
 import logging
 import math
+import os
 import pathlib
 import imageio
 from libero.libero import benchmark
@@ -17,6 +18,11 @@ from collections import Counter
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
+
+# Task descriptions and their indices come from the LeRobot dataset itself, so the
+# indices sent to the policy server always match the dataset it fetches demos from.
+LEROBOT_HOME = pathlib.Path(os.getenv("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).expanduser()
+LIBERO_TASKS_JSONL = LEROBOT_HOME / "physical-intelligence" / "libero" / "meta" / "tasks.jsonl"
 
 
 def load_task_splits(task_splits_dir: str, split: str):
@@ -104,10 +110,15 @@ def eval_libero(args: Args) -> None:
     logging.info(f"Task suite: {args.task_suite_name}")
 
     if args.task_suite_name == "libero_90":
-        filename = pathlib.Path("metadata/libero_90/tasks.jsonl")
-    else:
-        filename = pathlib.Path("metadata/libero/tasks.jsonl")
-    task_description2index = get_task_to_index_mapping(filename)
+        # LIBERO-90 is training co-data only. Its task indices are a different space
+        # from physical-intelligence/libero (90 vs 40 tasks, no overlap), and the
+        # policy server always fetches demos from the latter -- so evaluating this
+        # suite would condition on unrelated demos. See LIBERO_README section 6.
+        raise ValueError(
+            "libero_90 is not a supported eval suite: its task indices do not match "
+            "the demo dataset the policy server serves from."
+        )
+    task_description2index = get_task_to_index_mapping(LIBERO_TASKS_JSONL)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
     if args.task_suite_name == "libero_spatial":
@@ -118,8 +129,6 @@ def eval_libero(args: Args) -> None:
         max_steps = 300  # longest training demo has 270 steps
     elif args.task_suite_name == "libero_10":
         max_steps = 520  # longest training demo has 505 steps
-    elif args.task_suite_name == "libero_90":
-        max_steps = 400  # longest training demo has 373 steps
     else:
         raise ValueError(f"Unknown task suite: {args.task_suite_name}")
 

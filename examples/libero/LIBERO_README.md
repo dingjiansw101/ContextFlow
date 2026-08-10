@@ -43,8 +43,7 @@ Note: when updating `requirements.txt` in this directory, the flag `--extra-inde
 
 | Artifact | Where to get it | Needed for |
 | --- | --- | --- |
-| LIBERO dataset (`physical-intelligence/libero`) | auto-downloaded from HuggingFace on first use | training and eval (in-context demos are drawn from it) |
-| `metadata/libero/tasks.jsonl` | committed in git (verbatim copy of the dataset's `meta/tasks.jsonl`) | eval clients (task names/order) |
+| LIBERO dataset (`physical-intelligence/libero`) | auto-downloaded from HuggingFace on first use | training and eval (in-context demos are drawn from it; the eval clients also read its `meta/tasks.jsonl` for task names/order) |
 | `libero_task_splits/` (`split0`) | committed in git | seen/unseen evaluation |
 | `assets/ContextFlow/physical-intelligence/libero/` (norm stats) | Google Drive `assets/` (archived under `ContextFlow_Plain/`; rename the top level after download) | **training only** — inference loads norm stats from the checkpoint. The ContextFlow configs resolve this path via `assets_repo_override="ContextFlow"` |
 | Checkpoints | Google Drive (see [root README](../../README.md#in-context-model-checkpoints-google-drive)) | evaluation |
@@ -54,7 +53,6 @@ Download the Drive artifacts (browser, or rclone with your own Google Drive remo
 ```bash
 FOLDER=1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ
 rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
-rclone copy --drive-root-folder-id $FOLDER gdrive:metadata/libero ./metadata/libero
 rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/19999 \
     checkpoints/ContextFlow/ContextFlow_4gpu/19999
 ```
@@ -88,11 +86,11 @@ Two details matter here:
 - **Generate with the plain `pi0_libero` config, not an in-context config.** The in-context training configs (`ContextFlow`, …) filter their dataset down to the training episodes (`remove_task_list`), so generating through them would omit the unseen tasks — but evaluation needs demo episodes for unseen tasks too. `pi0_libero` sees the full dataset, and it reads no metadata itself, so there is no bootstrapping problem.
 - `--skip_norm_stats` skips the transform sanity check that runs after the files are written; metadata generation itself does not need norm stats.
 
-`metadata/libero/tasks.jsonl` is simply a copy of the dataset's task table:
-
-```bash
-cp ~/.cache/huggingface/lerobot/physical-intelligence/libero/meta/tasks.jsonl metadata/libero/tasks.jsonl
-```
+The eval clients read the task table directly from the dataset
+(`$LEROBOT_HOME/physical-intelligence/libero/meta/tasks.jsonl`, where `LEROBOT_HOME`
+defaults to `~/.cache/huggingface/lerobot`), so there is nothing to copy or commit.
+A client host therefore needs the dataset present — on a machine that only runs the
+simulator, fetch at least its `meta/` directory.
 
 ## 4. Training
 
@@ -142,7 +140,7 @@ python examples/libero/main.py --task-suite-name libero_spatial
 
 Key client arguments:
 
-- `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`, `libero_90`
+- `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`. (`libero_90` is training co-data only — the in-context clients reject it, because its task indices are a different space from the demo dataset the server serves from.)
 - `--task-split`: `split0` (the only split shipped; default `split0`)
 - `--task-splits-dir`: directory with the split definitions (default: `libero_task_splits` at the repo root, committed in git; each split has `seen_tasks.json` / `unseen_tasks.json`)
 - `--num-trials-per-task`: rollouts per task (default 50)

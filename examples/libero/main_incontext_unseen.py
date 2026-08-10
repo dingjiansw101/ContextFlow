@@ -2,6 +2,7 @@ import collections
 import dataclasses
 import logging
 import math
+import os
 import pathlib
 import imageio
 from libero.libero import benchmark
@@ -16,6 +17,11 @@ import json
 
 LIBERO_DUMMY_ACTION = [0.0] * 6 + [-1.0]
 LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
+
+# Task descriptions and their indices come from the LeRobot dataset itself, so the
+# indices sent to the policy server always match the dataset it fetches demos from.
+LEROBOT_HOME = pathlib.Path(os.getenv("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).expanduser()
+LIBERO_TASKS_JSONL = LEROBOT_HOME / "physical-intelligence" / "libero" / "meta" / "tasks.jsonl"
 
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
@@ -95,8 +101,7 @@ def eval_libero(args: Args) -> None:
     num_tasks_in_suite = task_suite.n_tasks
     logging.info(f"Task suite: {args.task_suite_name}")
 
-    filename = pathlib.Path("metadata/libero/tasks.jsonl")
-    task_description2index = get_task_to_index_mapping(filename)
+    task_description2index = get_task_to_index_mapping(LIBERO_TASKS_JSONL)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
     # Load seen and unseen task splits

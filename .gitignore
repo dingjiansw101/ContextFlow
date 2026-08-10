@@ -1,13 +1,10 @@
 # Data directories.
 assets/
-# metadata is generated/downloaded (see examples/libero/LIBERO_README.md), except the
-# small task table whitelisted below. The task->episode / episode->indexes lookup
-# tables are derived at runtime (src/openpi/training/lookup_tables.py), so nothing
-# else in here is committed.
-metadata/*
-!metadata/libero
-metadata/libero/*
-!metadata/libero/tasks.jsonl
+# Nothing under metadata/ is committed any more. The task->episode / episode->indexes
+# lookup tables are derived at runtime (src/openpi/training/lookup_tables.py), and the
+# task table is read straight from the LeRobot dataset's own meta/tasks.jsonl. The
+# directory only holds output of the standalone analysis scripts now.
+metadata/
 checkpoints/
 checkpoints
 nohup.out
