@@ -10,8 +10,8 @@ from libero.libero import get_libero_path
 from libero.libero.envs import OffScreenRenderEnv
 import numpy as np
 from openpi_client import image_tools
-from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS
 from openpi_client import websocket_client_policy as _websocket_client_policy
+from openpi.training.config_libero import LIBERO_UNSEEN_TASKS
 import tqdm
 import tyro
 import json

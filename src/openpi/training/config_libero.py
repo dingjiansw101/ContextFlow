@@ -3,17 +3,35 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 
-from typing_extensions import override
-
-import openpi.policies.libero_incontext_policy as libero_incontext_policy
-import openpi.policies.libero_policy as libero_policy
-from openpi.training.dataset_spec import DatasetSpec
+LIBERO_UNSEEN_TASKS = (
+    # libero_10
+    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+    "put both the alphabet soup and the tomato sauce in the basket",
+    # libero_goal
+    "put the bowl on the plate",
+    "put the bowl on the stove",
+    # libero_object
+    "pick up the milk and place it in the basket",
+    "pick up the tomato sauce and place it in the basket",
+    # libero_spatial
+    "pick up the black bowl on the cookie box and place it on the plate",
+    "pick up the black bowl next to the plate and place it on the plate",
+)
 
 
 def build(api) -> list[api.TrainConfig]:
+    # Eval clients import the task split under Python 3.8 without the training dependencies.
+    from typing_extensions import override  # noqa: PLC0415
+
+    import openpi.policies.libero_incontext_policy as libero_incontext_policy  # noqa: PLC0415
+    import openpi.policies.libero_policy as libero_policy  # noqa: PLC0415
+    from openpi.training.dataset_spec import DatasetSpec  # noqa: PLC0415
+
     g = globals()
     g.setdefault("DataConfig", object)
     g.setdefault("BaseModelConfig", object)
+    # The nested dataclass annotation is resolved through this module's globals.
+    g["DatasetSpec"] = DatasetSpec
 
     def _make_lerobot_incontext_repack_transform():
         return api._transforms.Group(
@@ -612,7 +630,7 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                remove_task_list=api.LIBERO_UNSEEN_TASKS,
+                remove_task_list=LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
             ),
@@ -645,7 +663,7 @@ def build(api) -> list[api.TrainConfig]:
                     local_files_only=False,  # Set to True for local-only datasets.
                     prompt_from_task=True,
                 ),
-                remove_task_list=api.LIBERO_UNSEEN_TASKS,
+                remove_task_list=LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 use_delta_joint_actions=False,
             ),
@@ -761,7 +779,7 @@ def build(api) -> list[api.TrainConfig]:
                     prompt_from_task=True,
                 ),
                 use_delta_joint_actions=False,
-                remove_task_list=api.LIBERO_UNSEEN_TASKS,
+                remove_task_list=LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             ),
             weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
@@ -793,7 +811,7 @@ def build(api) -> list[api.TrainConfig]:
                     prompt_from_task=True,
                 ),
                 use_delta_joint_actions=False,
-                remove_task_list=api.LIBERO_UNSEEN_TASKS,
+                remove_task_list=LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             ),
             weight_loader=api.weight_loaders.CheckpointWeightLoader(
@@ -893,7 +911,7 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        remove_task_list=api.LIBERO_UNSEEN_TASKS,
+                        remove_task_list=LIBERO_UNSEEN_TASKS,
                         local_files_only=False,
                     ),
                     DatasetSpec(

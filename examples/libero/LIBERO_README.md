@@ -25,7 +25,7 @@ uv pip sync examples/libero/requirements.txt third_party/libero/requirements.txt
     --extra-index-url https://download.pytorch.org/whl/cu113 --index-strategy=unsafe-best-match
 uv pip install -e packages/openpi-client
 uv pip install -e third_party/libero
-export PYTHONPATH=$PYTHONPATH:$PWD/third_party/libero
+export PYTHONPATH=$PYTHONPATH:$PWD/src:$PWD/third_party/libero
 ```
 
 Alternatively, with Docker:
@@ -140,7 +140,7 @@ python examples/libero/main.py --task-suite-name libero_spatial
 Key client arguments:
 
 - `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`. (`libero_90` is training co-data only — the in-context clients reject it, because its task indices are a different space from the demo dataset the server serves from.)
-- The seen/unseen assignment is not configurable: the training configs and eval clients share `LIBERO_UNSEEN_TASKS` from `openpi_client.libero_task_split`. Any suite task not in that tuple counts as seen.
+- The seen/unseen assignment is not configurable: the training configs and eval clients share `LIBERO_UNSEEN_TASKS` from `openpi.training.config_libero`. Any suite task not in that tuple counts as seen.
 - `--num-trials-per-task`: rollouts per task (default 50)
 - `--host` / `--port`: policy server address (default `0.0.0.0:8000`)
 

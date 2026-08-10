@@ -20,8 +20,6 @@ import jsonlines
 from typing_extensions import override
 import tyro
 
-from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS as LIBERO_UNSEEN_TASKS
-
 import openpi.models.model as _model
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast

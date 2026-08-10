@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
 import jsonlines
-from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS
+from openpi.training.config_libero import LIBERO_UNSEEN_TASKS
 
 
 @dataclass

@@ -1,6 +1,6 @@
 """Validation for the shared LIBERO seen/unseen task split."""
 
-from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS
+from openpi.training.config_libero import LIBERO_UNSEEN_TASKS
 
 
 def test_unseen_tasks_are_unique():
