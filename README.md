@@ -2,12 +2,11 @@
 
 This repository contains the model and training/evaluation code for **ContextFlow** — a vision-language-action (VLA) model that conditions on **in-context demonstrations** (demo images, states, and actions of a related task) to generalize to unseen tasks without fine-tuning.
 
-It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their two base models:
+It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their base model:
 
 - the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion VLA
-- the [π₀-FAST model](https://www.physicalintelligence.company/research/fast), an autoregressive VLA based on the FAST action tokenizer
 
-On top of these we provide the in-context method:
+On top of this we provide the in-context method:
 
 | Method | Base | In-context conditioning | Model config class |
 | --- | --- | --- | --- |
@@ -47,14 +46,13 @@ NOTE: `GIT_LFS_SKIP_SMUDGE=1` is needed to pull LeRobot as a dependency.
 
 ## Model Checkpoints
 
-### Base models (initialization for training)
+### Base model (initialization for training)
 
-Training the in-context models starts from the pre-trained π₀ / π₀-FAST base checkpoints, which are downloaded automatically from Physical Intelligence's S3 bucket on first use (cached in `~/.cache/openpi`; override with `OPENPI_DATA_HOME`):
+Training the in-context models starts from the pre-trained π₀ base checkpoint, which is downloaded automatically from Physical Intelligence's S3 bucket on first use (cached in `~/.cache/openpi`; override with `OPENPI_DATA_HOME`):
 
-| Model        | Checkpoint Path                                |
-| ------------ | ---------------------------------------------- |
-| π₀ base      | `s3://openpi-assets/checkpoints/pi0_base`      |
-| π₀-FAST base | `s3://openpi-assets/checkpoints/pi0_fast_base` |
+| Model   | Checkpoint Path                           |
+| ------- | ----------------------------------------- |
+| π₀ base | `s3://openpi-assets/checkpoints/pi0_base` |
 
 ### In-context model checkpoints (Google Drive)
 
@@ -136,7 +134,7 @@ Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code
 
 ## Repository Structure
 
-- `src/openpi/models/` — model implementations: `contextflow.py` (+ the upstream `pi0.py`, `pi0_fast.py`)
+- `src/openpi/models/` — model implementations: `contextflow.py` and the upstream `pi0.py`
 - `src/openpi/training/` — configs (`config_libero.py`, `config_aloha.py`), the in-context dataset (`custom_dataset.py`), metadata generation (`generate_task_to_index.py`)
 - `src/openpi/policies/` — policy wrappers, `policy_config.py` (checkpoint → policy, in-context demo pipeline)
 - `scripts/` — `train.py`, `serve_policy.py`, `compute_norm_stats.py`
@@ -157,4 +155,4 @@ Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code
 
 ## Acknowledgements
 
-This repository is a fork of [openpi](https://github.com/Physical-Intelligence/openpi). We thank the Physical Intelligence team for open-sourcing the π₀ / π₀-FAST models, and the [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) team for the benchmark.
+This repository is a fork of [openpi](https://github.com/Physical-Intelligence/openpi). We thank the Physical Intelligence team for open-sourcing the π₀ model, and the [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) team for the benchmark.
