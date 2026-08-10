@@ -25,7 +25,7 @@ uv run scripts/compute_norm_stats.py --config-name <config_name>
 # 2. Run training (set XLA flag to maximize GPU memory usage)
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py <config_name> --exp-name=<experiment_name> [--overwrite]
 
-# Common config names: pi0_fast_libero, pi0_libero, pi0_fast_droid, pi0_aloha_towel
+# Common config names: ContextFlow, ContextFlow_plus_libero90, ContextFlow_Aloha, Pi0_Aloha
 # --overwrite flag overwrites existing checkpoints with the same name
 ```
 
@@ -90,7 +90,7 @@ The codebase is organized into six main packages under `src/openpi/`:
 
 - **policies/**: Policy wrappers that bridge models to robot environments
   - `policy.py`: Base Policy class with input/output transforms
-  - Robot-specific policies: `libero_policy.py`, `aloha_policy.py`, `droid_policy.py`
+  - Robot-specific policies: `libero_policy.py`, `libero_incontext_policy.py`, `aloha_mobile_policy.py`
   - Each defines mapping from robot observations → model inputs and model outputs → robot actions
 
 - **training/**: Training pipeline, data loading, and configuration
@@ -128,7 +128,7 @@ The codebase is organized into six main packages under `src/openpi/`:
 - Inference: Single forward pass with autoregressive decoding
 - Action representation: Discrete tokens via FAST action tokenizer
 - Config defaults: `action_horizon=32`, `action_dim=32`
-- Use case: Faster inference, 0-shot generalization (e.g., DROID checkpoint)
+- Use case: Faster autoregressive inference
 
 **In-Context Models** (`pi0_incontextv*`)
 - Extension of base models with demonstration conditioning
@@ -376,7 +376,7 @@ Base models and datasets are hosted on S3:
 from openpi.shared import download
 
 # Auto-downloads and caches to ~/.cache/openpi
-checkpoint_dir = download.maybe_download("s3://openpi-assets/checkpoints/pi0_fast_droid")
+checkpoint_dir = download.maybe_download("s3://openpi-assets/checkpoints/pi0_base")
 
 # Override cache location via environment variable
 # export OPENPI_DATA_HOME=/custom/cache/path

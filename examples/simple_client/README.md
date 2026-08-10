@@ -11,7 +11,7 @@ uv run examples/simple_client/main.py --help
 ## With Docker
 
 ```bash
-export SERVER_ARGS="--env ALOHA_SIM"
+export SERVER_ARGS="--env LIBERO"
 docker compose -f examples/simple_client/compose.yml up --build
 ```
 
@@ -20,11 +20,11 @@ docker compose -f examples/simple_client/compose.yml up --build
 Terminal window 1:
 
 ```bash
-uv run examples/simple_client/main.py --env DROID
+uv run examples/simple_client/main.py --env LIBERO
 ```
 
 Terminal window 2:
 
 ```bash
-uv run scripts/serve_policy.py --env DROID
+uv run scripts/serve_policy.py --env LIBERO
 ```

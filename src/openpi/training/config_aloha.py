@@ -2,13 +2,11 @@ from __future__ import annotations
 import dataclasses
 import tyro
 import pathlib
-import json
 from collections.abc import Sequence
 from typing_extensions import override
 
 import openpi.policies.aloha_mobile_incontext_policy as aloha_incontext_policy
 import openpi.policies.aloha_mobile_policy as aloha_mobile_policy
-import openpi.policies.aloha_policy as aloha_policy
 
 # Constants for ALOHA objects dataset
 ALOHA_OBJECT_EPISODE_JSON = "/home/dingj0b/.cache/huggingface/lerobot/vo2yager/objects_pickup_place/meta/episodes.jsonl"
@@ -54,60 +52,6 @@ def build(api) -> list["api.TrainConfig"]:
     g["TrainConfig"] = getattr(api, "TrainConfig")
     
     # 1) Define DataConfig subclasses inside this function, inheriting DataConfigFactory via api
-    @dataclasses.dataclass(frozen=True)
-    class LeRobotAlohaDataConfig(api.DataConfigFactory):
-        # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
-        # Gripper dimensions will remain in absolute values.
-        use_delta_joint_actions: bool = True
-        # If provided, will be injected into the input data if the "prompt" key is not present.
-        default_prompt: str | None = None
-        # If true, this will convert the joint and gripper values from the standard Aloha space to
-        # the space used by the pi internal runtime which was used to train the base model. People who
-        # use standard Aloha data should set this to true.
-        adapt_to_pi: bool = True
-
-        # Repack transforms.
-        repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
-            default=api._transforms.Group(
-                inputs=[
-                    api._transforms.RepackTransform(
-                        {
-                            "images": {"cam_high": "observation.images.top"},
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            )
-        )
-        # Action keys that will be used to read the action sequence from the dataset.
-        action_sequence_keys: Sequence[str] = ("action",)
-
-        @override
-        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
-            data_transforms = api._transforms.Group(
-                inputs=[aloha_policy.AlohaInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)],
-                outputs=[aloha_policy.AlohaOutputs(adapt_to_pi=self.adapt_to_pi)],
-            )
-            if self.use_delta_joint_actions:
-                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1)
-                data_transforms = data_transforms.push(
-                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
-                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
-                )
-
-            model_transforms = api.ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
-
-            return dataclasses.replace(
-                self.create_base_config(assets_dirs),
-                repack_transforms=self.repack_transforms,
-                data_transforms=data_transforms,
-                model_transforms=model_transforms,
-                action_sequence_keys=self.action_sequence_keys,
-                train_episode=api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
-            )
-            
-            
     @dataclasses.dataclass(frozen=True)
     class LeRobotAlohaMobileDataConfig(api.DataConfigFactory):
         # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
@@ -448,42 +392,6 @@ def build(api) -> list["api.TrainConfig"]:
 
     # 2) Return this child's api.TrainConfig entries directly (can be multiple)
     return [
-        #
-    # In`fe`rence Aloha configs.
-    #
-    api.TrainConfig(
-        name="pi0_aloha",
-        model=api.pi0.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            assets=api.AssetsConfig(asset_id="trossen"),
-        ),
-    ),
-    api.TrainConfig(
-        name="pi0_aloha_mobile",
-        model=api.pi0.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            assets=api.AssetsConfig(
-                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
-                asset_id="mobile_trossen",
-            ),
-        ),
-    ),
-    api.TrainConfig(
-        name="pi0_aloha_towel",
-        model=api.pi0.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            assets=api.AssetsConfig(asset_id="trossen"),
-            default_prompt="fold the towel",
-        ),
-    ),
-    api.TrainConfig(
-        name="pi0_aloha_tupperware",
-        model=api.pi0.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            assets=api.AssetsConfig(asset_id="trossen"),
-            default_prompt="open the tupperware and put the food on the plate",
-        ),
-    ),
     api.TrainConfig(
         name="pi0_aloha_pen_uncap_b5_low_mem_finetune",
         model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
@@ -806,56 +714,6 @@ def build(api) -> list["api.TrainConfig"]:
         ).get_freeze_filter(),
         ema_decay=None,
     ),
-        #
-    # Fine-tuning Aloha configs.
-    #
-    # This is a test config that is used to illustate how train on a custom LeRobot dataset.
-    # For instuctions on how to convert and train on your own Aloha dataset see examples/aloha_real/README.md
-    api.TrainConfig(
-        name="pi0_aloha_pen_uncap",
-        model=api.pi0.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            repo_id="physical-intelligence/aloha_pen_uncap_diverse",
-            assets=api.AssetsConfig(
-                assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
-                asset_id="trossen",
-            ),
-            default_prompt="uncap the pen",
-            repack_transforms=api._transforms.Group(
-                inputs=[
-                    api._transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                        }
-                    )
-                ]
-            ),
-            base_config=api.DataConfig(
-                local_files_only=False,  # Set to True for local-only datasets.
-            ),
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-    ),
-    # This config is used to demonstrate how to train on a simple simulated environment.
-    api.TrainConfig(
-        name="pi0_aloha_sim",
-        model=api.pi0.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            repo_id="lerobot/aloha_sim_transfer_cube_human",
-            default_prompt="Transfer cube",
-            use_delta_joint_actions=False,
-        ),
-        weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-        num_train_steps=20_000,
-    ),
-
     # Transferred from /home/dingj0b/code/openpi/src/openpi/training/config.py
     api.TrainConfig(
         name="pi0_aloha_objects_all_pickup_place_incontext_low_mem_finetune_split_train",

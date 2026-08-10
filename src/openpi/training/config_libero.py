@@ -733,24 +733,6 @@ def build(api) -> list[api.TrainConfig]:
             # num_train_steps=10_000,
         ),
         api.TrainConfig(
-            name="pi0_libero_zero",
-            model=api.pi0.Pi0Config(),
-            data=LeRobotLiberoDataConfig(
-                repo_id="physical-intelligence/libero",
-                base_config=api.DataConfig(
-                    local_files_only=False,  # Set to True for local-only datasets.
-                    prompt_from_task=True,
-                ),
-                assets=api.AssetsConfig(
-                    assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
-                    asset_id="droid",
-                ),
-            ),
-            weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
-            # num_train_steps=30_000,
-            num_train_steps=10_000,
-        ),
-        api.TrainConfig(
             name="pi0_libero_low_mem_finetune",
             model=api.pi0.Pi0Config(paligemma_variant="gemma_2b_lora", action_expert_variant="gemma_300m_lora"),
             data=LeRobotLiberoDataConfig(

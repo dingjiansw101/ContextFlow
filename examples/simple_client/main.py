@@ -11,9 +11,6 @@ import tyro
 class EnvMode(enum.Enum):
     """Supported environments."""
 
-    ALOHA = "aloha"
-    ALOHA_SIM = "aloha_sim"
-    DROID = "droid"
     LIBERO = "libero"
     ALOHA_MOBILE = "aloha_mobile"
 
@@ -23,15 +20,12 @@ class Args:
     host: str = "0.0.0.0"
     port: int = 8000
 
-    env: EnvMode = EnvMode.ALOHA_SIM
+    env: EnvMode = EnvMode.LIBERO
     num_steps: int = 10
 
 
 def main(args: Args) -> None:
     obs_fn = {
-        EnvMode.ALOHA: _random_observation_aloha,
-        EnvMode.ALOHA_SIM: _random_observation_aloha,
-        EnvMode.DROID: _random_observation_droid,
         EnvMode.LIBERO: _random_observation_libero,
         EnvMode.ALOHA_MOBILE: _random_observation_aloha_mobile,
     }[args.env]
@@ -61,29 +55,6 @@ def _random_observation_aloha_mobile() -> dict:
             "cam_left_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
             "cam_right_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
         },
-        "prompt": "do something",
-    }
-
-
-def _random_observation_aloha() -> dict:
-    return {
-        "state": np.ones((14,)),
-        "images": {
-            "cam_high": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-            "cam_low": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-            "cam_left_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-            "cam_right_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-        },
-        "prompt": "do something",
-    }
-
-
-def _random_observation_droid() -> dict:
-    return {
-        "observation/exterior_image_1_left": np.random.randint(256, size=(224, 224, 3), dtype=np.uint8),
-        "observation/wrist_image_left": np.random.randint(256, size=(224, 224, 3), dtype=np.uint8),
-        "observation/joint_position": np.random.rand(7),
-        "observation/gripper_position": np.random.rand(1),
         "prompt": "do something",
     }
 

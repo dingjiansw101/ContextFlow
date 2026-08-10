@@ -27,7 +27,7 @@ The LIBERO ContextFlow runs reported in the paper were trained on 2–4× H100/A
 
 ## Installation
 
-Clone the repo with submodules (the LIBERO simulator and the ALOHA client are submodules; LeRobot itself is pulled by `uv sync`):
+Clone the repo with submodules (the LIBERO simulator is a submodule; LeRobot itself is pulled by `uv sync`):
 
 ```bash
 git clone --recurse-submodules <this-repo-url>
