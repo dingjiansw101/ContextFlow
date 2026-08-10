@@ -20,6 +20,8 @@ import jsonlines
 from typing_extensions import override
 import tyro
 
+from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS as LIBERO_UNSEEN_TASKS
+
 import openpi.models.model as _model
 import openpi.models.pi0 as pi0
 import openpi.models.pi0_fast as pi0_fast
@@ -49,22 +51,6 @@ DEFAULT_LIBERO_EPISODE_JSON = str(
     Path("~/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl").expanduser()
 )
 # "/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
-
-DEFAULT_LIBERO_TEST_TASK = [
-    # 10
-    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-    "put both the alphabet soup and the tomato sauce in the basket",
-    # goal
-    "put the bowl on the plate",
-    "put the bowl on the stove",
-    # object
-    "pick up the milk and place it in the basket",
-    "pick up the tomato sauce and place it in the basket",
-    # spatial
-    "pick up the black bowl on the cookie box and place it on the plate",
-    "pick up the black bowl next to the plate and place it on the plate",
-]
-
 
 # --- helper, keep tiny & local ---
 def _basename(x: str) -> str:

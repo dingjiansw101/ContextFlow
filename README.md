@@ -132,7 +132,7 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.inference_dtype=float3
 python examples/libero/main_incontext_unseen.py --task-suite-name libero_spatial
 ```
 
-Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code: `DEFAULT_LIBERO_TEST_TASK` in [`src/openpi/training/config.py`](src/openpi/training/config.py) is what the training configs exclude via `remove_task_list`, and `UNSEEN_TASKS` in the eval clients is the matching list. Every other task in the four suites is a seen task.
+Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code: `LIBERO_UNSEEN_TASKS` in [`packages/openpi-client/src/openpi_client/libero_task_split.py`](packages/openpi-client/src/openpi_client/libero_task_split.py) is shared by the training configs and eval clients. Every other task in the four suites is a seen task.
 
 ## Repository Structure
 

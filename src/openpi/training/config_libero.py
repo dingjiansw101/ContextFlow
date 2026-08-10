@@ -612,7 +612,7 @@ def build(api) -> list[api.TrainConfig]:
                 use_delta_joint_actions=False,
                 sample_frames=8,
                 sample_actions=128,
-                remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                remove_task_list=api.LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
             ),
@@ -645,7 +645,7 @@ def build(api) -> list[api.TrainConfig]:
                     local_files_only=False,  # Set to True for local-only datasets.
                     prompt_from_task=True,
                 ),
-                remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                remove_task_list=api.LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 use_delta_joint_actions=False,
             ),
@@ -761,7 +761,7 @@ def build(api) -> list[api.TrainConfig]:
                     prompt_from_task=True,
                 ),
                 use_delta_joint_actions=False,
-                remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                remove_task_list=api.LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             ),
             weight_loader=api.weight_loaders.CheckpointWeightLoader("s3://openpi-assets/checkpoints/pi0_base/params"),
@@ -793,7 +793,7 @@ def build(api) -> list[api.TrainConfig]:
                     prompt_from_task=True,
                 ),
                 use_delta_joint_actions=False,
-                remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                remove_task_list=api.LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
             ),
             weight_loader=api.weight_loaders.CheckpointWeightLoader(
@@ -893,7 +893,7 @@ def build(api) -> list[api.TrainConfig]:
                     DatasetSpec(
                         repo_id="physical-intelligence/libero",
                         episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
-                        remove_task_list=api.DEFAULT_LIBERO_TEST_TASK,
+                        remove_task_list=api.LIBERO_UNSEEN_TASKS,
                         local_files_only=False,
                     ),
                     DatasetSpec(

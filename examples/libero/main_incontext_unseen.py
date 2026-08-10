@@ -10,6 +10,7 @@ from libero.libero import get_libero_path
 from libero.libero.envs import OffScreenRenderEnv
 import numpy as np
 from openpi_client import image_tools
+from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS
 from openpi_client import websocket_client_policy as _websocket_client_policy
 import tqdm
 import tyro
@@ -22,27 +23,6 @@ LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 # indices sent to the policy server always match the dataset it fetches demos from.
 LEROBOT_HOME = pathlib.Path(os.getenv("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).expanduser()
 LIBERO_TASKS_JSONL = LEROBOT_HOME / "physical-intelligence" / "libero" / "meta" / "tasks.jsonl"
-
-# The held-out tasks: excluded from training, evaluated as unseen. Every other task in
-# the four suites is a seen task. This must stay in sync with DEFAULT_LIBERO_TEST_TASK
-# in src/openpi/training/config.py, which is what the training configs exclude via
-# remove_task_list -- the eval clients run in a separate environment and cannot import it.
-UNSEEN_TASKS = frozenset(
-    {
-        # libero_10
-        "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-        "put both the alphabet soup and the tomato sauce in the basket",
-        # libero_goal
-        "put the bowl on the plate",
-        "put the bowl on the stove",
-        # libero_object
-        "pick up the milk and place it in the basket",
-        "pick up the tomato sauce and place it in the basket",
-        # libero_spatial
-        "pick up the black bowl on the cookie box and place it on the plate",
-        "pick up the black bowl next to the plate and place it on the plate",
-    }
-)
 
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
@@ -103,14 +83,14 @@ def eval_libero(args: Args) -> None:
     task_description2index = get_task_to_index_mapping(LIBERO_TASKS_JSONL)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
-    logging.info(f"Held-out tasks: {len(UNSEEN_TASKS)}")
+    logging.info(f"Held-out tasks: {len(LIBERO_UNSEEN_TASKS)}")
 
     # Map unseen task names to task IDs
     unseen_task_ids = []
     for task_id in range(num_tasks_in_suite):
         task = task_suite.get_task(task_id)
         task_description = task.language
-        if task_description in UNSEEN_TASKS:
+        if task_description in LIBERO_UNSEEN_TASKS:
             unseen_task_ids.append(task_id)
 
     logging.info(f"Found {len(unseen_task_ids)} unseen tasks in suite: {unseen_task_ids}")

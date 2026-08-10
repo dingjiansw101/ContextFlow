@@ -887,7 +887,7 @@ def build(api) -> list["api.TrainConfig"]:
                 local_files_only=False,  # Set to True for local-only datasets.
                 prompt_from_task=True,
             ),
-            # remove_task_list=DEFAULT_LIBERO_TEST_TASK,
+            # remove_task_list=LIBERO_UNSEEN_TASKS,
             # episode_json_path=DEFAULT_LIBERO_EPISODE_JSON,
             remove_task_list=ALOHA_OBJECT_TEST_TASK,
             episode_json_path=ALOHA_OBJECT_EPISODE_JSON,

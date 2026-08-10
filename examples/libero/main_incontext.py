@@ -10,6 +10,7 @@ from libero.libero import get_libero_path
 from libero.libero.envs import OffScreenRenderEnv
 import numpy as np
 from openpi_client import image_tools
+from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS
 from openpi_client import websocket_client_policy as _websocket_client_policy
 import tqdm
 import tyro
@@ -23,28 +24,6 @@ LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 # indices sent to the policy server always match the dataset it fetches demos from.
 LEROBOT_HOME = pathlib.Path(os.getenv("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).expanduser()
 LIBERO_TASKS_JSONL = LEROBOT_HOME / "physical-intelligence" / "libero" / "meta" / "tasks.jsonl"
-
-# The held-out tasks: excluded from training, evaluated as unseen. Every other task in
-# the four suites is a seen task. This must stay in sync with DEFAULT_LIBERO_TEST_TASK
-# in src/openpi/training/config.py, which is what the training configs exclude via
-# remove_task_list -- the eval clients run in a separate environment and cannot import it.
-UNSEEN_TASKS = frozenset(
-    {
-        # libero_10
-        "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-        "put both the alphabet soup and the tomato sauce in the basket",
-        # libero_goal
-        "put the bowl on the plate",
-        "put the bowl on the stove",
-        # libero_object
-        "pick up the milk and place it in the basket",
-        "pick up the tomato sauce and place it in the basket",
-        # libero_spatial
-        "pick up the black bowl on the cookie box and place it on the plate",
-        "pick up the black bowl next to the plate and place it on the plate",
-    }
-)
-
 
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
@@ -95,7 +74,7 @@ def eval_libero(args: Args) -> None:
     if not args.results_out_path:
         args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_incontext_results.json")
 
-    logging.info(f"Held-out tasks: {len(UNSEEN_TASKS)}")
+    logging.info(f"Held-out tasks: {len(LIBERO_UNSEEN_TASKS)}")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
@@ -244,7 +223,7 @@ def eval_libero(args: Args) -> None:
         per_task_episodes[task_description] = task_episodes
         per_task_successes[task_description] = task_successes
 
-        category = "unseen" if task_description in UNSEEN_TASKS else "seen"
+        category = "unseen" if task_description in LIBERO_UNSEEN_TASKS else "seen"
 
         per_task_results.append({
             "task_id": task_id,
@@ -263,7 +242,7 @@ def eval_libero(args: Args) -> None:
     seen_rates, unseen_rates = [], []
     for task_desc in per_task_episodes.keys():
         rate = per_task_successes[task_desc] / per_task_episodes[task_desc]
-        if task_desc in UNSEEN_TASKS:
+        if task_desc in LIBERO_UNSEEN_TASKS:
             unseen_rates.append(rate)
         else:
             seen_rates.append(rate)

@@ -25,18 +25,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 
 import jsonlines
-
-# The default test set used in openpi/training/config.py
-DEFAULT_LIBERO_TEST_TASK = (
-    "put the white mug on the plate and put the chocolate pudding to the right of the plate",
-    "put both the alphabet soup and the tomato sauce in the basket",
-    "put the bowl on the plate",
-    "put the bowl on the stove",
-    "pick up the milk and place it in the basket",
-    "pick up the tomato sauce and place it in the basket",
-    "pick up the black bowl on the cookie box and place it on the plate",
-    "pick up the black bowl next to the plate and place it on the plate",
-)
+from openpi_client.libero_task_split import LIBERO_UNSEEN_TASKS
 
 
 @dataclass
@@ -79,7 +68,7 @@ def load_episode_tasks(episodes_jsonl: Path) -> Dict[int, List[str]]:
 def build_exclude_set(explicit: Iterable[str], keep_default: bool) -> set[str]:
     exclude = set(explicit or [])
     if keep_default:
-        exclude.update(DEFAULT_LIBERO_TEST_TASK)
+        exclude.update(LIBERO_UNSEEN_TASKS)
     return exclude
 
 
@@ -148,7 +137,7 @@ def main() -> None:
     parser.add_argument(
         "--no-default-exclude",
         action="store_true",
-        help="Skip the built-in DEFAULT_LIBERO_TEST_TASK exclusion list.",
+        help="Skip the built-in LIBERO unseen-task exclusion list.",
     )
     args = parser.parse_args()
 

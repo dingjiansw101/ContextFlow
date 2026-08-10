@@ -102,7 +102,7 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow \
 
 - Config names: `ContextFlow`, `ContextFlow_plus_libero90` (see [CONFIG_NAME_MAPPING.md](../../CONFIG_NAME_MAPPING.md) for the mapping from the original training names).
 - All three train for 20k steps with `batch_size=32`, starting from the π₀ / π₀-FAST base checkpoints (auto-downloaded from S3).
-- Training excludes the eight held-out tasks (`remove_task_list=DEFAULT_LIBERO_TEST_TASK` in the config).
+- Training excludes the eight held-out tasks (`remove_task_list=LIBERO_UNSEEN_TASKS` in the config).
 - Set a seed with `--seed=<n>` for repeated runs; use a fresh `--exp-name` per run.
 - `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` lets JAX use 90% of GPU memory (default 75%). Multi-GPU: run under `CUDA_VISIBLE_DEVICES=0,1` (data-parallel sharding is automatic across visible devices).
 - If training logs `Norm stats not found ... skipping`, stop — the norm stats are missing (Section 2) and the run would silently train unnormalized.
@@ -140,7 +140,7 @@ python examples/libero/main.py --task-suite-name libero_spatial
 Key client arguments:
 
 - `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`. (`libero_90` is training co-data only — the in-context clients reject it, because its task indices are a different space from the demo dataset the server serves from.)
-- The seen/unseen assignment is not configurable: the eight held-out tasks are the `UNSEEN_TASKS` constant in each client, matching `DEFAULT_LIBERO_TEST_TASK` in `src/openpi/training/config.py`. Any suite task not in that set counts as seen.
+- The seen/unseen assignment is not configurable: the training configs and eval clients share `LIBERO_UNSEEN_TASKS` from `openpi_client.libero_task_split`. Any suite task not in that tuple counts as seen.
 - `--num-trials-per-task`: rollouts per task (default 50)
 - `--host` / `--port`: policy server address (default `0.0.0.0:8000`)
 
