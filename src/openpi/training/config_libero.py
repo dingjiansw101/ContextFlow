@@ -430,7 +430,7 @@ def build(api) -> list[api.TrainConfig]:
         @override
         def create_policy(self, assets_dirs: pathlib.Path, model_config):
             # Cache-free eval path mirroring CustomLeRobotLiberoIncontextDataConfig.
-            # Demos come from the FIRST dataset spec (libero): split0 unseen-eval
+            # Demos come from the FIRST dataset spec (libero): the held-out eval
             # tasks are libero tasks, so libero_90 is never needed at eval time.
             from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
 
@@ -657,7 +657,7 @@ def build(api) -> list[api.TrainConfig]:
             ema_decay=None,
             num_workers=8,
             batch_size=36,
-            assets_repo_override="pi0_libero_split0",
+            assets_repo_override="pi0_libero_heldout",
         ),
         api.TrainConfig(
             name="pi0_libero_low_mem_finetune_split_inference",
@@ -752,7 +752,7 @@ def build(api) -> list[api.TrainConfig]:
             num_workers=4,
         ),
         api.TrainConfig(
-            name="pi0_libero_split0",
+            name="pi0_libero_heldout",
             model=api.pi0.Pi0Config(),
             data=LeRobotLiberoDataConfig(
                 repo_id="physical-intelligence/libero",
@@ -784,7 +784,7 @@ def build(api) -> list[api.TrainConfig]:
             num_train_steps=20_000,
         ),
         api.TrainConfig(
-            name="pi0_fast_libero_split0",
+            name="pi0_fast_libero_heldout",
             model=api.pi0_fast.Pi0FASTConfig(action_dim=7, action_horizon=10, max_token_len=180),
             data=LeRobotLiberoDataConfig(
                 repo_id="physical-intelligence/libero",

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Submit pi0_libero_split{0..4} training jobs on ORIX.
+# Submit the pi0_libero_heldout training job on ORIX.
 #
 # Examples:
-#   bash jobs/orix/submit_pi0_libero_splits.sh --test-only
-#   SUBMIT_CMD=sbatch PARTITION=batch-h100 QOS=batch bash jobs/orix/submit_pi0_libero_splits.sh submit
-#   SUBMIT_CMD=sbatch-free bash jobs/orix/submit_pi0_libero_splits.sh submit 0 2 4
+#   bash jobs/orix/submit_pi0_libero_heldout.sh --test-only
+#   SUBMIT_CMD=sbatch PARTITION=batch-h100 QOS=batch bash jobs/orix/submit_pi0_libero_heldout.sh submit
+#   SUBMIT_CMD=sbatch-free bash jobs/orix/submit_pi0_libero_heldout.sh submit
 
 MODE="${1:-submit}"
 if [ "$MODE" != "submit" ] && [ "$MODE" != "--test-only" ]; then
-    echo "usage: $0 [--test-only|submit] [split ...]" >&2
+    echo "usage: $0 [--test-only|submit] [config ...]" >&2
     exit 64
 fi
 shift || true
 
-SPLITS=("$@")
-if [ "${#SPLITS[@]}" -eq 0 ]; then
-    SPLITS=(0 1 2 3 4)
+CONFIGS=("$@")
+if [ "${#CONFIGS[@]}" -eq 0 ]; then
+    CONFIGS=(pi0_libero_heldout)
 fi
 
 REPO="${REPO:-/mnt/data/u/dingj0b/code/openpi_libero/openpi}"
@@ -32,13 +32,12 @@ TIME_LIMIT="${TIME_LIMIT:-24:00:00}"
 cd "$REPO"
 mkdir -p logs errs
 
-for split in "${SPLITS[@]}"; do
-    case "$split" in
-        0|1|2|3|4) ;;
-        *) echo "unsupported split: $split" >&2; exit 64 ;;
+for job_name in "${CONFIGS[@]}"; do
+    case "$job_name" in
+        pi0_libero_heldout) ;;
+        *) echo "unsupported config: $job_name" >&2; exit 64 ;;
     esac
 
-    job_name="pi0_libero_split${split}"
     sbatch_args=(
         --job-name="$job_name"
         --output="logs/%x-%j.log"
@@ -48,7 +47,7 @@ for split in "${SPLITS[@]}"; do
         --mem="$MEM"
         --time="$TIME_LIMIT"
         --chdir="$REPO"
-        --export=ALL,SPLIT="$split"
+        --export=ALL,CONFIG_NAME="$job_name"
     )
 
     case "$SUBMIT_CMD" in
@@ -70,7 +69,7 @@ for split in "${SPLITS[@]}"; do
         sbatch_args=(--test-only "${sbatch_args[@]}")
     fi
 
-    echo "Submitting split ${split} with ${SUBMIT_CMD}: ${sbatch_args[*]}"
+    echo "Submitting ${job_name} with ${SUBMIT_CMD}: ${sbatch_args[*]}"
     "$SUBMIT_CMD" "${sbatch_args[@]}" <<'SBATCH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -82,12 +81,12 @@ mkdir -p logs errs
 export PATH="$HOME/.local/bin:$PATH"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 
-if ! find assets/pi0_libero_split0 -maxdepth 4 -type f -name 'norm_stats*' | grep -q .; then
-    echo "Missing assets/pi0_libero_split0 norm stats; run jobs/orix/compute_pi0_libero_split0_norm_stats.sh first." >&2
+if ! find assets/pi0_libero_heldout -maxdepth 4 -type f -name 'norm_stats*' | grep -q .; then
+    echo "Missing assets/pi0_libero_heldout norm stats; run jobs/orix/compute_pi0_libero_heldout_norm_stats.sh first." >&2
     exit 66
 fi
 
-NAME="pi0_libero_split${SPLIT}"
+NAME="${CONFIG_NAME}"
 
 trap 'kill -TERM "$pid" 2>/dev/null; wait "$pid"' SIGTERM
 XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.9}" \

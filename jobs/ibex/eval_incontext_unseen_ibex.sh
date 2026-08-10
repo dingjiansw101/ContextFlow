@@ -60,11 +60,11 @@ for suite in $SUITES; do
     stem=${suite#libero_}
     RES="$LOG_DIR/${stem}_unseen_results.json"
     if [ -s "$RES" ]; then echo "skip $suite (exists)"; continue; fi
-    echo "eval $suite (unseen, split0) ..."
+    echo "eval $suite unseen, held-out ..."
     PYTHONPATH="$PWD:$PWD/packages/openpi-client/src:$LIBERO_TP" "$CLIENT_PY" \
         examples/libero/main_incontext_unseen.py \
         --args.host 127.0.0.1 --args.port "$PORT" \
-        --args.task_suite_name "$suite" --args.task_split split0 \
+        --args.task_suite_name "$suite" \
         --args.results_out_path "$RES" \
         > "$LOG_DIR/${stem}_client.log" 2>&1 || FAIL=1
 done

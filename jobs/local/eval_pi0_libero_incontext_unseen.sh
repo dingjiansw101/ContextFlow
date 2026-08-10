@@ -7,7 +7,7 @@ if [ "$#" -lt 3 ]; then
     echo "  <policy-config>   policy.config arg for scripts/serve_policy.py" >&2
     echo "  <checkpoint-dir>  orbax checkpoint directory" >&2
     echo "  [run-id]          output tag; defaults to orix_<date>" >&2
-    echo "env overrides: TASK_SPLIT, SUITE_LIST, ASSETS_BASE_DIR, PORT, LiberoVenv, ProjectPython, DISABLE_CUDNN_FMHA" >&2
+    echo "env overrides: SUITE_LIST, ASSETS_BASE_DIR, PORT, LiberoVenv, ProjectPython, DISABLE_CUDNN_FMHA" >&2
     exit 64
 fi
 
@@ -17,7 +17,6 @@ CHECKPOINT_DIR="$3"
 RUN_ID="${4:-orix_$(date +%Y%m%d)}"
 
 REPO="${REPO:-$PWD}"
-TASK_SPLIT="${TASK_SPLIT:-split0}"
 SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 LiberoVenv="${LiberoVenv:-examples/libero/.venv}"
 ProjectPython="${ProjectPython:-}"
@@ -144,12 +143,11 @@ run_suite() {
         echo "Skipping ${suite}; existing result found at ${results_path}"
         return
     fi
-    echo "Starting ${suite} held-out eval for ${NAME} (${TASK_SPLIT})"
+    echo "Starting ${suite} held-out eval for ${NAME}"
     env -u CUDA_VISIBLE_DEVICES python examples/libero/main_incontext_unseen.py \
         --args.host 127.0.0.1 \
         --args.port "$PORT" \
         --args.task_suite_name "$suite" \
-        --args.task_split "$TASK_SPLIT" \
         --args.video_out_path "${VIDEO_DIR}/${stem}" \
         --args.results_out_path "$results_path" \
         >"${LOG_DIR}/${stem}_unseen_weight_float32.log" 2>&1

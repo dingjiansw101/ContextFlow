@@ -11,14 +11,13 @@
 #     XLA_PYTHON_CLIENT_PREALLOCATE=false), so multiple suites can share one GPU.
 #
 # usage: eval_incontext_unseen_local.sh <run-name> <policy-config> <checkpoint-dir> [run-id]
-# env overrides: REPO TASK_SPLIT SUITE_LIST GPUS SERVER_PY CLIENT_PY LIBERO_TP SKIP_SHEET_SYNC
+# env overrides: REPO SUITE_LIST GPUS SERVER_PY CLIENT_PY LIBERO_TP SKIP_SHEET_SYNC
 set -uo pipefail
 
 NAME="${1:?run-name}"; POLICY_CONFIG="${2:?policy-config}"; CKPT_DIR="${3:?checkpoint-dir}"
 RUN_ID="${4:-visioncair_$(date +%Y%m%d)}"
 
 REPO="${REPO:-$PWD}"
-TASK_SPLIT="${TASK_SPLIT:-split0}"
 SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 GPUS=(${GPUS:-0 1 2 4})
 SERVER_PY="${SERVER_PY:-/home/dingj0b/code/openpi/.venv/bin/python}"
@@ -74,7 +73,7 @@ for s in "${SUITES[@]}"; do
         env -u CUDA_VISIBLE_DEVICES PYTHONPATH="$PWD:$PWD/packages/openpi-client/src:$LIBERO_TP" \
             "$CLIENT_PY" examples/libero/main_incontext_unseen.py \
             --args.host 127.0.0.1 --args.port "$PORT" \
-            --args.task_suite_name "$SUITE" --args.task_split "$TASK_SPLIT" \
+            --args.task_suite_name "$SUITE" \
             --args.video_out_path "$VIDEO_DIR/$STEM" \
             --args.results_out_path "$RES" \
             > "$LOG_DIR/${STEM}_client.log" 2>&1

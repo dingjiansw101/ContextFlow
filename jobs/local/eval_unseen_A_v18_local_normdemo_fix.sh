@@ -3,7 +3,7 @@
 # The fix did not touch the v18 config (aliases already set, no pad dims), so this checks
 # the shared-code changes (Normalize signature, data_loader/policy_config plumbing) did not
 # regress the v18 eval. Checkpoint: local _4gpu/19999 (refactor-sheet rows 12-17 reference).
-# Baselines (split0 unseen): spatial 0.66-0.71 (0.94 / 0.38-0.48), object 0.88-0.92,
+# Baselines (held-out unseen): spatial 0.66-0.71 (0.94 / 0.38-0.48), object 0.88-0.92,
 # goal 0.00, 10 0.00.
 #
 # Mirrors jobs/local/eval_unseen_D_900m_orix_normdemo_fix.sh (4 parallel server+client
@@ -57,9 +57,8 @@ for i in "${!SUITES[@]}"; do
             --args.host 127.0.0.1 \
             --args.port "$PORT" \
             --args.task_suite_name "$SUITE" \
-            --args.task_split split0 \
             --args.video_out_path "data/libero_incontext/$EXP/$RUN" \
-            --args.results_out_path "logs/$EXP/$RUN/${SUITE}_split0_incontext_unseen_results.json" \
+            --args.results_out_path "logs/$EXP/$RUN/${SUITE}_incontext_unseen_results.json" \
             > "logs/$EXP/$RUN/${PREFIX}_weight_float32.log" 2>&1
         echo "[$SUITE] client done"
     ) &
@@ -73,7 +72,7 @@ done
 
 echo "=== results ==="
 for SUITE in "${SUITES[@]}"; do
-    F="logs/$EXP/$RUN/${SUITE}_split0_incontext_unseen_results.json"
+    F="logs/$EXP/$RUN/${SUITE}_incontext_unseen_results.json"
     if [ -f "$F" ]; then
         python -c "import json;d=json.load(open('$F'));print('$SUITE', d['summary'])"
     else

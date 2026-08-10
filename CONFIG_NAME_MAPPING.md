@@ -19,8 +19,8 @@ records the old → new mapping so existing checkpoints, job scripts, and experi
 
 ### LIBERO — `+libero90` sweep & `900m` (second batch)
 
-Renamed to `<paper-base>_plus_libero90[_splitN]` / `ContextAR_900m`. `splitN` configs are evaluated on
-the matching `--task_split splitN`; the base `_plus_libero90` and `900m` on `split0`. **Name-only** —
+Renamed to `<paper-base>_plus_libero90` / `ContextAR_900m`. (The historical `_splitN` variants were
+evaluated against per-split held-out task sets; this branch keeps only the original one.) **Name-only** —
 assets keys were unchanged at the time of that rename (`ContextFlow_Plain` for v18/v12,
 `debug_pi0_fast_libero_incontext_inference` for FAST), so existing checkpoints + baked norm stats
 were unaffected. The v18/v12 LIBERO key has since become `ContextFlow` —
@@ -174,7 +174,7 @@ the old config names (they fail `get_config` on the rename branch), so use the n
 the **new** config name via `scripts/serve_policy.py --loader=INCONTEXT` (the `serve_policy_incontext.py`
 in older docs does not exist).
 
-### orix SLURM eval wrappers (unseen, split0)
+### orix SLURM eval wrappers (unseen, held-out tasks)
 
 | Config | Old job script | New job script |
 |---|---|---|

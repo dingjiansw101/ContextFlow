@@ -11,7 +11,6 @@ EXP_NAME="${EXP_NAME:-${CONFIG}_raw_images}"
 ITER="${ITER:-19999}"
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-checkpoints/${CONFIG}/${EXP_NAME}/${ITER}}"
 RUN_ID="${RUN_ID:-orix_raw_images_${JOB_TAG}_${SLURM_JOB_ID:-manual}_$(date +%Y%m%d_%H%M%S)}"
-TASK_SPLIT="${TASK_SPLIT:-split0}"
 SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
 SKIP_LOG_TO_SHEET="${SKIP_LOG_TO_SHEET:-1}"
@@ -22,7 +21,6 @@ mkdir -p logs errs
 
 export REPO
 export LiberoVenv
-export TASK_SPLIT
 export SUITE_LIST
 export ASSETS_BASE_DIR
 export DISABLE_CUDNN_FMHA

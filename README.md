@@ -129,10 +129,10 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.inference_dtype=float3
   --policy.config=ContextFlow --policy.dir=checkpoints/ContextFlow/my_run/19999
 
 # 4. Evaluate on unseen tasks (terminal 2, inside the LIBERO client venv)
-python examples/libero/main_incontext_unseen.py --task-suite-name libero_spatial --task-split split0
+python examples/libero/main_incontext_unseen.py --task-suite-name libero_spatial
 ```
 
-Task splits (which LIBERO tasks are seen during training vs held out) are committed in [`libero_task_splits/`](libero_task_splits) (`split0`, with `seen_tasks.json` / `unseen_tasks.json`).
+Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code: `DEFAULT_LIBERO_TEST_TASK` in [`src/openpi/training/config.py`](src/openpi/training/config.py) is what the training configs exclude via `remove_task_list`, and `UNSEEN_TASKS` in the eval clients is the matching list. Every other task in the four suites is a seen task.
 
 ## Repository Structure
 
@@ -142,7 +142,6 @@ Task splits (which LIBERO tasks are seen during training vs held out) are commit
 - `scripts/` — `train.py`, `serve_policy.py`, `compute_norm_stats.py`
 - `examples/libero/` — LIBERO evaluation clients and the [LIBERO guide](examples/libero/LIBERO_README.md)
 - `jobs/` — batch eval/training wrappers for local and SLURM machines
-- `libero_task_splits/` — seen/unseen task split definitions
 
 ## Troubleshooting
 

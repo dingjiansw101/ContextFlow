@@ -53,7 +53,7 @@ Configs sharing the same dataset and action representation (e.g., same `repo_id`
 ```python
 assets_repo_override="<config_with_existing_stats>",
 ```
-This redirects `assets_dirs` from `./assets/<this_config>/` to `./assets/<other_config>/`. Example: `pi0_libero_split1` through `split4` all set `assets_repo_override="pi0_libero_split0"` to share one set of norm stats.
+This redirects `assets_dirs` from `./assets/<this_config>/` to `./assets/<other_config>/`. Example: `pi0_libero_low_mem_finetune_split_train` sets `assets_repo_override="pi0_libero_heldout"` to reuse that config's norm stats.
 
 **Pre-flight check:** When a config lacks `assets_repo_override`, verify `./assets/<config_name>/*/norm_stats*` exists. If missing, either add `assets_repo_override` pointing to a compatible config or run `compute_norm_stats.py`.
 
@@ -113,26 +113,15 @@ A common failure mode in openpi jobs that combine training + eval in one script:
 
 Eval scripts often have default parameter values that silently produce wrong results when they don't match the training config's data split.
 
-**Example:** `main_incontext_unseen.py` defaults to `--args.task_split split0`. If the training config uses `DEFAULT_LIBERO_TEST_TASK_V3` (split2), but the job script omits `--args.task_split`, the eval uses split0's seen/unseen task assignments — producing plausible but incorrect results.
+On this branch there is a single held-out task set, so the split mismatch this section used to warn
+about cannot occur: the training configs exclude `DEFAULT_LIBERO_TEST_TASK`
+(`src/openpi/training/config.py`), and the eval clients classify against the matching `UNSEEN_TASKS`
+constant. There is no `--args.task_split` flag any more.
 
-**Mapping (openpi LIBERO):**
-
-| Training config `remove_task_list` | Eval `--args.task_split` |
-|-----------------------------------|--------------------------|
-| `DEFAULT_LIBERO_TEST_TASK`    | `split0` (default) |
-| `DEFAULT_LIBERO_TEST_TASK_V2` | `split1` |
-| `DEFAULT_LIBERO_TEST_TASK_V3` | `split2` |
-| `DEFAULT_LIBERO_TEST_TASK_V4` | `split3` |
-| `DEFAULT_LIBERO_TEST_TASK_V5` | `split4` |
-| `DEFAULT_LIBERO_TEST_TASK_V6` | `split5` |
-| `DEFAULT_LIBERO_TEST_TASK_V7` | `split6` |
-| `DEFAULT_LIBERO_TEST_TASK_V8` | `split7` |
-
-**Check:** For every eval command in the job script:
-1. Read the eval script's arg defaults (look for dataclass fields)
-2. Identify which `remove_task_list` the training config uses
-3. Verify the eval command explicitly passes the matching `--args.task_split`
-4. If omitted, flag it before submitting
+**Check:** the two lists are duplicated across the train/eval process boundary (the clients run in a
+separate Python 3.8 environment and cannot import `openpi`). If you change one, change the other —
+nothing enforces it automatically. A silent divergence would train on a task that is then scored as
+unseen.
 
 ## Log-to-Sheet Metadata Paths
 
@@ -147,7 +136,7 @@ These go in the columns after Config Name. Check existing rows in the sheet to c
 
 All eval scripts (`examples/libero/main*.py`) write a structured JSON results file at the end of evaluation. This is the **preferred source** for reading eval results programmatically — no log parsing needed.
 
-- **Default path**: `logs/eval_results/<task_suite_name>_<task_split>_<variant>_results.json` (e.g. `libero_spatial_split0_incontext_results.json`; `<variant>` is `base` for `main.py`, `incontext` for `main_incontext.py`, `incontext_unseen` for `main_incontext_unseen.py`)
+- **Default path**: `logs/eval_results/<task_suite_name>_<variant>_results.json` (e.g. `libero_spatial_incontext_results.json`; `<variant>` is `base` for `main.py`, `incontext` for `main_incontext.py`, `incontext_unseen` for `main_incontext_unseen.py`)
 - **Override**: pass `--args.results_out_path /custom/path.json` — typical usage is to save alongside the eval logs:
   ```bash
   python examples/libero/main_incontext_unseen.py \
@@ -161,7 +150,7 @@ To sync to the experiment tracking sheet:
 claude -p "/log-to-sheet Read eval results from logs/${Name}/test1/*_results.json and sync to https://docs.google.com/spreadsheets/d/16It_o0GO_eYTpek65dSKr3sB0TOc_4FXZ5Uqwp9gKjU/edit?gid=499236864#gid=499236864 tab Libero Experiments"
 ```
 
-Fallback: eval logs at `logs/${Name}/<run_id>/` can still be parsed if the JSON file is unavailable. `${Name}` is the experiment name variable defined in the job script (e.g. `pi0_fast_libero_split0`).
+Fallback: eval logs at `logs/${Name}/<run_id>/` can still be parsed if the JSON file is unavailable. `${Name}` is the experiment name variable defined in the job script (e.g. `pi0_fast_libero_heldout`).
 
 ## ORIX-specific failure modes (LIBERO+MuJoCo)
 

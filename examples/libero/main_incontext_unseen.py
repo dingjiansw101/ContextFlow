@@ -23,6 +23,27 @@ LIBERO_ENV_RESOLUTION = 256  # resolution used to render training data
 LEROBOT_HOME = pathlib.Path(os.getenv("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).expanduser()
 LIBERO_TASKS_JSONL = LEROBOT_HOME / "physical-intelligence" / "libero" / "meta" / "tasks.jsonl"
 
+# The held-out tasks: excluded from training, evaluated as unseen. Every other task in
+# the four suites is a seen task. This must stay in sync with DEFAULT_LIBERO_TEST_TASK
+# in src/openpi/training/config.py, which is what the training configs exclude via
+# remove_task_list -- the eval clients run in a separate environment and cannot import it.
+UNSEEN_TASKS = frozenset(
+    {
+        # libero_10
+        "put the white mug on the plate and put the chocolate pudding to the right of the plate",
+        "put both the alphabet soup and the tomato sauce in the basket",
+        # libero_goal
+        "put the bowl on the plate",
+        "put the bowl on the stove",
+        # libero_object
+        "pick up the milk and place it in the basket",
+        "pick up the tomato sauce and place it in the basket",
+        # libero_spatial
+        "pick up the black bowl on the cookie box and place it on the plate",
+        "pick up the black bowl next to the plate and place it on the plate",
+    }
+)
+
 def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
     mapping = {}
     with file_path.open('r', encoding='utf-8') as file:
@@ -36,26 +57,6 @@ def get_task_to_index_mapping(file_path: pathlib.Path) -> dict:
             if task_description is not None and task_index is not None:
                 mapping[task_description] = task_index
     return mapping
-
-def load_task_splits(task_splits_dir: str, split: str):
-    """Load seen and unseen task lists from JSON files.
-
-    Returns:
-        tuple: (seen_tasks_set, unseen_tasks_set) - sets of task descriptions with spaces
-    """
-    split_path = pathlib.Path(task_splits_dir) / split
-
-    with open(split_path / "seen_tasks.json", "r") as f:
-        seen_tasks = json.load(f)
-
-    with open(split_path / "unseen_tasks.json", "r") as f:
-        unseen_tasks = json.load(f)
-
-    # Normalize task names: replace underscores with spaces to match task_description format
-    seen_tasks_set = {task.replace("_", " ") for task in seen_tasks}
-    unseen_tasks_set = {task.replace("_", " ") for task in unseen_tasks}
-
-    return seen_tasks_set, unseen_tasks_set
 
 @dataclasses.dataclass
 class Args:
@@ -81,8 +82,6 @@ class Args:
     #################################################################################################################
     video_out_path: str = "data/libero_incontext/videos"  # Path to save videos
     results_out_path: str = ""  # Path to save JSON results (default: logs/eval_results/<task_suite_name>_results.json)
-    task_split: str = "split0"  # Task split to use for seen/unseen tasks
-    task_splits_dir: str = "libero_task_splits"  # Directory containing task split definitions
     unseen_task_index: int = -1  # If >= 0, only evaluate this unseen task (0-indexed)
 
     seed: int = 7  # Random Seed (for reproducibility)
@@ -93,7 +92,7 @@ def eval_libero(args: Args) -> None:
     np.random.seed(args.seed)
 
     if not args.results_out_path:
-        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_{args.task_split}_incontext_unseen_results.json")
+        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_incontext_unseen_results.json")
 
     # Initialize LIBERO task suite
     benchmark_dict = benchmark.get_benchmark_dict()
@@ -104,18 +103,14 @@ def eval_libero(args: Args) -> None:
     task_description2index = get_task_to_index_mapping(LIBERO_TASKS_JSONL)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
-    # Load seen and unseen task splits
-    seen_tasks, unseen_tasks = load_task_splits(args.task_splits_dir, args.task_split)
-    logging.info(f"Loaded task split: {args.task_split}")
-    logging.info(f"  Seen tasks: {len(seen_tasks)}")
-    logging.info(f"  Unseen tasks: {len(unseen_tasks)}")
+    logging.info(f"Held-out tasks: {len(UNSEEN_TASKS)}")
 
     # Map unseen task names to task IDs
     unseen_task_ids = []
     for task_id in range(num_tasks_in_suite):
         task = task_suite.get_task(task_id)
         task_description = task.language
-        if task_description in unseen_tasks:
+        if task_description in UNSEEN_TASKS:
             unseen_task_ids.append(task_id)
 
     logging.info(f"Found {len(unseen_task_ids)} unseen tasks in suite: {unseen_task_ids}")
@@ -272,7 +267,6 @@ def eval_libero(args: Args) -> None:
             "task_suite_name": args.task_suite_name,
             "num_trials_per_task": args.num_trials_per_task,
             "seed": args.seed,
-            "task_split": args.task_split,
         },
         "per_task_results": per_task_results,
         "summary": {

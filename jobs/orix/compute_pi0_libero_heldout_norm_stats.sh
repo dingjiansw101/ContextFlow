@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=norm_pi0_libero_split0
+#SBATCH --job-name=norm_pi0_libero_heldout
 #SBATCH --output=logs/%x-%j.log
 #SBATCH --error=errs/%j-%x.err
 #SBATCH --gres=gpu:1
@@ -16,6 +16,6 @@ mkdir -p logs errs
 export PATH="$HOME/.local/bin:$PATH"
 export JAX_DEFAULT_MATMUL_PRECISION="${JAX_DEFAULT_MATMUL_PRECISION:-float32}"
 
-uv run scripts/compute_norm_stats.py --config-name=pi0_libero_split0
+uv run scripts/compute_norm_stats.py --config-name=pi0_libero_heldout
 
-find assets/pi0_libero_split0 -maxdepth 4 -type f -name 'norm_stats*' -print
+find assets/pi0_libero_heldout -maxdepth 4 -type f -name 'norm_stats*' -print

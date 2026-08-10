@@ -55,9 +55,8 @@ for i in "${!SUITES[@]}"; do
             --args.host 127.0.0.1 \
             --args.port "$PORT" \
             --args.task_suite_name "$SUITE" \
-            --args.task_split split0 \
             --args.video_out_path "data/libero_incontext/$EXP/$RUN" \
-            --args.results_out_path "logs/$EXP/$RUN/${SUITE}_split0_incontext_unseen_results.json" \
+            --args.results_out_path "logs/$EXP/$RUN/${SUITE}_incontext_unseen_results.json" \
             > "logs/$EXP/$RUN/${PREFIX}_weight_float32.log" 2>&1
         echo "[$SUITE] client done"
     ) &
@@ -71,7 +70,7 @@ done
 
 echo "=== results ==="
 for SUITE in "${SUITES[@]}"; do
-    F="logs/$EXP/$RUN/${SUITE}_split0_incontext_unseen_results.json"
+    F="logs/$EXP/$RUN/${SUITE}_incontext_unseen_results.json"
     if [ -f "$F" ]; then
         python -c "import json;d=json.load(open('$F'));print('$SUITE', d['summary'])"
     else

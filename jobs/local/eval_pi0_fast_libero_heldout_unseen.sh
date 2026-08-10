@@ -1,25 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
-    echo "usage: $0 <split-id 0..2> <checkpoint-dir> [run-id]" >&2
+if [ "$#" -lt 1 ]; then
+    echo "usage: $0 <checkpoint-dir> [run-id]" >&2
     exit 64
 fi
 
-SPLIT_ID="$1"
-CHECKPOINT_DIR="$2"
-RUN_ID="${3:-kw60803_20260501}"
+CHECKPOINT_DIR="$1"
+RUN_ID="${2:-kw60803_20260501}"
 
-case "$SPLIT_ID" in
-    0|1|2) ;;
-    *) echo "unsupported split id: $SPLIT_ID" >&2; exit 64 ;;
-esac
 
 REPO="${REPO:-$PWD}"
 cd "$REPO"
 
-NAME="pi0_fast_libero_split${SPLIT_ID}"
-TASK_SPLIT="split${SPLIT_ID}"
+NAME="pi0_fast_libero_heldout"
 LOG_DIR="logs/${NAME}/${RUN_ID}"
 VIDEO_DIR="data/libero/${NAME}/${RUN_ID}"
 ProjectPython="${ProjectPython:-}"
@@ -32,8 +26,8 @@ if [ ! -d "$CHECKPOINT_DIR" ]; then
     echo "checkpoint dir not found: $CHECKPOINT_DIR" >&2
     exit 66
 fi
-if [ ! -f assets/pi0_fast_libero_split0/physical-intelligence/libero/norm_stats.json ]; then
-    echo "Missing assets/pi0_fast_libero_split0 norm stats on eval machine." >&2
+if [ ! -f assets/pi0_fast_libero_heldout/physical-intelligence/libero/norm_stats.json ]; then
+    echo "Missing assets/pi0_fast_libero_heldout norm stats on eval machine." >&2
     exit 66
 fi
 
@@ -110,12 +104,11 @@ run_suite() {
         echo "Skipping ${suite}; existing result found at ${results_path}"
         return
     fi
-    echo "Starting ${suite} held-out eval for ${NAME} (${TASK_SPLIT})"
+    echo "Starting ${suite} held-out eval for ${NAME}"
     env -u CUDA_VISIBLE_DEVICES python examples/libero/main_incontext_unseen.py \
         --args.host 127.0.0.1 \
         --args.port "$PORT" \
         --args.task_suite_name "$suite" \
-        --args.task_split "$TASK_SPLIT" \
         --args.video_out_path "${VIDEO_DIR}/${stem}" \
         --args.results_out_path "$results_path" \
         >"${LOG_DIR}/${stem}_unseen_weight_float32.log" 2>&1

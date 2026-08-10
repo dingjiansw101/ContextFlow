@@ -24,13 +24,12 @@ EXP_NAME="${EXP_NAME:-ContextFlow_4gpu}"
 ITER="${ITER:-19999}"
 CHECKPOINT_DIR="checkpoints/${CONFIG}/${EXP_NAME}/${ITER}"
 RUN_ID="${RUN_ID:-orix_rename_$(date +%Y%m%d)}"
-TASK_SPLIT="${TASK_SPLIT:-split0}"
 SUITE_LIST="${SUITE_LIST:-spatial object goal 10}"
 ASSETS_BASE_DIR="${ASSETS_BASE_DIR:-$REPO/assets}"
 DISABLE_CUDNN_FMHA="${DISABLE_CUDNN_FMHA:-0}"
 
 cd "$REPO"; mkdir -p logs errs
-export REPO TASK_SPLIT SUITE_LIST ASSETS_BASE_DIR DISABLE_CUDNN_FMHA
+export REPO SUITE_LIST ASSETS_BASE_DIR DISABLE_CUDNN_FMHA
 
 bash jobs/local/eval_pi0_libero_incontext_unseen.sh \
     "$EXP_NAME" "$POLICY_CONFIG" "$CHECKPOINT_DIR" "$RUN_ID"

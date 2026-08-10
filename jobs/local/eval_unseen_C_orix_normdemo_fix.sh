@@ -3,7 +3,7 @@
 # The fix changes C's eval-time demo conditioning raw -> normalized; the old-pipeline orix
 # checkpoint (trained on normalized demos) should now reproduce its old-eval numbers
 # through the migrated path. Checkpoint: orix openpi_refactor_fast .../train_split/19999
-# (refactor row 6 / Libero Experiments row 14). Baselines (split0 unseen):
+# (refactor row 6 / Libero Experiments row 14). Baselines (held-out unseen):
 # spatial 0.37 (0.72 / 0.02), object 0.43 (0.80 / 0.06), goal 0.22 (0.00 / 0.44), 10 0.00.
 #
 # Mirrors jobs/local/eval_unseen_D_900m_orix_normdemo_fix.sh and jobs/ibex/eval_unseen_C_dropcache.sh.
@@ -56,9 +56,8 @@ for i in "${!SUITES[@]}"; do
             --args.host 127.0.0.1 \
             --args.port "$PORT" \
             --args.task_suite_name "$SUITE" \
-            --args.task_split split0 \
             --args.video_out_path "data/libero_incontext/$EXP/$RUN" \
-            --args.results_out_path "logs/$EXP/$RUN/${SUITE}_split0_incontext_unseen_results.json" \
+            --args.results_out_path "logs/$EXP/$RUN/${SUITE}_incontext_unseen_results.json" \
             > "logs/$EXP/$RUN/${PREFIX}_weight_float32.log" 2>&1
         echo "[$SUITE] client done"
     ) &
@@ -72,7 +71,7 @@ done
 
 echo "=== results ==="
 for SUITE in "${SUITES[@]}"; do
-    F="logs/$EXP/$RUN/${SUITE}_split0_incontext_unseen_results.json"
+    F="logs/$EXP/$RUN/${SUITE}_incontext_unseen_results.json"
     if [ -f "$F" ]; then
         python -c "import json;d=json.load(open('$F'));print('$SUITE', d['summary'])"
     else
