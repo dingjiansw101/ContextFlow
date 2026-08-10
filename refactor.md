@@ -20,7 +20,7 @@ Low priority:
 
 ## Optimize the code
 
-- [ ] can we simplify the `reindex_filtered_dict` function (in `src/openpi/transforms.py`)? — still present; simplification not yet assessed
+- [x] remove the unused `reindex_filtered_dict` function from `src/openpi/transforms.py` — filtered reindexing is handled by `training/lookup_tables.py`
 - [ ] clean the configs
 - [ ] organize the unit testing files
 - [~] remove third image for libero dataset — `src/openpi/policies/libero_policy.py:54` zeros out `right_wrist_0_rgb` in the transform instead of dropping it from the model input; full removal still pending

@@ -55,48 +55,6 @@ def _seed_component_bytes(component: Any) -> bytes:
     return f"{array.shape}:{array.dtype}:".encode() + array.tobytes()
 
 
-def reindex_filtered_dict(data: dict[str, Any]) -> dict[str, Any]:
-    # TODO: check this function
-    new_data = {}
-    current_frame_index = 0
-
-    for ep_idx in data:
-        num_frames = len(data[ep_idx])
-        new_data[ep_idx] = list(range(current_frame_index, current_frame_index + num_frames))
-        current_frame_index += num_frames
-    return new_data
-
-
-# def reindex_filtered_dict(data: Dict[str, Any], episode_order: Optional[Sequence[int]] = None) -> Dict[str, Any]:
-#     """Reindex per-episode frame lists to be contiguous within a filtered subset.
-
-#     Args:
-#         data: Mapping from episode index to a list of global frame indices. Assumes episodes are
-#             unique keys and lists preserve the relative ordering within each episode.
-#         episode_order: Optional sequence specifying the iteration order for episodes. When provided,
-#             only episodes present in both the order list and `data` are considered, preserving the
-#             dataset's filtered ordering.
-
-#     Returns:
-#         Dict mapping the same episode indices to contiguous frame indices starting from zero.
-#     """
-#     new_data: Dict[int, list[int]] = {}
-#     current_frame_index = 0
-
-#     if episode_order is None:
-#         episode_iter = data.keys()
-#     else:
-#         episode_iter = [ep for ep in episode_order if ep in data]
-
-#     for ep_idx in episode_iter:
-#         frames = data[ep_idx]
-#         num_frames = len(frames)
-#         new_data[ep_idx] = list(range(current_frame_index, current_frame_index + num_frames))
-#         current_frame_index += num_frames
-
-#     return new_data
-
-
 @runtime_checkable
 class DataTransformFn(Protocol):
     def __call__(self, data: DataDict) -> DataDict:
