@@ -89,12 +89,6 @@ In `config.py` the module import aliases were renamed to match
 > a pre-existing architecture split between the LIBERO and ALOHA ContextAR configs, not
 > introduced by this rename — don't read `ContextARConfig` as "the LIBERO ContextAR model".
 
-## File renames (scripts)
-
-| Old path | New path | Why |
-|---|---|---|
-| `scripts/v18_dataloader_check.py` | `scripts/contextflow_dataloader_check.py` | Loads the `ContextFlow` config by default; filename now reflects the method. Its `--config` default and the docstring reference in `scripts/dataloader_spawn_smoke.py` were updated too. |
-
 ## Assets-key (`assets_repo_override`) renames
 
 The `assets_repo_override` values were renamed from the old descriptive strings to the
