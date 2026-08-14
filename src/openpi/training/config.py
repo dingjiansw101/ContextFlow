@@ -309,7 +309,7 @@ class DataConfigFactory(abc.ABC):
     # white list: a josn path that contains all training episodes
     keep_episode_filename_list: tyro.conf.Suppress[str | Path | list[str] | None] = None
     # Base seed used by data factories that need deterministic per-sample random selection.
-    seed_base: tyro.conf.Suppress[int | None] = None
+    seed_base: int | None = None
 
     # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
