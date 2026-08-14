@@ -88,7 +88,7 @@ drop contributes exactly zero (cache-free == legacy bitwise).
 ## Inference (shared checkpoints, fixed synthetic observation, `split="test"`, task 5, float32 matmul + deterministic XLA ops)
 
 Fixture hash `79c51f17…` identical on all sides. Direct `create_trained_policy_incontext`
-call, no server.
+call, no server. The fixture source is archived in commit `c016ab9`.
 
 | Check | aloha-dev | legacy @ e63059d | cache-free |
 |---|---|---|---|
