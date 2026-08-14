@@ -135,7 +135,7 @@ Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code
 ## Repository Structure
 
 - `src/openpi/models/` — model implementations: `contextflow.py` and the upstream `pi0.py`
-- `src/openpi/training/` — configs (`config_libero.py`, `config_aloha.py`), the in-context dataset (`custom_dataset.py`), metadata generation (`generate_task_to_index.py`)
+- `src/openpi/training/` — configs (`config_libero.py`, `config_aloha.py`) and the in-context dataset (`custom_dataset.py`)
 - `src/openpi/policies/` — policy wrappers, `policy_config.py` (checkpoint → policy, in-context demo pipeline)
 - `scripts/` — `train.py`, `serve_policy.py`, `compute_norm_stats.py`
 - `examples/libero/` — LIBERO evaluation clients and the [LIBERO guide](examples/libero/LIBERO_README.md)

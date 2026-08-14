@@ -1,8 +1,7 @@
 """In-code generation of the task→episode and episode→frame lookup tables.
 
 These tables used to be precomputed into ``metadata/<name>/task_to_episode.json``
-and ``metadata/<name>/episode_to_indexes.json`` by
-``src/openpi/training/generate_task_to_index.py`` and then read back at train /
+and ``metadata/<name>/episode_to_indexes.json`` and then read back at train /
 eval time. Both are fully determined by the LeRobot dataset metadata
 (``meta/tasks.jsonl`` + ``meta/episodes.jsonl``), which LeRobotDataset already
 loads, so deriving them here removes the precompute step and the risk of a stale

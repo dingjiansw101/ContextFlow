@@ -12,7 +12,7 @@ git submodule update --init --recursive
 
 Two Python environments are involved:
 
-- the **repo environment** (Python 3.11, managed by `uv`) — training, the policy server, metadata generation. Set it up as in the [root README](../../README.md#installation) (`GIT_LFS_SKIP_SMUDGE=1 uv sync`).
+- the **repo environment** (Python 3.11, managed by `uv`) — training and the policy server. Set it up as in the [root README](../../README.md#installation) (`GIT_LFS_SKIP_SMUDGE=1 uv sync`).
 - the **LIBERO client environment** (Python 3.8) — runs the simulator and the evaluation clients.
 
 Create the client environment:
@@ -60,7 +60,7 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/1
 
 > **⚠ Norm stats: download, do not recompute.** The released norm stats in `assets/ContextFlow/physical-intelligence/libero` were computed by an earlier generation of these configs that used `use_delta_joint_actions=True`, over the full dataset (no train-split filtering). The current configs set `use_delta_joint_actions=False` but deliberately continue to use the same stats — all released checkpoints were trained with them, and each checkpoint also carries its own copy in `<checkpoint>/assets/`. Recomputing with `scripts/compute_norm_stats.py` under today's configs therefore gives *different* stats (delta actions change the action distribution: e.g. the released action mean for dim 3 is −2.97 ≈ −state mean, where an absolute-action computation gives ≈0) and will not reproduce the released results. Provenance is verified: re-running the computation with the delta setting flipped back on reproduces the released `norm_stats.json` byte-for-byte. Recompute only for a new dataset of your own.
 
-## 3. Generating the Metadata from Scratch
+## 3. Dataset Metadata
 
 **Training and evaluation need no precomputed lookup tables.** The task→episode and
 episode→frame maps are derived in memory from the LeRobot dataset metadata
@@ -68,22 +68,6 @@ episode→frame maps are derived in memory from the LeRobot dataset metadata
 [`src/openpi/training/lookup_tables.py`](../../src/openpi/training/lookup_tables.py), which costs
 ~10 ms and cannot drift from the dataset it describes. The old
 `metadata/<name>/task_to_episode.json` / `episode_to_indexes.json` files have been removed.
-
-`src/openpi/training/generate_task_to_index.py` still exists and can write those JSON files, but
-only the standalone analysis tools (`scripts/visualize_lerobot.py`,
-`scripts/check_libero_prompt_coverage.py`) read them:
-
-```bash
-uv run src/openpi/training/generate_task_to_index.py \
-    --config pi0_libero \
-    --skip_norm_stats \
-    --output_dir metadata/libero
-```
-
-Two details matter here:
-
-- **Generate with the plain `pi0_libero` config, not an in-context config.** The in-context training configs (`ContextFlow`, …) filter their dataset down to the training episodes (`remove_task_list`), so generating through them would omit the unseen tasks — but evaluation needs demo episodes for unseen tasks too. `pi0_libero` sees the full dataset, and it reads no metadata itself, so there is no bootstrapping problem.
-- `--skip_norm_stats` skips the transform sanity check that runs after the files are written; metadata generation itself does not need norm stats.
 
 The eval clients read the task table directly from the dataset
 (`$LEROBOT_HOME/physical-intelligence/libero/meta/tasks.jsonl`, where `LEROBOT_HOME`
