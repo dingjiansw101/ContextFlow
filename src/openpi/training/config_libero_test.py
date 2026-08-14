@@ -15,6 +15,8 @@ USAGE:
     uv run pytest src/openpi/training/config_libero_test.py -v
 """
 
+import json
+
 import flax.nnx as nnx
 import flax.traverse_util
 import jax
@@ -24,6 +26,20 @@ import pytest
 from openpi.training import config as _config
 from openpi.training import config_libero
 from openpi.training import weight_loaders
+
+
+def test_libero_unseen_tasks_are_valid_exclusions(tmp_path):
+    episode_path = tmp_path / "episodes.jsonl"
+    episode_path.write_text(
+        "\n".join(
+            [
+                json.dumps({"episode_index": 0, "tasks": [config_libero.LIBERO_UNSEEN_TASKS[0]]}),
+                json.dumps({"episode_index": 1, "tasks": ["a seen task"]}),
+            ]
+        )
+    )
+
+    assert _config.get_kept_episode_indices(episode_path, config_libero.LIBERO_UNSEEN_TASKS) == [1]
 
 
 def test_libero_incontext_inference_configs_removed():
