@@ -238,16 +238,6 @@ class DataConfig:
     # Xianjie: add additioanl episode field to enable train-test split
     # the episode arg will be passed to LeRobotDataset.episodes
     train_episode: list[int] | None = None
-    # Optional override for incontext demo state dimension (applied before tokenization).
-    demo_state_dim: int | None = None
-
-    # When True, the in-context demonstration fields (dem_prompt_images, dem_prompt_states,
-    # dem_prompt_actions, selected_episode) are populated by data_transforms.inputs at policy
-    # time, so the policy server must NOT also append AddImagePromptTransform /
-    # AddStatesActionsPromptTransform (which read JSON state/action caches).
-    provides_incontext_demos: bool = False
-
-
 class GroupFactory(Protocol):
     def __call__(self, model_config: _model.BaseModelConfig) -> _transforms.Group:
         """Create a group."""
@@ -413,7 +403,7 @@ class TrainConfig:
     # Number of workers to use for the data loader. Increasing this number will speed up data loading but
     # will increase memory and CPU usage.
     num_workers: int = 2
-    # If true, will use create_custom_incontext_data_loader instead of create_incontext_data_loader.
+    # In-context models require the custom dataset loader that supplies demonstrations.
     use_custom_dataloader: bool = False
     # Number of train steps (batches) to run.
     num_train_steps: int = 30_000

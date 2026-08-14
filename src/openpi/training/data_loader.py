@@ -1,8 +1,6 @@
 from collections.abc import Iterator, Sequence
-import json
 import multiprocessing
 import os
-from pathlib import Path
 import typing
 from typing import Protocol, SupportsIndex, TypeVar
 
@@ -27,18 +25,6 @@ def is_effective_none(x):
     if isinstance(x, tuple) and len(x) == 1 and x[0] is None:
         return True
     return False
-
-
-def tree_stack_np(list_of_trees, axis=0):
-    """
-    Stack a list of similarly structured PyTrees along `axis`,
-    ensuring the leaves are NumPy arrays.
-    """
-
-    def stack_fn(*leaves):
-        return np.stack(leaves, axis=axis)
-
-    return jax.tree_map(stack_fn, *list_of_trees)
 
 
 class Dataset(Protocol[T_co]):
@@ -75,36 +61,6 @@ class TransformedDataset(Dataset[T_co]):
 
     def __len__(self) -> int:
         return len(self._dataset)
-
-
-def save_episode_states_to_json(episode_to_all_states: dict[int, np.ndarray], filename: str):
-    """
-    Converts each NumPy array to a Python list, then dumps to JSON.
-    """
-    filename = Path(filename)  # Convert string path to a Path object
-
-    json_dict = {}
-    for episode_id, states_array in episode_to_all_states.items():
-        json_dict[str(episode_id)] = states_array.tolist()
-
-    with filename.open("w") as f:  # Use Path.open()
-        json.dump(json_dict, f)
-
-
-def load_episode_states_from_json(filename: str) -> dict[int, np.ndarray]:
-    """
-    Loads the JSON file and reconstructs each list into a NumPy array.
-    """
-    filename = Path(filename)  # Convert string path to Path
-    with filename.open("r") as f:  # Use Path.open() instead of open()
-        json_dict = json.load(f)
-
-    episode_to_all_states = {}
-    for episode_id_str, state_list in json_dict.items():
-        episode_id = int(episode_id_str)
-        episode_to_all_states[episode_id] = np.array(state_list, dtype=np.float32)
-
-    return episode_to_all_states
 
 
 class FakeDataset(Dataset):
@@ -370,91 +326,6 @@ def create_data_loader(
                 yield _model.Observation.from_dict(batch), batch["actions"]
 
     return DataLoaderImpl(data_config, data_loader)
-
-
-def create_incontext_data_loader(
-    config: _config.TrainConfig,
-    *,
-    sharding: jax.sharding.Sharding | None = None,
-    skip_norm_stats: bool = False,
-    shuffle: bool = False,
-    num_batches: int | None = None,
-    num_workers: int = 0,
-) -> DataLoader[tuple[_model.Observation, _model.Actions]]:
-    """Create a data loader for training.
-
-    Args:
-        config: The training configuration.
-        sharding: The sharding to use for the data loader. If None, the data loader will
-            use a single device sharding.
-        skip_norm_stats: Whether to skip data normalization.
-        shuffle: Whether to shuffle the data.
-        num_batches: Determines the number of batches to return. If the number exceeds the
-            number of batches in the dataset, the data loader will loop over the dataset.
-            If not provided, will iterate over the dataset indefinitely.
-        num_workers: The number of worker processes to use. If zero, the data loader will
-            execute in the main process.
-    """
-    data_config = config.data.create(config.assets_dirs, config.model)
-    dataset = create_dataset(data_config, config.model)
-    dataset = transform_dataset(dataset, data_config, skip_norm_stats=skip_norm_stats)
-    # dataset_old = AddDemoPromptDataset(dataset)
-
-    if config.model.use_image_prompts:
-        print("Using image prompt")
-        add_image_transform = _transforms.AddImagePromptTransform(dataset=dataset)
-        dataset = TransformedDataset(dataset, [add_image_transform])
-
-    if config.model.use_action_state_prompts:
-        print("Using action-state prompt")
-        demo_state_dim = getattr(config.data, "demo_state_dim", None)
-        padding_mode = getattr(config.data, "padding_mode", "keep_all")
-        mask_padding_as_valid = getattr(config.data, "mask_padding_as_valid", False)
-        add_demo_transform = _transforms.AddStatesActionsPromptTransform(
-            dataset=dataset,
-            max_len=config.model.sample_actions,
-            states_cache_path=config.data.states_cache_path,
-            actions_cache_path=config.data.actions_cache_path,
-            padding_mode=padding_mode,
-            mask_padding_as_valid=mask_padding_as_valid,
-            demo_state_dim=demo_state_dim,
-        )
-        dataset = TransformedDataset(dataset, [add_demo_transform])
-
-    # jax.tree_util.tree_all(jax.tree_map(np.allclose, dataset[0], dataset_old[0]))
-    data_loader = TorchDataLoader(
-        dataset,
-        local_batch_size=config.batch_size // jax.process_count(),
-        sharding=sharding,
-        shuffle=shuffle,
-        num_batches=num_batches,
-        num_workers=num_workers,
-        seed=config.seed,
-    )
-
-    observation_cls = _model.ObservationIncontext
-
-    class DataLoaderImpl(DataLoader):
-        def __init__(
-            self,
-            data_config: _config.DataConfig,
-            data_loader: TorchDataLoader,
-            dataset: Dataset,
-            obs_cls,
-        ):
-            self._data_config = data_config
-            self._data_loader = data_loader
-            self._dataset = dataset
-            self._observation_cls = obs_cls
-
-        def data_config(self) -> _config.DataConfig:
-            return self._data_config
-
-        def __iter__(self):
-            for batch in self._data_loader:
-                yield self._observation_cls.from_dict(batch), batch["actions"]
-
-    return DataLoaderImpl(data_config, data_loader, dataset, observation_cls)
 
 
 def create_custom_incontext_data_loader(

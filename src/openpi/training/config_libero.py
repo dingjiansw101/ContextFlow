@@ -33,77 +33,6 @@ def build(api) -> list[api.TrainConfig]:
     # The nested dataclass annotation is resolved through this module's globals.
     g["DatasetSpec"] = DatasetSpec
 
-    def _make_lerobot_incontext_repack_transform():
-        return api._transforms.Group(
-            inputs=[
-                api._transforms.RepackTransform(
-                    {
-                        "observation/image": "image",
-                        "observation/wrist_image": "wrist_image",
-                        "observation/state": "state",
-                        "actions": "actions",
-                        "prompt": "prompt",
-                        "episode_index": "episode_index",
-                        "frame_index": "frame_index",
-                        "index": "index",
-                        "task_index": "task_index",
-                    }
-                )
-            ]
-        )
-
-    def _make_lerobot_incontext_data_config(
-        factory,
-        assets_dirs: pathlib.Path,
-        model_config,
-        *,
-        train_episode: list[int] | None,
-        local_files_only: bool | None = None,
-    ):
-        # Resolved first so InjectDemoIndexes can derive its lookup tables from the
-        # same repo (and local_files_only) the dataset itself will be built from.
-        base_config = factory.create_base_config(assets_dirs)
-        if local_files_only is not None:
-            base_config = dataclasses.replace(base_config, local_files_only=local_files_only)
-
-        data_transforms = api._transforms.Group(
-            inputs=[
-                api._transforms.InjectDemoIndexes(
-                    sample_frames=model_config.sample_frames,
-                    random_select=model_config.random_select,
-                    sample_episodes=model_config.sample_episodes,
-                    repo_id=base_config.repo_id,
-                    local_files_only=base_config.local_files_only,
-                    train_episode_index_list=train_episode,
-                    seed_base=factory.seed_base,
-                )
-            ],
-            outputs=[],
-        )
-        data_transforms = data_transforms.push(
-            inputs=[
-                libero_incontext_policy.LiberoIncontextInputs(
-                    action_dim=model_config.action_dim,
-                    model_type=model_config.model_type,
-                )
-            ],
-            outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-        )
-
-        if factory.use_delta_joint_actions:
-            delta_action_mask = api._transforms.make_bool_mask(6, -1)
-            data_transforms = data_transforms.push(
-                inputs=[api._transforms.DeltaActions(delta_action_mask)],
-                outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
-            )
-
-        return dataclasses.replace(
-            base_config,
-            repack_transforms=_make_lerobot_incontext_repack_transform(),
-            data_transforms=data_transforms,
-            model_transforms=api.ModelTransformFactory()(model_config),
-            train_episode=train_episode,
-        )
 
     @dataclasses.dataclass(frozen=True)
     class LeRobotLiberoDataConfig(api.DataConfigFactory):
@@ -154,58 +83,14 @@ def build(api) -> list[api.TrainConfig]:
             )
 
     @dataclasses.dataclass(frozen=True)
-    class LeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
-        use_delta_joint_actions: bool = True
-        states_cache_path: str = "metadata/libero/episode_states_cache.json"
-        actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-
-        # Padding strategy for AddStatesActionsPromptTransform
-        # "keep_all": Keep all frames when L < max_len, then pad (default, current behavior)
-        # "linspace_repeat": Always linspace sample, then repeat last (training behavior)
-        padding_mode: str = "keep_all"
-
-        # Whether to mask padded frames as valid (True) or invalid (False)
-        # True = training behavior, False = current inference behavior (default)
-        mask_padding_as_valid: bool = False
-
-        @override
-        def create(self, assets_dirs: pathlib.Path, model_config: BaseModelConfig) -> DataConfig:
-            train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
-            return _make_lerobot_incontext_data_config(
-                self,
-                assets_dirs,
-                model_config,
-                train_episode=train_epi,
-            )
-
-        @override
-        def create_policy(self, assets_dirs: pathlib.Path, model_config):
-            return _make_lerobot_incontext_data_config(
-                self,
-                assets_dirs,
-                model_config,
-                train_episode=None,
-            )
-
-    @dataclasses.dataclass(frozen=True)
     class CustomLeRobotLiberoIncontextDataConfig(api.DataConfigFactory):
-        """Config for CustomLeRobotDataset with in-context learning.
-
-        Unlike LeRobotLiberoIncontextDataConfig which uses transforms to add
-        demonstration data, CustomLeRobotLiberoIncontextDataConfig delegates this to
-        the dataset itself via CustomLeRobotDataset.
-        """
+        """Config for in-context learning with CustomLeRobotDataset."""
 
         use_delta_joint_actions: bool = False
 
         # CustomLeRobotDataset specific parameters
-        custom_dataloader_version: str = "v1"  # Version of custom dataloader to use
         sample_frames: int = 2  # Number of frames for in-context demonstration
         sample_actions: int = 32  # Number of actions for in-context demonstration
-        states_cache_path: str = "metadata/libero/episode_states_without_delta_cache.json"
-        actions_cache_path: str = "metadata/libero/episode_actions_without_delta_cache.json"
-        padding_mode: str = "linspace_repeat"
-        mask_padding_as_valid: bool = True
         policy_local_files_only: bool = False
         random_select: bool = True  # If True, randomly select demo episodes; if False, use deterministic selection
         norm_stats_aliases: dict[str, str] | None = dataclasses.field(
@@ -249,9 +134,7 @@ def build(api) -> list[api.TrainConfig]:
             # Calculate training episode indices
             train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
 
-            # Prepare data for policy training
-            # NOTE: CustomLeRobotDataset handles demo loading internally,
-            # so we DON'T use InjectDemoIndexes
+            # CustomLeRobotDataset supplies the demonstration data.
             data_transforms = api._transforms.Group(
                 inputs=[
                     libero_incontext_policy.CustomLeRobotLiberoIncontextInputs(
@@ -282,10 +165,7 @@ def build(api) -> list[api.TrainConfig]:
 
         @override
         def create_policy(self, assets_dirs: pathlib.Path, model_config):
-            # Cache-free eval path: pull in-context demos directly from CustomLeRobotDataset
-            # instead of the older InjectDemoIndexes + AddImagePromptTransform +
-            # AddStatesActionsPromptTransform pipeline (which depended on JSON state/action
-            # caches under metadata/libero/).
+            # Pull in-context demos directly from CustomLeRobotDataset.
             # Lazy imports avoid a circular import (config -> data_loader -> config).
             from lerobot.common.datasets import lerobot_dataset as lerobot_dataset_mod
 
@@ -360,7 +240,6 @@ def build(api) -> list[api.TrainConfig]:
                 data_transforms=data_transforms,
                 model_transforms=model_transforms,
                 train_episode=None,
-                provides_incontext_demos=True,
             )
 
     @dataclasses.dataclass(frozen=True)
@@ -380,7 +259,6 @@ def build(api) -> list[api.TrainConfig]:
         dataset_specs: tuple[DatasetSpec, ...] = ()
         use_delta_joint_actions: bool = False
 
-        custom_dataloader_version: str = "v1"
         sample_frames: int = 2
         sample_actions: int = 32
         random_select: bool = True
@@ -519,94 +397,6 @@ def build(api) -> list[api.TrainConfig]:
                 data_transforms=data_transforms,
                 model_transforms=model_transforms,
                 train_episode=None,
-                provides_incontext_demos=True,
-            )
-
-    @dataclasses.dataclass(frozen=True)
-    class LeRobotLiberoStageIncontextDataConfig(api.DataConfigFactory):
-        use_delta_joint_actions: bool = True
-        states_cache_path: str = "metadata/libero/episode_states_cache.json"
-        actions_cache_path: str = "metadata/libero/episode_actions_first_cache.json"
-
-        @override
-        def create(self, assets_dirs: pathlib.Path, model_config: BaseModelConfig) -> DataConfig:
-            # Make inputs look like they come from the Libero environment
-            repack_transform = api._transforms.Group(
-                inputs=[
-                    api._transforms.RepackTransform(
-                        {
-                            "observation/image": "image",
-                            "observation/wrist_image": "wrist_image",
-                            "observation/state": "state",
-                            "actions": "actions",
-                            "prompt": "prompt",
-                            "episode_index": "episode_index",
-                            "frame_index": "frame_index",
-                            "index": "index",
-                            "task_index": "task_index",
-                        }
-                    )
-                ]
-            )
-
-            # Xianjie: calculate training episode indexi first
-            # --- choose train episodes ---
-            if self.keep_episode_filename_list is not None:
-                # white list
-                train_epi = api.get_kept_episode_indices(
-                    self.episode_json_path,
-                    exclude_task_language=None,
-                    include_episode_filenames=self.keep_episode_filename_list,
-                )
-            else:
-                train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
-
-            # Prepare data for policy training
-            # inject the indexes of demo prompt, TODO: provide json file_paths here
-            data_transforms = api._transforms.Group(
-                inputs=[
-                    api._transforms.InjectDemoIndexes(
-                        sample_frames=model_config.sample_frames,
-                        random_select=model_config.random_select,
-                        sample_episodes=model_config.sample_episodes,
-                        repo_id=self.repo_id,
-                        local_files_only=self.local_files_only,
-                        train_episode_index_list=train_epi,
-                        seed_base=self.seed_base,
-                    )
-                ],
-                outputs=[],
-            )
-
-            # Convert images to uint8 numpy arrays, add masks
-            data_transforms = data_transforms.push(
-                inputs=[
-                    libero_incontext_policy.LiberoIncontextInputs(
-                        action_dim=model_config.action_dim, model_type=model_config.model_type
-                    )
-                ],
-                outputs=[libero_incontext_policy.LiberoIncontextOutputs()],
-            )
-
-            # TODO: fix the bug of libero actions.
-            # fix it and re-train on libero
-            # Use delta actions (not for gripper)
-            if self.use_delta_joint_actions:
-                delta_action_mask = api._transforms.make_bool_mask(6, -1)
-                data_transforms = data_transforms.push(
-                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
-                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
-                )
-            # else:
-            # Model transforms include things like tokenizing the prompt and action targets
-            model_transforms = api.ModelTransformFactory()(model_config)
-
-            return dataclasses.replace(
-                self.create_base_config(assets_dirs),
-                repack_transforms=repack_transform,
-                data_transforms=data_transforms,
-                model_transforms=model_transforms,
-                train_episode=train_epi,
             )
 
     # 2) Return this child's TrainConfig entries directly (can be multiple)

@@ -252,14 +252,9 @@ def _create_train_data_loader(
                 shuffle=shuffle,
             )
         case _model.ModelType.PI0_INCONTEXT:
-            if config.use_custom_dataloader:
-                return _data_loader.create_custom_incontext_data_loader(
-                    config,
-                    sharding=sharding,
-                    num_workers=num_workers,
-                    shuffle=shuffle,
-                )
-            return _data_loader.create_incontext_data_loader(
+            if not config.use_custom_dataloader:
+                raise ValueError("PI0_INCONTEXT requires the custom in-context data loader.")
+            return _data_loader.create_custom_incontext_data_loader(
                 config,
                 sharding=sharding,
                 num_workers=num_workers,

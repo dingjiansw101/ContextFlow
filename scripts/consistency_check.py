@@ -88,32 +88,6 @@ def _make_loader(kind: str, trainer, data_loader_mod, cfg, data_sharding):
         return trainer._create_train_data_loader(cfg, sharding=data_sharding, num_workers=0, shuffle=True)  # noqa: SLF001
     if kind == "standard":
         return data_loader_mod.create_data_loader(cfg, sharding=data_sharding, num_workers=0, shuffle=True)
-    if kind == "incontext":
-        if getattr(cfg, "use_custom_dataloader", False):
-            return data_loader_mod.create_custom_incontext_data_loader(
-                cfg,
-                sharding=data_sharding,
-                num_workers=0,
-                shuffle=True,
-            )
-        return data_loader_mod.create_incontext_data_loader(cfg, sharding=data_sharding, num_workers=0, shuffle=True)
-    if kind == "fast_mini_v14":
-        if cfg.use_custom_dataloader:
-            version = getattr(cfg.data, "custom_dataloader_version", "v1")
-            if version == "v2":
-                return data_loader_mod.create_custom_incontext_data_loaderv2(
-                    cfg,
-                    sharding=data_sharding,
-                    num_workers=0,
-                    shuffle=True,
-                )
-            return data_loader_mod.create_custom_incontext_data_loader(
-                cfg,
-                sharding=data_sharding,
-                num_workers=0,
-                shuffle=True,
-            )
-        return data_loader_mod.create_incontext_data_loader(cfg, sharding=data_sharding, num_workers=0, shuffle=True)
     raise ValueError(f"Unknown loader kind: {kind}")
 
 
@@ -191,7 +165,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run a deterministic one-batch or one-step training check.")
     parser.add_argument("--config", required=True)
     parser.add_argument("--trainer", required=True)
-    parser.add_argument("--loader-kind", required=True, choices=["refactor", "standard", "incontext", "fast_mini_v14"])
+    parser.add_argument("--loader-kind", required=True, choices=["refactor", "standard"])
     parser.add_argument("--batch-only", action="store_true")
     parser.add_argument("--output-json")
     parser.add_argument("--seed", type=int, default=12345)

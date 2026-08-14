@@ -35,19 +35,11 @@ def test_libero_incontext_inference_configs_removed():
     assert names == []
 
 
-def test_custom_libero_incontext_create_policy_uses_lerobot_path():
-    config = _config.get_config("ContextFlow")
-    data_config = config.data.create_policy(config.assets_dirs, config.model)
+def test_all_incontext_configs_use_custom_loader():
+    configs = [config for config in _config._CONFIGS if config.model.model_type == _config.ModelType.PI0_INCONTEXT]
 
-    input_transform_names = [type(transform).__name__ for transform in data_config.data_transforms.inputs]
-
-    assert data_config.train_episode is None
-    assert data_config.local_files_only is False
-    assert "InjectDemoIndexes" in input_transform_names
-    assert "LiberoIncontextInputs" in input_transform_names
-    assert "CustomLeRobotLiberoIncontextInputs" not in input_transform_names
-    assert config.data.padding_mode == "linspace_repeat"
-    assert config.data.mask_padding_as_valid is True
+    assert configs
+    assert all(config.use_custom_dataloader for config in configs)
 
 
 @pytest.mark.manual

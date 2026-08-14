@@ -109,126 +109,10 @@ def build(api) -> list["api.TrainConfig"]:
                 action_sequence_keys=self.action_sequence_keys,
                 train_episode=api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list),
             )
-        
-    @dataclasses.dataclass(frozen=True)
-    class LeRobotAlohaMobileIncontextDataConfig(api.DataConfigFactory):
-        states_cache_path: str = "metadata/aloha_pen_uncap/episode_states_cache.json"
-        actions_cache_path: str = "metadata/aloha_pen_uncap/episode_actions_first_cache.json"
-        # If true, will convert joint dimensions to deltas with respect to the current state before passing to the model.
-        # Gripper dimensions will remain in absolute values.
-        use_delta_joint_actions: bool = True
-        # If provided, will be injected into the input data if the "prompt" key is not present.
-        # TODO: check the issue of default prompt
-        default_prompt: str | None = None
-        # If true, this will convert the joint and gripper values from the standard Aloha space to
-        # the space used by the pi internal runtime which was used to train the base model. People who
-        # use standard Aloha data should set this to true.
-        # adapt_to_pi: bool = True
-        adapt_to_pi: bool = False
-        multi_process: bool = False
-
-        # Padding mode for AddStatesActionsPromptTransform
-        # "keep_all": Keep all L frames when L < max_len, then pad with last frame
-        # "linspace_repeat": Always use linspace sampling, then repeat last sample if needed
-        padding_mode: str = "keep_all"
-        # Whether to mask padded frames as valid (True) or invalid (False)
-        mask_padding_as_valid: bool = False
-
-        # Repack transforms.
-        repack_transforms: tyro.conf.Suppress["Group"] = dataclasses.field(
-            default=api._transforms.Group(
-                inputs=[
-                    api._transforms.RepackTransform(
-                        {
-                            "images": {
-                                "cam_high": "observation.images.cam_high",
-                                "cam_left_wrist": "observation.images.cam_left_wrist",
-                                "cam_right_wrist": "observation.images.cam_right_wrist",
-                            },
-                            "state": "observation.state",
-                            "actions": "action",
-                            "prompt": "prompt",
-                            "episode_index": "episode_index",
-                            "index": "index",
-                            "task_index": "task_index",
-                        }
-                    )
-                ]
-            )
-        )
-        # Action keys that will be used to read the action sequence from the dataset.
-        action_sequence_keys: Sequence[str] = ("action",)
-
-        @override
-        def create(self, assets_dirs: pathlib.Path, model_config: "BaseModelConfig") -> "DataConfig":
-            # assert model_config.action_dim == 16
-
-            # TODO: generate the indexes for aloha mobile data
-            train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
-
-            # Resolved first so InjectDemoIndexes derives its lookup tables from the same
-            # repo (and local_files_only) the dataset itself will be built from.
-            base_config = self.create_base_config(assets_dirs)
-
-            data_transforms = api._transforms.Group(
-                inputs=[api._transforms.InjectDemoIndexes(
-                                                    repo_id=base_config.repo_id,
-                                                    local_files_only=base_config.local_files_only,
-                                                    sample_frames=model_config.sample_frames,
-                                                    random_select=model_config.random_select,
-                                                    sample_episodes=model_config.sample_episodes,
-                                                    train_episode_index_list=train_epi,
-                                                    seed_base=self.seed_base)],
-                outputs=[],
-            )
-
-            data_transforms = data_transforms.push(
-                inputs=[
-                    aloha_incontext_policy.AlohaMobileIncontextInputs(
-                        action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi
-                    )
-                ],
-                outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
-
-            )
-            # data_transforms = _transforms.Group(
-            #     inputs=[
-            #         aloha_mobile_policy.AlohaMobileInputs(action_dim=model_config.action_dim, adapt_to_pi=self.adapt_to_pi)
-            #     ],
-            #     outputs=[aloha_mobile_policy.AlohaMobileOutputs(adapt_to_pi=self.adapt_to_pi)],
-            # )
-            if self.use_delta_joint_actions:
-                # TODO: for base action, is it delta?
-                delta_action_mask = api._transforms.make_bool_mask(6, -1, 6, -1, -1, -1)
-                data_transforms = data_transforms.push(
-                    inputs=[api._transforms.DeltaActions(delta_action_mask)],
-                    outputs=[api._transforms.AbsoluteActions(delta_action_mask)],
-                )
-            # TODO: change it to support multi-task?
-            # model_transforms = ModelTransformFactory(default_prompt=self.default_prompt)(model_config)
-            model_transforms = api.ModelTransformFactory()(model_config)
-
-            return dataclasses.replace(
-                base_config,
-                repack_transforms=self.repack_transforms,
-                data_transforms=data_transforms,
-                model_transforms=model_transforms,
-                action_sequence_keys=self.action_sequence_keys,
-                train_episode=train_epi,
-            )
-        
-        
 
     @dataclasses.dataclass(frozen=True)
     class CustomLeRobotAlohaMobileIncontextDataConfig(api.DataConfigFactory):
-        """Cache-free aloha in-context config.
-
-        Demonstrations (frames/states/actions) come directly from CustomLeRobotDataset
-        instead of the legacy InjectDemoIndexes + AddImagePromptTransform +
-        AddStatesActionsPromptTransform pipeline, which depended on the JSON state/action
-        caches under metadata/aloha_data_unique/. Training must route through
-        create_custom_incontext_data_loader (TrainConfig.use_custom_dataloader=True).
-        """
+        """ALOHA in-context config backed by CustomLeRobotDataset."""
 
         use_delta_joint_actions: bool = True
         default_prompt: str | None = None
@@ -387,7 +271,6 @@ def build(api) -> list["api.TrainConfig"]:
                 model_transforms=model_transforms,
                 action_sequence_keys=tuple(self.action_sequence_keys),
                 train_episode=None,
-                provides_incontext_demos=True,
             )
 
     # 2) Return this child's api.TrainConfig entries directly (can be multiple)
