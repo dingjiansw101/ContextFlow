@@ -118,6 +118,5 @@ Libero evaluation script to stream observations to the server for rollouts.
 
 ## Additional Resources
 
-- [ALOHA Pen-Task Hand Naming Convention](ALOHA_DATASET_NAMING.md) — the paper and the
-  released dataset use mirror `<left>`/`<right>` conventions for the pen-uncap tasks;
-  includes the mapping and a corrected statistics table.
+- [ALOHA dataset](https://huggingface.co/datasets/vo2yager/aloha_incontext) — task
+  instructions, picking-hand naming convention, and seen/unseen configurations.

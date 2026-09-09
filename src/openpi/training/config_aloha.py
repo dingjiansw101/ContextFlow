@@ -28,7 +28,7 @@ ALOHA_OBJECT_TEST_TASK = [
 # the pen (the released aloha_data_unique folder names use the mirror convention, naming the
 # UNCAPPING hand). These are exact keys into that dataset's meta/tasks.jsonl -- exclusion is
 # exact string membership, so they must match byte-for-byte.
-# See ALOHA_DATASET_NAMING.md and ALOHA_PAPER_DATASET_PLAN.md.
+# See https://huggingface.co/datasets/vo2yager/aloha_incontext for task definitions.
 #
 # The 6 unseen configurations of the paper. The tasks absent from the paper entirely
 # (separate cups, blue pen /<right>, the single-demo pick-and-place tasks) are not listed
