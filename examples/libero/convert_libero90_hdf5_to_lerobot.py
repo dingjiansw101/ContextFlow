@@ -7,8 +7,8 @@ The raw HDF5 files are the official LIBERO libero_90 demonstrations, obtained by
 ``libero_90`` directory.
 
 Usage:
-    PYTHONPATH=src uv run examples/libero/convert_libero_raw_hdf5_to_lerobot.py --data_dir /path/to/libero_90
-    PYTHONPATH=src uv run examples/libero/convert_libero_raw_hdf5_to_lerobot.py --data_dir /path/to/libero_90 --push_to_hub
+    PYTHONPATH=src uv run examples/libero/convert_libero90_hdf5_to_lerobot.py --data_dir /path/to/libero_90
+    PYTHONPATH=src uv run examples/libero/convert_libero90_hdf5_to_lerobot.py --data_dir /path/to/libero_90 --push_to_hub
 """
 
 from __future__ import annotations
