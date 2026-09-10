@@ -1,4 +1,4 @@
-# ContextFlow: In-Context Vision-Language-Action Models
+# ContextFlow: In-Context Flow Matching for Robot Manipulation
 
 This repository contains the model and training/evaluation code for **ContextFlow** — a vision-language-action (VLA) model that conditions on **in-context demonstrations** (demo images, states, and actions of a related task) to generalize to unseen tasks without fine-tuning.
 
