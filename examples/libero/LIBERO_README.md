@@ -21,7 +21,7 @@ Create the client environment:
 # Create virtual environment
 uv venv --python 3.8 examples/libero/.venv
 source examples/libero/.venv/bin/activate
-uv pip sync examples/libero/requirements.txt third_party/libero/requirements.txt \
+uv pip install -r examples/libero/requirements.txt -r third_party/libero/requirements.txt \
     --extra-index-url https://download.pytorch.org/whl/cu113 --index-strategy=unsafe-best-match
 uv pip install -e packages/openpi-client
 uv pip install -e third_party/libero
@@ -111,10 +111,10 @@ uv run scripts/serve_policy.py policy:checkpoint \
 
 ```bash
 # Unseen tasks of a split (the paper's generalization metric)
-python examples/libero/main_incontext_unseen.py \
+python examples/libero/main_incontext.py --unseen-only \
     --task-suite-name libero_spatial
 
-# Seen tasks of a split
+# All tasks of a split (reports seen and unseen success rates separately)
 python examples/libero/main_incontext.py --task-suite-name libero_spatial
 
 # Plain pi0 / pi0-FAST baseline (no in-context demos)
@@ -126,7 +126,11 @@ Key client arguments:
 - `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`. (`libero_90` is training co-data only — the in-context clients reject it, because its task indices are a different space from the demo dataset the server serves from.)
 - The seen/unseen assignment is not configurable: the training configs and eval clients share `LIBERO_UNSEEN_TASKS` from `openpi.training.config_libero`. Any suite task not in that tuple counts as seen.
 - `--num-trials-per-task`: rollouts per task (default 50)
+- `--unseen-only`: evaluate only held-out tasks (default: evaluate all tasks).
+- `--unseen-task-index`: evaluate one held-out task by its zero-based index within the suite's unseen tasks; implies unseen-only evaluation.
 - `--host` / `--port`: policy server address (default `0.0.0.0:8000`)
+
+`main_incontext_unseen.py` remains a compatibility entry point with unseen-only evaluation enabled by default.
 
 Results are written as JSON to `logs/eval_results/` (override with `--results-out-path`).
 
@@ -145,7 +149,7 @@ It needs one extra artifact:
    python third_party/libero/benchmark_scripts/download_libero_datasets.py --datasets libero_100
 
    # Convert to a LeRobot dataset (optionally --push_to_hub):
-   uv run examples/libero/convert_libero_raw_hdf5_to_lerobot.py --data_dir /path/to/libero_90
+   uv run examples/libero/convert_libero90_hdf5_to_lerobot.py --data_dir /path/to/libero_90
    ```
 
    The config's `libero_90` dataset spec sets `local_files_only=True` and points `episode_json_path`
