@@ -12,6 +12,8 @@ data/
 wandb/
 jobs/
 jobs
+# Local experiment jobs must remain untracked.
+/jobs/local/
 errs
 b9_configs.py
 logs
