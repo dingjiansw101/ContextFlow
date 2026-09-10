@@ -99,9 +99,8 @@ class CustomLeRobotDataset(LeRobotDataset):
             num_sample_actions (int): Number of actions for in-context demonstration.
             random_select (bool): If True, randomly select demo episodes; if False, use deterministic selection (first episode).
             seed_base (int | None): Optional base seed for deterministic random demo selection.
-            state_key (str): Dataset column holding the proprioceptive state ("state" for LIBERO,
-                "observation.state" for ALOHA-style LeRobot datasets).
-            actions_key (str): Dataset column holding raw actions ("actions" for LIBERO, "action" for ALOHA).
+            state_key (str): Dataset column holding the proprioceptive state (defaults to "state").
+            actions_key (str): Dataset column holding raw actions (defaults to "actions").
             demo_image_keys (dict[str, str] | None): Mapping from output name in dem_prompt_images to the
                 dataset image column. Defaults to the LIBERO layout
                 {"image": "image", "wrist_image": "wrist_image"}.
@@ -216,7 +215,7 @@ class CustomLeRobotDataset(LeRobotDataset):
         # Load in-context demonstration from another episode with the same task
         task_index = int(item["task_index"])
         # Seed components mirroring what the legacy repack forwarded to InjectDemoIndexes
-        # (the aloha in-context repack maps "index" and "episode_index" but not "frame_index").
+        # (the legacy repack forwarded "index" and "episode_index" but not "frame_index").
         legacy_seed_components = (item.get("index"), None, item.get("episode_index"))
         incontext_demo = self.load_incontext_demonstration(
             current_ep_idx, task_index, sample_index=idx, legacy_seed_components=legacy_seed_components

@@ -2,7 +2,7 @@
 
 The in-context configs, their **model classes**, the **module files**, and the
 **assets keys** were all renamed to the paper method names (`ContextFlow` /
-`ContextFlow_Plain` / `ContextAR`, plus `_Aloha` variants). Use the **new** config names
+`ContextFlow_Plain` / `ContextAR`). Use the **new** config names
 when launching training/eval (`uv run python scripts/train.py <new_name> ...`). This file
 records the old → new mapping so existing checkpoints, job scripts, and experiment logs
 (which still use the old names) can be cross-referenced.
@@ -42,19 +42,6 @@ see [Assets-key renames](#assets-key-assets_repo_override-renames) below.
 | `ContextAR_plus_libero90_split3` | `…_train_split_plus_libero90_split3` | `config_sequence.py` |
 | `ContextAR_900m` | `pi0_fast_incontext_prompt_action_7_state_8_train_split_900m` | `config_sequence.py` (f-string loop, `suffix==""` special-case) |
 
-### ALOHA (`aloha_data_unique`)
-
-| New name | Old name | Defined in | What it is |
-|---|---|---|---|
-| `ContextFlow_Aloha` | `pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test` | `config_aloha.py` | ALOHA in-context v18, `sample_frames=8`, `sample_actions=128`; test tasks excluded (train) |
-| `ContextFlow_Aloha_Inference` | `pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_inference` | `config_aloha.py` | Same, inference variant (no test-task filtering) |
-| `ContextAR_Aloha` | `pi0_fast_aloha_data_unique_incontext_train_split_v1` | `config_aloha.py` | ALOHA pi0-FAST in-context, `sample_frames=2`, `sample_actions=4`; test tasks excluded (train) |
-| `ContextAR_Aloha_Inference` | `pi0_fast_aloha_data_unique_incontext_inference` | `config_aloha.py` | Same, inference variant (no test-task filtering) |
-| `Pi0_Aloha` | `pi0_aloha_data_unique_low_mem_finetune_no_test` | `config_aloha.py` | ALOHA plain-pi0 baseline (paper "pi0" row); not an in-context method. Uses `pi0_base` assets (no `assets_repo_override`). Renamed in the second batch. |
-
-**Note:** the **LIBERO** plain-pi0 baseline is still left untouched (descriptive name); only the
-**ALOHA** pi0 baseline was renamed (→ `Pi0_Aloha`) in the second batch.
-
 ## Model class / module / file renames
 
 | Old class(es) | New class(es) | Module file (old → new) |
@@ -69,7 +56,7 @@ see [Assets-key renames](#assets-key-assets_repo_override-renames) below.
 In `config.py` the module import aliases were renamed to match
 (`pi0_incontextv18`→`contextflow`, `pi0_incontextv12`→`contextflow_plain`,
 `pi0_fast_incontext`→`contextar`); every `api.<module>.<Class>` call site in
-`config_libero.py` / `config_aloha.py` and the direct importers
+`config_libero.py` and the direct importers
 (`policy_config.py`, `data_loader.py`, `model_test.py`, `config_libero_test.py`,
 `contextflow_test.py`) were updated. `config_sequence.py` stays glob-discovered
 (`config_*.py`), so no import changed for it.
@@ -82,13 +69,6 @@ In `config.py` the module import aliases were renamed to match
 - The shared plumbing classes `LeRobot*IncontextDataConfig`, `*IncontextInputs/Outputs`,
   `PolicyIncontext`/`PolicyFASTIncontext` — architecture reused across many configs.
 
-> ⚠ **LIBERO `ContextAR` uses the Seq class, not `ContextARConfig`.** The renamed
-> `ContextARConfig` (ex-`Pi0FASTIncontextConfig`) backs the **ALOHA** `ContextAR_Aloha`
-> configs. The **LIBERO** `ContextAR` config (built by `make_config` in
-> `config_sequence.py`) uses `Pi0FASTIncontextSeqConfig`, which was left unrenamed. This is
-> a pre-existing architecture split between the LIBERO and ALOHA ContextAR configs, not
-> introduced by this rename — don't read `ContextARConfig` as "the LIBERO ContextAR model".
-
 ## Assets-key (`assets_repo_override`) renames
 
 The `assets_repo_override` values were renamed from the old descriptive strings to the
@@ -97,9 +77,6 @@ paper names, so the assets key now matches the config name.
 | Old assets key | New assets key | Shared by |
 |---|---|---|
 | `pi0_libero_refactor_incontextv12_…_dataset_refactor` (the anchor) | `ContextFlow` | `ContextFlow`, `ContextFlow_plus_libero90` — both `assets_repo_override=` lines repointed |
-| `pi0_aloha_data_unique_incontextv18_…_no_test` | `ContextFlow_Aloha` | `ContextFlow_Aloha` |
-| `pi0_aloha_data_unique_incontextv18_…_inference` | `ContextFlow_Aloha_Inference` | `ContextFlow_Aloha_Inference` |
-| `pi0_fast_aloha_data_unique_incontext_train_split_v1` | `ContextAR_Aloha` | `ContextAR_Aloha` + `ContextAR_Aloha_Inference` (shared) |
 
 **⚠ Requires a one-time on-disk move per training filesystem.** `./assets/` is **gitignored**
 (not in the commit) and norm stats are read from `./assets/<assets_key>/<asset_id>/` — where
@@ -115,17 +92,7 @@ mv ./assets/pi0_libero_refactor_incontextv12_low_mem_finetune_sample2_actionssam
    ./assets/ContextFlow
 # (from an older checkout that already renamed to ContextFlow_Plain:
 #  mv ./assets/ContextFlow_Plain ./assets/ContextFlow)
-
-# On kw61077 (ALOHA training box), if these dirs exist:
-mv ./assets/pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test  ./assets/ContextFlow_Aloha
-mv ./assets/pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_inference ./assets/ContextFlow_Aloha_Inference
-mv ./assets/pi0_fast_aloha_data_unique_incontext_train_split_v1                          ./assets/ContextAR_Aloha
 ```
-
-(The ALOHA keys have no local dir in this repo — they resolve from trained checkpoints,
-which carry their own baked-in norm stats and are unaffected.) Left unchanged (out of
-scope): the non-paper `pi0_aloha_objects_task_suite_incontextv18_…` key and the
-`debug_pi0_fast_libero_incontext_inference` key used by the LIBERO ContextAR debug configs.
 
 ## Things to know
 
@@ -135,8 +102,6 @@ scope): the non-paper `pi0_aloha_objects_task_suite_incontextv18_…` key and th
   checkpoint dir on the cluster, e.g.:
   ```bash
   mv checkpoints/pi0_libero_incontextv18_low_mem_finetune_sample_frames8 checkpoints/ContextFlow
-  mv checkpoints/pi0_aloha_data_unique_incontextv18_low_mem_finetune_sample_frames8_no_test checkpoints/ContextFlow_Aloha
-  mv checkpoints/pi0_fast_aloha_data_unique_incontext_train_split_v1 checkpoints/ContextAR_Aloha
   ```
   Renaming classes/modules/asset-keys does **not** break existing checkpoints: orbax keys
   on nnx pytree attribute paths, and norm stats are baked into each checkpoint's `assets/`.
@@ -150,7 +115,7 @@ scope): the non-paper `pi0_aloha_objects_task_suite_incontextv18_…` key and th
   `jobs/orix/raw_images/_train_common.sh` gained an optional `POLICY_CONFIG` override
   (`${POLICY_CONFIG:-$CONFIG}`), so out-of-scope callers are unaffected. Out-of-scope siblings
   (`…_inference*`, `…_train_split2..8`, `…_avg_demo_img*`, v18/v12 ablations) were intentionally left
-  on their descriptive names. The ALOHA launch scripts live on `kw61077`, not in-tree, and are unchanged.
+  on their descriptive names.
 
 - **`ContextAR` family renames (two batches).** The FAST configs are generated by f-strings /
   helpers in `config_sequence.py`. **Renamed to paper names:** the bare base (`ContextAR`), the
@@ -158,8 +123,7 @@ scope): the non-paper `pi0_aloha_objects_task_suite_incontextv18_…` key and th
   `..._train_split_plus_libero90[_split1/2/3]` configs (`ContextAR_plus_libero90[_splitN]`).
   **Still descriptive (out of scope):** the numbered `..._train_split2` … `_train_split8` (and
   their `_900m` forms), the `..._900m_avg_demo_img_plus_libero90` avg-image variants, and the
-  `_inference*` eval configs. The ALOHA `ContextAR_Aloha` configs are standalone (not
-  f-string-generated) and have no siblings.
+  `_inference*` eval configs.
 
 ## Job-script mapping (old → new)
 

@@ -12,7 +12,6 @@ class EnvMode(enum.Enum):
     """Supported environments."""
 
     LIBERO = "libero"
-    ALOHA_MOBILE = "aloha_mobile"
 
 
 @dataclasses.dataclass
@@ -27,7 +26,6 @@ class Args:
 def main(args: Args) -> None:
     obs_fn = {
         EnvMode.LIBERO: _random_observation_libero,
-        EnvMode.ALOHA_MOBILE: _random_observation_aloha_mobile,
     }[args.env]
 
     policy = _websocket_client_policy.WebsocketClientPolicy(
@@ -45,18 +43,6 @@ def main(args: Args) -> None:
 
     print(f"Total time taken: {end - start:.2f} s")
     print(f"Average inference time: {1000 * (end - start) / args.num_steps:.2f} ms")
-
-
-def _random_observation_aloha_mobile() -> dict:
-    return {
-        "state": np.ones((14,)),
-        "images": {
-            "cam_high": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-            "cam_left_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-            "cam_right_wrist": np.random.randint(256, size=(3, 224, 224), dtype=np.uint8),
-        },
-        "prompt": "do something",
-    }
 
 
 def _random_observation_libero() -> dict:

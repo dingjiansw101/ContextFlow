@@ -108,8 +108,6 @@ class Pi0FASTConfig(_model.BaseModelConfig):
                     "base_1_rgb": image_mask_spec,
                     "wrist_0_rgb": image_mask_spec,
                 },
-                # TODO: check, the state and action dimension are different in aloha.
-                # However, it is the same here
                 state=jax.ShapeDtypeStruct([batch_size, self.action_dim], jnp.float32),
                 tokenized_prompt=jax.ShapeDtypeStruct([batch_size, self.max_token_len], jnp.int32),
                 tokenized_prompt_mask=jax.ShapeDtypeStruct([batch_size, self.max_token_len], bool),

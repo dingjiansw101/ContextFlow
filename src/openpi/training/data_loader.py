@@ -180,8 +180,7 @@ def create_custom_dataset(
         num_sample_actions = getattr(data_config_factory, "sample_actions", 32)
         random_select = getattr(data_config_factory, "random_select", True)
         seed_base = getattr(data_config_factory, "seed_base", None)
-        # Dataset column layout + demo selection compat (defaults preserve the LIBERO layout;
-        # the aloha factories override these — see CustomLeRobotAlohaMobileIncontextDataConfig).
+        # Dataset column layout and demo selection compatibility; defaults preserve the LIBERO layout.
         state_key = getattr(data_config_factory, "state_key", "state")
         actions_key = getattr(data_config_factory, "actions_key", "actions")
         demo_image_keys = getattr(data_config_factory, "demo_image_keys", None)

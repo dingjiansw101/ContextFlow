@@ -183,15 +183,8 @@ class AssetsConfig:
     These assets will be replicated inside the checkpoint under the `assets/asset_id` directory.
 
     This can be used to load assets from a different checkpoint (e.g., base model checkpoint) or some other
-    centralized location. For example, to load the norm stats for the Trossen robot from the base model checkpoint
-    during fine-tuning, use:
-
-    ```
-    AssetsConfig(
-        assets_dir="s3://openpi-assets/checkpoints/pi0_base/assets",
-        asset_id="trossen",
-    )
-    ```
+    centralized location. Set assets_dir to the asset directory and asset_id to the
+    dataset's asset subdirectory.
     """
 
     # Assets directory. If not provided, the config assets_dirs will be used. This is useful to load assets from
@@ -467,7 +460,7 @@ def _discover_child_modules() -> list[str]:
     for p in pkg_dir.glob("config_*.py"):
         if p.name == "config.py":
             continue
-        out.append(f"{base_pkg}.{p.stem}")  # e.g. openpi.training.config_aloha
+        out.append(f"{base_pkg}.{p.stem}")  # e.g. openpi.training.config_libero
     out.sort()
     return out
 

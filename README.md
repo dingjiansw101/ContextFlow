@@ -12,7 +12,7 @@ On top of this we provide the in-context method:
 | --- | --- | --- | --- |
 | **ContextFlow** | π₀ (flow) | 8 demo frames + 128 demo state/action steps | `ContextFlowConfig` (`src/openpi/models/contextflow.py`) |
 
-It is trained and evaluated on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO) with a seen/unseen task split, and has ALOHA real-robot variants (`ContextFlow_Aloha`, `Pi0_Aloha`).
+It is trained and evaluated on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO) with a seen/unseen task split.
 
 ## Requirements
 
@@ -62,7 +62,6 @@ Our trained checkpoints, norm stats, and dataset metadata are hosted in the publ
 | --- | --- | --- |
 | ContextFlow | `ContextFlow` | `ContextFlow/ContextFlow_4gpu/19999` |
 | + LIBERO-90 co-training | `ContextFlow_plus_libero90` | see `MANIFEST.json` (one folder per config) |
-| ALOHA (real robot) | `ContextFlow_Aloha`, `Pi0_Aloha` | see `MANIFEST.json` |
 
 The Drive folder also holds checkpoints for methods this repo no longer ships configs for (ContextFlow-Plain, ContextAR and their variants); see `MANIFEST.json`. To run those, check out a commit before the configs were pruned.
 
@@ -135,7 +134,7 @@ Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code
 ## Repository Structure
 
 - `src/openpi/models/` — model implementations: `contextflow.py` and the upstream `pi0.py`
-- `src/openpi/training/` — configs (`config_libero.py`, `config_aloha.py`) and the in-context dataset (`custom_dataset.py`)
+- `src/openpi/training/` — configs (`config_libero.py`) and the in-context dataset (`custom_dataset.py`)
 - `src/openpi/policies/` — policy wrappers, `policy_config.py` (checkpoint → policy, in-context demo pipeline)
 - `scripts/` — `train.py`, `serve_policy.py`, `compute_norm_stats.py`
 - `examples/libero/` — LIBERO evaluation clients and the [LIBERO guide](examples/libero/LIBERO_README.md)
