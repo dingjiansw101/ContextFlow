@@ -143,7 +143,7 @@ def create_custom_dataset(
     # Multi-dataset: the factory carries dataset_specs; build a ConcatDataset of
     # per-spec CustomLeRobotDataset instances. Each sub-dataset is wrapped in
     # PromptFromLeRobotTask BEFORE concatenation because task_index is
-    # dataset-local (task 0 in libero != task 0 in libero_90).
+    # dataset-local (task 0 in one dataset != task 0 in another).
     dataset_specs = getattr(data_config_factory, "dataset_specs", None) if data_config_factory is not None else None
     if dataset_specs:
         num_sample_frames = getattr(data_config_factory, "sample_frames", 2)

@@ -25,7 +25,7 @@ uv run scripts/compute_norm_stats.py --config-name <config_name>
 # 2. Run training (set XLA flag to maximize GPU memory usage)
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py <config_name> --exp-name=<experiment_name> [--overwrite]
 
-# Common config names: ContextFlow, ContextFlow_plus_libero90
+# Common config name: ContextFlow
 # --overwrite flag overwrites existing checkpoints with the same name
 ```
 

@@ -5,6 +5,8 @@ will compute the mean and standard deviation of the data in the dataset and save
 to the config assets directory.
 """
 
+import dataclasses
+
 import numpy as np
 import tqdm
 import tyro
@@ -20,11 +22,21 @@ class RemoveStrings(transforms.DataTransformFn):
         return {k: v for k, v in x.items() if not np.issubdtype(np.asarray(v).dtype, np.str_)}
 
 
-def create_dataset(config: _config.TrainConfig) -> tuple[_config.DataConfig, _data_loader.Dataset]:
+def create_dataset(
+    config: _config.TrainConfig, *, use_delta_joint_actions: bool = True
+) -> tuple[_config.DataConfig, _data_loader.Dataset]:
+    # Override a copy only for statistics; the registered train/eval config stays unchanged.
+    if hasattr(config.data, "use_delta_joint_actions"):
+        config = dataclasses.replace(
+            config, data=dataclasses.replace(config.data, use_delta_joint_actions=use_delta_joint_actions)
+        )
     data_config = config.data.create(config.assets_dirs, config.model)
     if data_config.repo_id is None:
         raise ValueError("Data config must have a repo_id")
-    dataset = _data_loader.create_dataset(data_config, config.model)
+    if config.use_custom_dataloader:
+        dataset = _data_loader.create_custom_dataset(data_config, config.model, config.data)
+    else:
+        dataset = _data_loader.create_dataset(data_config, config.model)
     dataset = _data_loader.TransformedDataset(
         dataset,
         [
@@ -37,9 +49,16 @@ def create_dataset(config: _config.TrainConfig) -> tuple[_config.DataConfig, _da
     return data_config, dataset
 
 
-def main(config_name: str, sample_frames: int | None = None):
+def main(config_name: str, sample_frames: int | None = None, *, use_delta_joint_actions: bool = True):
+    """Compute statistics, using delta joint actions by default for compatible data configs.
+
+    Args:
+        config_name: Registered configuration name.
+        sample_frames: Optional number of frames to sample.
+        use_delta_joint_actions: Subtract joint state from actions for statistics only.
+    """
     config = _config.get_config(config_name)
-    data_config, dataset = create_dataset(config)
+    data_config, dataset = create_dataset(config, use_delta_joint_actions=use_delta_joint_actions)
 
     num_frames = len(dataset)
     shuffle = False
