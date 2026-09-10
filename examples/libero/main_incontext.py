@@ -53,10 +53,12 @@ class Args:
     # LIBERO environment-specific parameters
     #################################################################################################################
     task_suite_name: str = (
-        "libero_spatial"  # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10, libero_90
+        "libero_spatial"  # Task suite. Options: libero_spatial, libero_object, libero_goal, libero_10
     )
     num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize i n sim
     num_trials_per_task: int = 50  # Number of rollouts per task
+    unseen_only: bool = False  # Evaluate only held-out tasks
+    unseen_task_index: int = -1  # If >= 0, evaluate this index within the suite's unseen tasks
 
     #################################################################################################################
     # Utils
@@ -72,7 +74,8 @@ def eval_libero(args: Args) -> None:
     np.random.seed(args.seed)
 
     if not args.results_out_path:
-        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_incontext_results.json")
+        suffix = "incontext_unseen" if args.unseen_only or args.unseen_task_index >= 0 else "incontext"
+        args.results_out_path = str(pathlib.Path("logs") / "eval_results" / f"{args.task_suite_name}_{suffix}_results.json")
 
     logging.info(f"Held-out tasks: {len(LIBERO_UNSEEN_TASKS)}")
 
@@ -94,6 +97,17 @@ def eval_libero(args: Args) -> None:
     task_description2index = get_task_to_index_mapping(LIBERO_TASKS_JSONL)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 
+    task_ids = list(range(num_tasks_in_suite))
+    if args.unseen_only or args.unseen_task_index >= 0:
+        task_ids = [task_id for task_id in task_ids if task_suite.get_task(task_id).language in LIBERO_UNSEEN_TASKS]
+        logging.info(f"Found {len(task_ids)} unseen tasks in suite: {task_ids}")
+        if args.unseen_task_index >= 0:
+            if args.unseen_task_index >= len(task_ids):
+                raise ValueError(
+                    f"unseen_task_index {args.unseen_task_index} is out of range for {len(task_ids)} unseen tasks"
+                )
+            task_ids = [task_ids[args.unseen_task_index]]
+
     if args.task_suite_name == "libero_spatial":
         max_steps = 220  # longest training demo has 193 steps
     elif args.task_suite_name == "libero_object":
@@ -114,7 +128,7 @@ def eval_libero(args: Args) -> None:
     total_episodes, total_successes = 0, 0
     per_task_results = []
 
-    for task_id in tqdm.tqdm(range(num_tasks_in_suite)):
+    for task_id in tqdm.tqdm(task_ids):
         # Get task
         task = task_suite.get_task(task_id)
 
@@ -209,7 +223,7 @@ def eval_libero(args: Args) -> None:
             suffix = "success" if done else "failure"
             task_segment = task_description.replace(" ", "_")
             imageio.mimwrite(
-                pathlib.Path(args.video_out_path) / f"rollout_{task_segment}_{suffix}.mp4",
+                pathlib.Path(args.video_out_path) / f"rollout_{task_segment}_ep{episode_idx:03d}_{suffix}.mp4",
                 [np.asarray(x) for x in replay_images],
                 fps=10,
             )
@@ -253,7 +267,8 @@ def eval_libero(args: Args) -> None:
     logging.info(f"\nAverage success on SEEN tasks: {avg_seen:.3f} ({len(seen_rates)} tasks)")
     logging.info(f"Average success on UNSEEN tasks: {avg_unseen:.3f} ({len(unseen_rates)} tasks)")
 
-    logging.info(f"Total success rate: {float(total_successes) / float(total_episodes)}")
+    total_success_rate = float(total_successes) / float(total_episodes) if total_episodes > 0 else 0.0
+    logging.info(f"Total success rate: {total_success_rate}")
     logging.info(f"Total episodes: {total_episodes}")
 
     results = {
@@ -266,7 +281,7 @@ def eval_libero(args: Args) -> None:
         "summary": {
             "total_episodes": total_episodes,
             "total_successes": total_successes,
-            "total_success_rate": float(total_successes) / float(total_episodes) if total_episodes > 0 else 0.0,
+            "total_success_rate": total_success_rate,
             "seen_success_rate": avg_seen,
             "unseen_success_rate": avg_unseen,
             "num_seen_tasks": len(seen_rates),
@@ -311,4 +326,4 @@ def _quat2axisangle(quat):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    tyro.cli(eval_libero)
+    eval_libero(tyro.cli(Args))

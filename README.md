@@ -126,7 +126,7 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.inference_dtype=float3
   --policy.config=ContextFlow --policy.dir=checkpoints/ContextFlow/my_run/19999
 
 # 4. Evaluate on unseen tasks (terminal 2, inside the LIBERO client venv)
-python examples/libero/main_incontext_unseen.py --task-suite-name libero_spatial
+python examples/libero/main_incontext.py --unseen-only --task-suite-name libero_spatial
 ```
 
 Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code: `LIBERO_UNSEEN_TASKS` in [`src/openpi/training/config_libero.py`](src/openpi/training/config_libero.py) is shared by the training configs and eval clients. Every other task in the four suites is a seen task.
