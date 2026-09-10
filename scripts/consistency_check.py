@@ -63,8 +63,8 @@ def _make_config(config_mod, args: argparse.Namespace):
 
     # Demo selection uses the real random_select=True path; determinism comes from
     # seed_base (set above via --deterministic-data). Cross-branch comparison against a
-    # reference like aloha-dev requires that reference to carry the same dormant seed_base
-    # plumbing (behavior-preserving when unset); see ALOHA_CACHE_FREE_CONSISTENCY.md.
+    # legacy reference requires that reference to carry the same dormant seed_base
+    # plumbing (behavior-preserving when unset).
     return dataclasses.replace(
         cfg,
         seed=args.seed,

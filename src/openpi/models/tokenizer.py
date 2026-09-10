@@ -54,8 +54,6 @@ class FASTTokenizer:
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         cleaned_text = prompt.lower().strip().replace("_", " ")
         # Convention: state gets discretized into 256 discrete bins (assumed range after normalization: [-1, 1])
-        # The state for mobile aloha is 14, however, it is set to be the same size as action dim 16
-        # therefore, it is padded to 16 with zero
         discretized_state = np.digitize(state, bins=np.linspace(-1, 1, 256 + 1)[:-1]) - 1
         # Convention: prefix includes prompt and string-representation of state, followed by ';'
         state_str = " ".join(map(str, discretized_state))
