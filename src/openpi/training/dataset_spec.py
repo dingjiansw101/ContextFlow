@@ -12,7 +12,7 @@ class DatasetSpec:
     ``data_loader.create_custom_dataset``). Demo retrieval is within-dataset
     only, and each sub-dataset derives its own task-to-episode table from
     ``repo_id``'s metadata, so the table is always keyed by that dataset's task
-    indices (task 0 in libero != task 0 in libero_90).
+    indices (task 0 in one dataset != task 0 in another).
 
     Defined in a leaf module (no openpi imports) so config fragments can bind it
     at module scope, letting tyro resolve the forward reference

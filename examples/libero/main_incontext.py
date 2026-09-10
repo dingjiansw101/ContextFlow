@@ -85,15 +85,6 @@ def eval_libero(args: Args) -> None:
     num_tasks_in_suite = task_suite.n_tasks
     logging.info(f"Task suite: {args.task_suite_name}")
 
-    if args.task_suite_name == "libero_90":
-        # LIBERO-90 is training co-data only. Its task indices are a different space
-        # from physical-intelligence/libero (90 vs 40 tasks, no overlap), and the
-        # policy server always fetches demos from the latter -- so evaluating this
-        # suite would condition on unrelated demos. See LIBERO_README section 6.
-        raise ValueError(
-            "libero_90 is not a supported eval suite: its task indices do not match "
-            "the demo dataset the policy server serves from."
-        )
     task_description2index = get_task_to_index_mapping(LIBERO_TASKS_JSONL)
     pathlib.Path(args.video_out_path).mkdir(parents=True, exist_ok=True)
 

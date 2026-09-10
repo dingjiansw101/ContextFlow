@@ -2,9 +2,7 @@
 
 This repository contains the model and training/evaluation code for **ContextFlow** — a vision-language-action (VLA) model that conditions on **in-context demonstrations** (demo images, states, and actions of a related task) to generalize to unseen tasks without fine-tuning.
 
-It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their base model:
-
-- the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion VLA
+It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their base model, the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion VLA.
 
 On top of this we provide the in-context method:
 
@@ -20,10 +18,10 @@ To run the models in this repository, you will need an NVIDIA GPU with at least 
 
 | Mode                    | Memory Required | Example GPU        |
 | ----------------------- | --------------- | ------------------ |
-| Inference               | > 16 GB         | RTX 4090           |
-| Fine-Tuning (LoRA)      | > 40 GB         | A100 (80GB) / H100 |
+| Inference               | > 16 GB         | A100 (80GB)        |
+| Fine-Tuning (LoRA)       | > 40 GB         | A100 (80GB)        |
 
-The LIBERO ContextFlow runs reported in the paper were trained on 2–4× H100/A100-80GB with `batch_size=32`. The repo has been tested on Ubuntu 22.04.
+The default ContextFlow training configuration uses `batch_size=32`. The repo has been tested on Ubuntu 22.04.
 
 ## Installation
 
@@ -56,27 +54,20 @@ Training the in-context models starts from the pre-trained π₀ base checkpoint
 
 ### In-context model checkpoints (Google Drive)
 
-Our trained checkpoints, norm stats, and dataset metadata are hosted in the public Google Drive folder [`ContextFlow_Data`](https://drive.google.com/drive/folders/1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ?usp=sharing). Each checkpoint directory contains `params/` and `assets/` (the norm stats it was trained with), so a downloaded checkpoint is self-sufficient for inference. `MANIFEST.json` in the same folder documents every checkpoint's provenance (original training name, step, source machine).
+The Google Drive folder [`ContextFlow_Data`](https://drive.google.com/drive/folders/1Bf5j90lifJ9kPy2YSQG1bp5FKWZwzTES) provides the ContextFlow configuration and trained weights. Download the complete checkpoint directory for inference.
 
-| Model | Config name | Recommended checkpoint (path inside `ContextFlow_Data`) |
+| Model | Config name | Checkpoint path inside `ContextFlow_Data` |
 | --- | --- | --- |
 | ContextFlow | `ContextFlow` | `ContextFlow/ContextFlow_4gpu/19999` |
-| + LIBERO-90 co-training | `ContextFlow_plus_libero90` | see `MANIFEST.json` (one folder per config) |
-
-The Drive folder also holds checkpoints for methods this repo no longer ships configs for (ContextFlow-Plain, ContextAR and their variants); see `MANIFEST.json`. To run those, check out a commit before the configs were pruned.
 
 Download via the browser link above, or with [rclone](https://rclone.org/drive/) (using your own configured Google Drive remote, here called `gdrive:`):
 
 ```bash
-FOLDER=1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ
+FOLDER=1Bf5j90lifJ9kPy2YSQG1bp5FKWZwzTES
 # Checkpoint → local layout expected by the eval commands (checkpoints/<config>/<exp>/<step>)
 rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/19999 \
     checkpoints/ContextFlow/ContextFlow_4gpu/19999
-# Norm stats (needed for training only — inference reads them from the checkpoint)
-rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
 ```
-
-> **⚠ Norm stats: download, do not recompute.** The released norm stats live in `assets/ContextFlow/physical-intelligence/libero`, which both remaining ContextFlow configs point at via `assets_repo_override="ContextFlow"`. (Older checkouts and the Google Drive archive use `assets/ContextFlow_Plain/...` — see the migration note in [CONFIG_NAME_MAPPING.md](CONFIG_NAME_MAPPING.md).) They were computed by an earlier generation of the configs that used `use_delta_joint_actions=True`, over the full dataset (provenance verified: re-running the computation with that setting reproduces the released file byte-for-byte). The current configs set `use_delta_joint_actions=False` but intentionally keep reusing those same stats — every released checkpoint was trained with them. Running `scripts/compute_norm_stats.py` with today's configs produces *different* statistics, and models trained or evaluated with mismatched stats will not reproduce the released results. Recompute only when you train on a new dataset of your own.
 
 ## Running Inference
 
@@ -114,8 +105,8 @@ The model can run on a different server and stream actions to the robot via a we
 The full walkthrough — dataset and metadata preparation, training, serving, and seen/unseen evaluation — lives in **[examples/libero/LIBERO_README.md](examples/libero/LIBERO_README.md)**. The short version:
 
 ```bash
-# 1. Get norm stats (download from Google Drive — see the LIBERO README)
-rclone copy --drive-root-folder-id 1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ gdrive:assets ./assets
+# 1. Prepare training assets
+uv run scripts/compute_norm_stats.py --config-name ContextFlow
 
 # 2. Train (the LIBERO dataset physical-intelligence/libero auto-downloads from HuggingFace)
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow --exp-name=my_run --overwrite
@@ -145,7 +136,6 @@ Which LIBERO tasks are held out (unseen) rather than trained on is fixed in code
 | Issue                                     | Resolution                                                                                                                                                                                   |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `uv sync` fails with dependency conflicts | Try removing the virtual environment directory (`rm -rf .venv`) and running `uv sync` again. Check that you have the latest version of `uv` installed (`uv self update`). |
-| Training logs `Norm stats not found ... skipping` | This is a **silent** failure mode: the run continues with no normalization. Make sure `./assets/ContextFlow/physical-intelligence/libero/` exists (downloaded from Google Drive, then renamed per CONFIG_NAME_MAPPING.md) before starting training. |
 | In-context inference results are unstable / degraded | Export `JAX_DEFAULT_MATMUL_PRECISION=float32` and pass `--policy.inference_dtype=float32` to `serve_policy.py`. |
 | Training runs out of GPU memory           | Set `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` before training so JAX can use 90% of GPU memory. You can also reduce the batch size, or shard with `fsdp_devices` in the training config. |
 | Simulator renders black images / EGL errors during LIBERO eval | Export `MUJOCO_GL=egl` and make sure an NVIDIA EGL vendor library is installed (see `jobs/local/eval_incontext_unseen_local.sh` for a working environment setup). |

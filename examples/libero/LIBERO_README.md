@@ -44,21 +44,15 @@ Note: when updating `requirements.txt` in this directory, the flag `--extra-inde
 | Artifact | Where to get it | Needed for |
 | --- | --- | --- |
 | LIBERO dataset (`physical-intelligence/libero`) | auto-downloaded from HuggingFace on first use | training and eval (in-context demos are drawn from it; the eval clients also read its `meta/tasks.jsonl` for task names/order) |
-| `assets/ContextFlow/physical-intelligence/libero/` (norm stats) | Google Drive `assets/` (archived under `ContextFlow_Plain/`; rename the top level after download) | **training only** — inference loads norm stats from the checkpoint. The ContextFlow configs resolve this path via `assets_repo_override="ContextFlow"` |
 | Checkpoints | Google Drive (see [root README](../../README.md#in-context-model-checkpoints-google-drive)) | evaluation |
 
 Download the Drive artifacts (browser, or rclone with your own Google Drive remote):
 
 ```bash
-FOLDER=1TJvz-ITv4b99HjiJ27DRk8j0p6b6VaaJ
-rclone copy --drive-root-folder-id $FOLDER gdrive:assets ./assets
+FOLDER=1Bf5j90lifJ9kPy2YSQG1bp5FKWZwzTES
 rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/19999 \
     checkpoints/ContextFlow/ContextFlow_4gpu/19999
 ```
-
-**What about the big cache files?** The Drive `metadata/libero/` folder also contains `episode_states_without_delta_cache.json` / `episode_actions_without_delta_cache.json` (~150 MB). They are obsolete: `ContextFlow` loads demonstrations directly from `CustomLeRobotDataset` during both training and inference. Do not download them.
-
-> **⚠ Norm stats: download, do not recompute.** The released norm stats in `assets/ContextFlow/physical-intelligence/libero` were computed by an earlier generation of these configs that used `use_delta_joint_actions=True`, over the full dataset (no train-split filtering). The current configs set `use_delta_joint_actions=False` but deliberately continue to use the same stats — all released checkpoints were trained with them, and each checkpoint also carries its own copy in `<checkpoint>/assets/`. Recomputing with `scripts/compute_norm_stats.py` under today's configs therefore gives *different* stats (delta actions change the action distribution: e.g. the released action mean for dim 3 is −2.97 ≈ −state mean, where an absolute-action computation gives ≈0) and will not reproduce the released results. Provenance is verified: re-running the computation with the delta setting flipped back on reproduces the released `norm_stats.json` byte-for-byte. Recompute only for a new dataset of your own.
 
 ## 3. Dataset Metadata
 
@@ -80,16 +74,16 @@ simulator, fetch at least its `meta/` directory.
 Train with the config name and an experiment name (checkpoints go to `./checkpoints/<config>/<exp-name>/<step>/`):
 
 ```bash
+uv run scripts/compute_norm_stats.py --config-name ContextFlow
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow \
     --exp-name=my_run --overwrite
 ```
 
-- Config names: `ContextFlow`, `ContextFlow_plus_libero90` (see [CONFIG_NAME_MAPPING.md](../../CONFIG_NAME_MAPPING.md) for the mapping from the original training names).
-- All three train for 20k steps with `batch_size=32`, starting from the π₀ / π₀-FAST base checkpoints (auto-downloaded from S3).
+- Config name: `ContextFlow`.
+- ContextFlow trains for 20k steps with `batch_size=32`, starting from the π₀ base checkpoint (auto-downloaded from S3).
 - Training excludes the eight held-out tasks (`remove_task_list=LIBERO_UNSEEN_TASKS` in the config).
 - Set a seed with `--seed=<n>` for repeated runs; use a fresh `--exp-name` per run.
 - `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` lets JAX use 90% of GPU memory (default 75%). Multi-GPU: run under `CUDA_VISIBLE_DEVICES=0,1` (data-parallel sharding is automatic across visible devices).
-- If training logs `Norm stats not found ... skipping`, stop — the norm stats are missing (Section 2) and the run would silently train unnormalized.
 
 ## 5. Evaluation
 
@@ -123,7 +117,7 @@ python examples/libero/main.py --task-suite-name libero_spatial
 
 Key client arguments:
 
-- `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`. (`libero_90` is training co-data only — the in-context clients reject it, because its task indices are a different space from the demo dataset the server serves from.)
+- `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`.
 - The seen/unseen assignment is not configurable: the training configs and eval clients share `LIBERO_UNSEEN_TASKS` from `openpi.training.config_libero`. Any suite task not in that tuple counts as seen.
 - `--num-trials-per-task`: rollouts per task (default 50)
 - `--unseen-only`: evaluate only held-out tasks (default: evaluate all tasks).
@@ -136,29 +130,6 @@ Results are written as JSON to `logs/eval_results/` (override with `--results-ou
 
 **Batch evaluation.** `jobs/local/eval_incontext_unseen_local.sh <run-name> <policy-config> <checkpoint-dir> [run-id]` runs all four suites in parallel across GPUs (one server per suite; env `SUITE_LIST`, `GPUS`, `TASK_SPLIT` to customize). SLURM wrappers: `jobs/orix/refactor_merge/eval_contextflow_unseen.sh` and `jobs/ibex/eval_incontext_unseen_ibex.sh`.
 
-## 6. LIBERO-90 Co-Training
+## 6. Troubleshooting
 
-The `ContextFlow_plus_libero90` config co-trains on LIBERO-90 in addition to the standard suites.
-
-It needs one extra artifact:
-
-1. **The LIBERO-90 LeRobot dataset** [`vo2yager/libero_90`](https://huggingface.co/datasets/vo2yager/libero_90) — auto-downloads from HuggingFace (~63 GB). To rebuild it yourself from the official raw HDF5 demonstrations instead:
-
-   ```bash
-   # Download the raw libero_90 HDF5 files (ships inside the libero_100 archive):
-   python third_party/libero/benchmark_scripts/download_libero_datasets.py --datasets libero_100
-
-   # Convert to a LeRobot dataset (optionally --push_to_hub):
-   uv run examples/libero/convert_libero90_hdf5_to_lerobot.py --data_dir /path/to/libero_90
-   ```
-
-   The config's `libero_90` dataset spec sets `local_files_only=True` and points `episode_json_path`
-   at `~/.cache/huggingface/lerobot/vo2yager/libero_90/meta/episodes.jsonl`, so that path must
-   exist before training starts. If you only need the dataset *metadata* — for the task→episode
-   tables, or to read `meta/tasks.jsonl` — copying `meta/` alone is enough (~539 KB instead of
-   63 GB); the lookup tables never touch the parquet shards. Training on LIBERO-90 frames, of
-   course, does need the full dataset.
-
-## 7. Troubleshooting
-
-See the [root README troubleshooting table](../../README.md#troubleshooting). The most common LIBERO-specific pitfalls: missing `MUJOCO_GL=egl` (black renders / EGL crashes), missing norm stats (silent "skipping" log line during training), and running in-context inference without `float32` precision.
+See the [root README troubleshooting table](../../README.md#troubleshooting). The most common LIBERO-specific pitfalls: missing `MUJOCO_GL=egl` (black renders / EGL crashes), and running in-context inference without `float32` precision.
