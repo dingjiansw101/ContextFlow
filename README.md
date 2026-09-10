@@ -4,12 +4,6 @@ This repository contains the model and training/evaluation code for **ContextFlo
 
 It is a fork of [openpi](https://github.com/Physical-Intelligence/openpi) by the [Physical Intelligence team](https://www.physicalintelligence.company/) and builds on their base model, the [π₀ model](https://www.physicalintelligence.company/blog/pi0), a flow-based diffusion VLA.
 
-On top of this we provide the in-context method:
-
-| Method | Base | In-context conditioning | Model config class |
-| --- | --- | --- | --- |
-| **ContextFlow** | π₀ (flow) | 8 demo frames + 128 demo state/action steps | `ContextFlowConfig` (`src/openpi/models/contextflow.py`) |
-
 It is trained and evaluated on the [LIBERO benchmark](https://github.com/Lifelong-Robot-Learning/LIBERO) with a seen/unseen task split.
 
 ## Requirements
