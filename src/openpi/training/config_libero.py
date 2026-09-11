@@ -130,6 +130,19 @@ def build(api) -> list[api.TrainConfig]:
             )
 
             # Calculate training episode indices
+            # Bootstrap the default dataset metadata before selecting the split.
+            # Explicit metadata paths remain strict so typos are not silently ignored.
+            if (
+                self.episode_json_path == api.DEFAULT_LIBERO_EPISODE_JSON
+                and not pathlib.Path(self.episode_json_path).exists()
+            ):
+                from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
+
+                LeRobotDatasetMetadata(
+                    self.repo_id,
+                    root=pathlib.Path(self.episode_json_path).parent.parent,
+                    local_files_only=(self.base_config or api.DataConfig()).local_files_only,
+                )
             train_epi = api.get_kept_episode_indices(self.episode_json_path, self.remove_task_list)
 
             # CustomLeRobotDataset supplies the demonstration data.

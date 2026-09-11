@@ -15,7 +15,9 @@ USAGE:
     uv run pytest src/openpi/training/config_libero_test.py -v
 """
 
+import dataclasses
 import json
+from types import SimpleNamespace
 
 import flax.nnx as nnx
 import flax.traverse_util
@@ -23,9 +25,48 @@ import jax
 import numpy as np
 import pytest
 
+from openpi import transforms
 from openpi.training import config as _config
 from openpi.training import config_libero
 from openpi.training import weight_loaders
+
+
+@pytest.mark.parametrize("local_files_only", [False, True])
+def test_contextflow_bootstraps_missing_default_metadata(tmp_path, monkeypatch, local_files_only):
+    import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
+
+    episode_path = tmp_path / "physical-intelligence/libero/meta/episodes.jsonl"
+    monkeypatch.setattr(_config, "DEFAULT_LIBERO_EPISODE_JSON", str(episode_path))
+    config = _config.get_config("ContextFlow")
+    data = dataclasses.replace(
+        config.data,
+        episode_json_path=str(episode_path),
+        base_config=dataclasses.replace(config.data.base_config, local_files_only=local_files_only),
+    )
+    calls = []
+
+    def metadata(repo_id, *, root, local_files_only):
+        calls.append((repo_id, root, local_files_only))
+        episode_path.parent.mkdir(parents=True)
+        episode_path.write_text("\n".join([
+            json.dumps({"episode_index": 0, "tasks": [config_libero.LIBERO_UNSEEN_TASKS[0]]}),
+            json.dumps({"episode_index": 1, "tasks": ["a seen task"]}),
+        ]))
+        return SimpleNamespace(root=root)
+
+    monkeypatch.setattr(lerobot_dataset, "LeRobotDatasetMetadata", metadata)
+    monkeypatch.setattr(_config.ModelTransformFactory, "__call__", lambda *args: transforms.Group())
+    monkeypatch.setattr(_config.DataConfigFactory, "create_base_config", lambda self, assets: self.base_config)
+    assert data.create(config.assets_dirs, config.model).train_episode == [1]
+    assert calls == [("physical-intelligence/libero", episode_path.parent.parent, local_files_only)]
+    # An existing dataset uses precisely the same split without another download.
+    assert data.create(config.assets_dirs, config.model).train_episode == [1]
+    assert len(calls) == 1
+
+    explicit_data = dataclasses.replace(data, episode_json_path=str(tmp_path / "typo.jsonl"))
+    with pytest.raises(FileNotFoundError, match="typo.jsonl"):
+        explicit_data.create(config.assets_dirs, config.model)
+    assert len(calls) == 1
 
 
 def test_libero_unseen_tasks_are_valid_exclusions(tmp_path):

@@ -46,7 +46,8 @@ def get_project_root() -> Path:
 PROJECT_ROOT = get_project_root()
 
 DEFAULT_LIBERO_EPISODE_JSON = str(
-    Path("~/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl").expanduser()
+    Path(os.environ.get("LEROBOT_HOME", "~/.cache/huggingface/lerobot")).expanduser()
+    / "physical-intelligence/libero/meta/episodes.jsonl"
 )
 # "/home/dingj0b/.cache/huggingface/lerobot/physical-intelligence/libero/meta/episodes.jsonl"
 
