@@ -68,6 +68,8 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_run1/1
 
 Follow the [LIBERO guide](examples/libero/LIBERO_README.md) to set up the simulator, train ContextFlow, and evaluate a downloaded or newly trained checkpoint. It includes commands for unseen-task evaluation and repeated runs.
 
+Use `examples/libero/main_incontext.py --unseen-only` for unseen-task evaluation. The same entry point evaluates all tasks when `--unseen-only` is omitted.
+
 The policy server and simulator can run on separate machines; set `--host` on the evaluation client to the server address. To test the server with random observations, see the [simple client](examples/simple_client/README.md).
 
 ## Repository Structure

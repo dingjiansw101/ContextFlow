@@ -77,10 +77,13 @@ For your own trained model, use `checkpoints/ContextFlow/my_run/19999` instead.
 
 ```bash
 export MUJOCO_GL=egl
+export PYTHONPATH="$PWD/src:$PWD/third_party/libero:$PWD/packages/openpi-client/src${PYTHONPATH:+:$PYTHONPATH}"
 # Evaluate unseen tasks
 uv run --no-project --python examples/libero/.venv/bin/python python \
     examples/libero/main_incontext.py --unseen-only \
-    --task-suite-name libero_spatial
+    --task-suite-name libero_spatial \
+    --results-out-path logs/eval_results/unseen/libero_spatial.json \
+    --video-out-path data/libero_incontext/videos/unseen/libero_spatial
 
 # All tasks of a split (reports seen and unseen success rates separately)
 uv run --no-project --python examples/libero/.venv/bin/python python \
@@ -94,6 +97,22 @@ Key client arguments:
 - `--unseen-only`: evaluate only held-out tasks (default: evaluate all tasks).
 - `--unseen-task-index`: evaluate one held-out task by its zero-based index within the suite's unseen tasks; implies unseen-only evaluation.
 - `--host` / `--port`: policy server address (default `0.0.0.0:8000`)
+
+To evaluate one unseen task, use `--unseen-task-index 0` or `--unseen-task-index 1` with the desired suite.
+
+To evaluate unseen tasks across all four suites, keep the policy server running and run:
+
+```bash
+export MUJOCO_GL=egl
+export PYTHONPATH="$PWD/src:$PWD/third_party/libero:$PWD/packages/openpi-client/src${PYTHONPATH:+:$PYTHONPATH}"
+for suite in libero_spatial libero_object libero_goal libero_10; do
+    uv run --no-project --python examples/libero/.venv/bin/python python \
+        examples/libero/main_incontext.py --unseen-only \
+        --task-suite-name "$suite" --num-trials-per-task 50 \
+        --results-out-path "logs/eval_results/unseen_all/${suite}.json" \
+        --video-out-path "data/libero_incontext/videos/unseen_all/${suite}"
+done
+```
 
 Results are written as JSON to `logs/eval_results/` (override with `--results-out-path`). For repeated evaluations, set `--seed=<n>` and use separate `--results-out-path` and `--video-out-path` locations for each run.
 

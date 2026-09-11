@@ -108,11 +108,12 @@ These go in the columns after Config Name. Check existing rows in the sheet to c
 
 All eval scripts (`examples/libero/main*.py`) write a structured JSON results file at the end of evaluation. This is the **preferred source** for reading eval results programmatically — no log parsing needed.
 
-- **Default path**: `logs/eval_results/<task_suite_name>_<variant>_results.json` (e.g. `libero_spatial_incontext_results.json`; `<variant>` is `base` for `main.py`, `incontext` for `main_incontext.py`, `incontext_unseen` for `main_incontext_unseen.py`)
+- **Default path**: `logs/eval_results/<task_suite_name>_<variant>_results.json` (e.g. `libero_spatial_incontext_results.json`; `<variant>` is `base` for `main.py`, `incontext` for `main_incontext.py`, or `incontext_unseen` when selecting unseen tasks)
 - **Override**: pass `--args.results_out_path /custom/path.json` — typical usage is to save alongside the eval logs:
   ```bash
-  python examples/libero/main_incontext_unseen.py \
-    --args.results_out_path logs/${Name}/test1/goal_unseen_results.json \
+  uv run --no-project --python examples/libero/.venv/bin/python python \
+    examples/libero/main_incontext.py --unseen-only \
+    --results-out-path logs/${Name}/test1/goal_unseen_results.json \
     ...
   ```
 - **Schema**: `config` (eval parameters), `per_task_results` (per-task success rates), `summary` (aggregated metrics including seen/unseen splits where applicable)
