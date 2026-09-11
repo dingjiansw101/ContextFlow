@@ -49,15 +49,36 @@ def create_dataset(
     return data_config, dataset
 
 
-def main(config_name: str, sample_frames: int | None = None, *, use_delta_joint_actions: bool = True):
+def main(
+    config_name: str,
+    sample_frames: int | None = None,
+    *,
+    use_delta_joint_actions: bool = True,
+    fast: bool = True,
+    output_dir: str | None = None,
+):
     """Compute statistics, using delta joint actions by default for compatible data configs.
 
     Args:
         config_name: Registered configuration name.
         sample_frames: Optional number of frames to sample.
         use_delta_joint_actions: Subtract joint state from actions for statistics only.
+        fast: Use numeric-only loading for full ContextFlow statistics. Sampling and other configs use the legacy path.
+        output_dir: Optional output directory for norm_stats.json; defaults to the config's asset directory.
     """
     config = _config.get_config(config_name)
+    if fast and config_name == "ContextFlow" and sample_frames is None:
+        from openpi.training import libero_norm_stats
+
+        data_config = config.data.create(config.assets_dirs, config.model)
+        dataset = libero_norm_stats.load_dataset(config, data_config, use_delta_joint_actions=use_delta_joint_actions)
+        norm_stats = libero_norm_stats.compute(dataset)
+        asset_id = data_config.asset_id or data_config.repo_id
+        output_path = output_dir or config.assets_dirs / asset_id
+        print(f"Writing stats to: {output_path}")
+        normalize.save(output_path, norm_stats)
+        return
+
     data_config, dataset = create_dataset(config, use_delta_joint_actions=use_delta_joint_actions)
 
     num_frames = len(dataset)
@@ -91,7 +112,7 @@ def main(config_name: str, sample_frames: int | None = None, *, use_delta_joint_
     asset_id = data_config.asset_id or data_config.repo_id
     if asset_id is None:
         raise ValueError("Data config must have an asset_id or repo_id to write norm stats")
-    output_path = config.assets_dirs / asset_id
+    output_path = output_dir or config.assets_dirs / asset_id
     print(f"Writing stats to: {output_path}")
     normalize.save(output_path, norm_stats)
 
