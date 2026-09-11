@@ -54,7 +54,6 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow \
 - Config name: `ContextFlow`.
 - ContextFlow trains for 20k steps with `batch_size=32`, starting from the π₀ base checkpoint (auto-downloaded from S3).
 - Training excludes the eight held-out tasks (`remove_task_list=LIBERO_UNSEEN_TASKS` in the config).
-- Training defaults to `--seed=42` and `--data.seed-base=1` for deterministic per-sample demonstration selection. Override these for repeated runs and use a fresh `--exp-name` per run.
 - `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` lets JAX use 90% of GPU memory (default 75%). Multi-GPU: run under `CUDA_VISIBLE_DEVICES=0,1` (data-parallel sharding is automatic across visible devices).
 
 ## 4. Evaluation
