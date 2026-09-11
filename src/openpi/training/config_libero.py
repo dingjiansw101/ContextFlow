@@ -245,6 +245,7 @@ def build(api) -> list[api.TrainConfig]:
     return [
         api.TrainConfig(
             name="ContextFlow",
+            seed=42,
             assets_repo_override="ContextFlow",
             model=api.contextflow.ContextFlowConfig(
                 prompt_expert_variant="gemma_300m_v2",
@@ -265,6 +266,7 @@ def build(api) -> list[api.TrainConfig]:
                 remove_task_list=LIBERO_UNSEEN_TASKS,
                 episode_json_path=api.DEFAULT_LIBERO_EPISODE_JSON,
                 random_select=True,
+                seed_base=1,
             ),
             weight_loader=api.weight_loaders.CheckpointWeightLoaderIncontext(
                 "s3://openpi-assets/checkpoints/pi0_base/params"
