@@ -229,7 +229,6 @@ class DataConfig:
     # If true, will disable syncing the dataset from the Hugging Face Hub. Allows training on local-only datasets.
     local_files_only: bool = False
 
-    # Xianjie: add additioanl episode field to enable train-test split
     # the episode arg will be passed to LeRobotDataset.episodes
     train_episode: list[int] | None = None
 class GroupFactory(Protocol):
@@ -295,7 +294,6 @@ class DataConfigFactory(abc.ABC):
     # Base config that will be updated by the factory.
     base_config: tyro.conf.Suppress[DataConfig | None] = None
 
-    # Xianjie: train-test spli config parameters
     # remove_task_list: a list of tasks that need to be removed from training (for test)
     remove_task_list: tyro.conf.Suppress[list[str] | None] = None
     # episode_json_path: a json that contains the episode index and task name
@@ -305,7 +303,6 @@ class DataConfigFactory(abc.ABC):
     # Base seed used by data factories that need deterministic per-sample random selection.
     seed_base: int | None = None
 
-    # TODO: Xianjie: maybe use task index? Or take training task description/index as input?
     @abc.abstractmethod
     def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
         """Create a data config."""

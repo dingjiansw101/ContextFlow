@@ -53,7 +53,6 @@ class TransformedDataset(Dataset[T_co]):
         self._dataset = dataset
         self._transform = _transforms.compose(transforms)
 
-        # Xianjie: for data transform debug
         # self._transform_list = transforms
 
     def __getitem__(self, index: SupportsIndex) -> T_co:
@@ -104,8 +103,6 @@ def create_dataset(data_config: _config.DataConfig, model_config: _model.BaseMod
     dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, local_files_only=data_config.local_files_only)
     dataset = lerobot_dataset.LeRobotDataset(
         data_config.repo_id,
-        # TODO: Xianjie: reduendant check of None type
-        # Xianjie: either None or training episode index list
         episodes=data_config.train_episode if not is_effective_none(data_config.train_episode) else None,
         delta_timestamps={
             key: [t / dataset_meta.fps for t in range(model_config.action_horizon)]

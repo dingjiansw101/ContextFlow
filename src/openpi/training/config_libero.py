@@ -344,9 +344,6 @@ def build(api) -> list[api.TrainConfig]:
             num_workers=4,
             batch_size=32,
         ),
-        # Xianjie:
-        # Xianjie:
-        # Xianjie:
         #
         # Fine-tuning Libero configs.
         #
