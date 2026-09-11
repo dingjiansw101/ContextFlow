@@ -32,9 +32,8 @@ export OPENBLAS_NUM_THREADS=1
 export MUJOCO_GL=egl
 export __EGL_VENDOR_LIBRARY_DIRS="$HOME/nvidia-egl"
 export LD_LIBRARY_PATH="$HOME/nvidia-egl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-# The client clears CUDA_VISIBLE_DEVICES; select the physical GPU assigned by SLURM.
-export MUJOCO_EGL_DEVICE_ID="${SLURM_JOB_GPUS:?SLURM must assign exactly one GPU}"
-[[ "$MUJOCO_EGL_DEVICE_ID" =~ ^[0-9]+$ ]] || { echo 'Expected one numeric physical GPU ID'; exit 1; }
+# EGL enumerates only the cgroup-visible GPU, starting at zero (not its physical ID).
+export MUJOCO_EGL_DEVICE_ID=0
 CUDA_NVCC="$REPO/.venv/lib/python3.11/site-packages/nvidia/cuda_nvcc"
 export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_cuda_data_dir=$CUDA_NVCC"
 export PATH="$CUDA_NVCC/bin:$PATH"

@@ -14,9 +14,8 @@ export OPENBLAS_NUM_THREADS=1
 export MUJOCO_GL=egl
 export __EGL_VENDOR_LIBRARY_DIRS="$HOME/nvidia-egl"
 export LD_LIBRARY_PATH="$HOME/nvidia-egl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-GPU_IDS="${SLURM_STEP_GPUS:-${SLURM_JOB_GPUS:?must run on an allocated GPU}}"
-export MUJOCO_EGL_DEVICE_ID="${GPU_IDS%%,*}"
-[[ "$MUJOCO_EGL_DEVICE_ID" =~ ^[0-9]+$ ]] || exit 1
+# The one-GPU SLURM step exposes one EGL device, enumerated as zero.
+export MUJOCO_EGL_DEVICE_ID=0
 export LIBERO_CONFIG_PATH
 LIBERO_CONFIG_PATH=$(mktemp -d /mnt/data/u/dingj0b/contextflow/logs/libero-check.XXXXXX)
 uv run --no-sync python - <<'PY'
