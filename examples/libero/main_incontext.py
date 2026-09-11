@@ -57,7 +57,7 @@ class Args:
     )
     num_steps_wait: int = 10  # Number of steps to wait for objects to stabilize i n sim
     num_trials_per_task: int = 50  # Number of rollouts per task
-    unseen_only: bool = False  # Evaluate only held-out tasks
+    unseen_only: bool = True  # Evaluate only held-out tasks by default
     unseen_task_index: int = -1  # If >= 0, evaluate this index within the suite's unseen tasks
 
     #################################################################################################################
@@ -255,7 +255,8 @@ def eval_libero(args: Args) -> None:
     avg_seen = sum(seen_rates) / len(seen_rates) if seen_rates else 0.0
     avg_unseen = sum(unseen_rates) / len(unseen_rates) if unseen_rates else 0.0
 
-    logging.info(f"\nAverage success on SEEN tasks: {avg_seen:.3f} ({len(seen_rates)} tasks)")
+    if seen_rates:
+        logging.info(f"\nAverage success on SEEN tasks: {avg_seen:.3f} ({len(seen_rates)} tasks)")
     logging.info(f"Average success on UNSEEN tasks: {avg_unseen:.3f} ({len(unseen_rates)} tasks)")
 
     total_success_rate = float(total_successes) / float(total_episodes) if total_episodes > 0 else 0.0

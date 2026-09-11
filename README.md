@@ -68,7 +68,13 @@ rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_run1/1
 
 Follow the [LIBERO guide](examples/libero/LIBERO_README.md) to set up the simulator, train ContextFlow, and evaluate a downloaded or newly trained checkpoint. It includes commands for unseen-task evaluation and repeated runs.
 
+`examples/libero/main_incontext.py` evaluates unseen tasks by default and reports their success rate.
+
 The policy server and simulator can run on separate machines; set `--host` on the evaluation client to the server address. To test the server with random observations, see the [simple client](examples/simple_client/README.md).
+
+## Real-World Dataset
+
+The real-world ALOHA dataset is available on Hugging Face: [vo2yager/aloha_incontext](https://huggingface.co/datasets/vo2yager/aloha_incontext). Visit the dataset page to browse and download the data.
 
 ## Repository Structure
 
