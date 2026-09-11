@@ -22,7 +22,8 @@ The default ContextFlow training configuration uses `batch_size=32`. The repo ha
 Clone the repo with submodules (the LIBERO simulator is a submodule; LeRobot itself is pulled by `uv sync`):
 
 ```bash
-git clone --recurse-submodules <this-repo-url>
+git clone --recurse-submodules https://github.com/dingjiansw101/ContextFlow.git
+cd ContextFlow
 
 # Or if you already cloned the repo:
 git submodule update --init --recursive
