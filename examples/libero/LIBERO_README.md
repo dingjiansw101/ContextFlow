@@ -54,7 +54,6 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py ContextFlow \
 - Config name: `ContextFlow`.
 - ContextFlow trains for 20k steps with `batch_size=32`, starting from the π₀ base checkpoint (auto-downloaded from S3).
 - Training excludes the eight held-out tasks (`remove_task_list=LIBERO_UNSEEN_TASKS` in the config).
-- Training defaults to `--seed=42` and `--data.seed-base=1` for deterministic per-sample demonstration selection. Override these for repeated runs and use a fresh `--exp-name` per run.
 - `XLA_PYTHON_CLIENT_MEM_FRACTION=0.9` lets JAX use 90% of GPU memory (default 75%). Multi-GPU: run under `CUDA_VISIBLE_DEVICES=0,1` (data-parallel sharding is automatic across visible devices).
 
 ## 4. Evaluation
@@ -73,40 +72,17 @@ uv run scripts/serve_policy.py policy:checkpoint \
 
 For your own trained model, use `checkpoints/ContextFlow/my_run/19999` instead.
 
-**Terminal 2 — evaluation client:**
+**Terminal 2 — evaluate unseen Spatial and Object tasks:**
 
 ```bash
 export MUJOCO_GL=egl
 export PYTHONPATH="$PWD/src:$PWD/third_party/libero:$PWD/packages/openpi-client/src${PYTHONPATH:+:$PYTHONPATH}"
-# Evaluate unseen tasks
-uv run --no-project --python examples/libero/.venv/bin/python python \
-    examples/libero/main_incontext.py \
-    --task-suite-name libero_spatial \
-    --results-out-path logs/eval_results/unseen/libero_spatial.json \
-    --video-out-path data/libero_incontext/videos/unseen/libero_spatial
-```
-
-Key client arguments:
-
-- `--task-suite-name`: `libero_spatial`, `libero_object`, `libero_goal`, `libero_10`.
-- `--num-trials-per-task`: rollouts per task (default 50)
-- Only held-out (unseen) tasks are evaluated by default.
-- `--unseen-task-index`: evaluate one held-out task by its zero-based index within the suite's unseen tasks; implies unseen-only evaluation.
-- `--host` / `--port`: policy server address (default `0.0.0.0:8000`)
-
-To evaluate one unseen task, use `--unseen-task-index 0` or `--unseen-task-index 1` with the desired suite.
-
-To evaluate unseen tasks across all four suites, keep the policy server running and run:
-
-```bash
-export MUJOCO_GL=egl
-export PYTHONPATH="$PWD/src:$PWD/third_party/libero:$PWD/packages/openpi-client/src${PYTHONPATH:+:$PYTHONPATH}"
-for suite in libero_spatial libero_object libero_goal libero_10; do
+for suite in libero_spatial libero_object; do
     uv run --no-project --python examples/libero/.venv/bin/python python \
         examples/libero/main_incontext.py \
         --task-suite-name "$suite" --num-trials-per-task 50 \
-        --results-out-path "logs/eval_results/unseen_all/${suite}.json" \
-        --video-out-path "data/libero_incontext/videos/unseen_all/${suite}"
+        --results-out-path "logs/eval_results/unseen/${suite}.json" \
+        --video-out-path "data/libero_incontext/videos/unseen/${suite}"
 done
 ```
 
