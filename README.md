@@ -52,15 +52,15 @@ The Google Drive folder [`ContextFlow_Data`](https://drive.google.com/drive/fold
 
 | Model | Config name | Checkpoint path inside `ContextFlow_Data` |
 | --- | --- | --- |
-| ContextFlow | `ContextFlow` | `ContextFlow/ContextFlow_4gpu/19999` |
+| ContextFlow | `ContextFlow` | `ContextFlow/ContextFlow_run1/19999` |
 
 Download via the browser link above, or with [rclone](https://rclone.org/drive/) (using your own configured Google Drive remote, here called `gdrive:`):
 
 ```bash
 FOLDER=1Bf5j90lifJ9kPy2YSQG1bp5FKWZwzTES
 # Checkpoint → local layout expected by the eval commands (checkpoints/<config>/<exp>/<step>)
-rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_4gpu/19999 \
-    checkpoints/ContextFlow/ContextFlow_4gpu/19999
+rclone copy --drive-root-folder-id $FOLDER gdrive:ContextFlow/ContextFlow_run1/19999 \
+    checkpoints/ContextFlow/ContextFlow_run1/19999
 ```
 
 ## Running Inference
@@ -73,7 +73,7 @@ from openpi.policies import policy_config
 
 config = _config.get_config("ContextFlow")
 policy = policy_config.create_trained_policy_incontext(
-    config, "checkpoints/ContextFlow/ContextFlow_4gpu/19999"
+    config, "checkpoints/ContextFlow/ContextFlow_run1/19999"
 )
 action_chunk = policy.infer(example)["actions"]
 ```
@@ -85,7 +85,7 @@ export JAX_DEFAULT_MATMUL_PRECISION=float32
 uv run scripts/serve_policy.py policy:checkpoint \
   --policy.inference_dtype=float32 \
   --policy.config=ContextFlow \
-  --policy.dir=checkpoints/ContextFlow/ContextFlow_4gpu/19999
+  --policy.dir=checkpoints/ContextFlow/ContextFlow_run1/19999
 ```
 
 `serve_policy.py` auto-detects in-context configs (`--loader=AUTO` is the default; pass `--loader=INCONTEXT` to force). The server listens on port 8000 by default.
