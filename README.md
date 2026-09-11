@@ -72,6 +72,10 @@ Follow the [LIBERO guide](examples/libero/LIBERO_README.md) to set up the simula
 
 The policy server and simulator can run on separate machines; set `--host` on the evaluation client to the server address. To test the server with random observations, see the [simple client](examples/simple_client/README.md).
 
+## Real-World Dataset
+
+The real-world ALOHA dataset is available on Hugging Face: [vo2yager/aloha_incontext](https://huggingface.co/datasets/vo2yager/aloha_incontext). Visit the dataset page to browse and download the data.
+
 ## Repository Structure
 
 - `src/openpi/models/` — model implementations: `contextflow.py` and the upstream `pi0.py`
