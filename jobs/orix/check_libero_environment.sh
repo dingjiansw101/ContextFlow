@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Diagnostic only: render each held-out Spatial/Object task without running a policy.
 # May run as an overlapping step of an existing allocation with spare GPU memory:
-# srun --jobid JOB --overlap --gres=gpu:1 --cpus-per-task=1 bash jobs/orix/check_libero_environment.sh
+# srun --jobid JOB --overlap --ntasks=1 --gres=gpu:1 --cpus-per-task=1 bash jobs/orix/check_libero_environment.sh
 set -euo pipefail
+[[ "${SLURM_NTASKS:-1}" == 1 ]] || { echo 'Specify --ntasks=1 for this diagnostic'; exit 1; }
 cd /home/dingj0b/code/contextflow
 export PATH="$HOME/.local/bin:$PATH"
 export UV_CACHE_DIR=/mnt/data/u/dingj0b/contextflow/uv-cache
